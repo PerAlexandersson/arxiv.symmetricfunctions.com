@@ -62,7 +62,7 @@ Create `generate_keyword_dict.py` — a one-time script that builds a JSON dicti
 - Extract term and source filename
 - Map filename to catalog page URL (e.g., `schur.tex` → `schur.htm`)
 
-Output: `arxiv/src/keyword_dictionary.json`
+Output: `src/keyword_dictionary.json`
 ```json
 {
   "Modified Macdonald polynomials": {
@@ -91,7 +91,7 @@ Approach:
 - Cross-reference against the catalog dictionary — flag terms already covered vs. new discoveries
 - Output a ranked list of candidate keywords with frequencies
 
-Output: `arxiv/src/discovered_keywords.txt` — a ranked list for manual review:
+Output: `src/discovered_keywords.txt` — a ranked list for manual review:
 ```
 523  Young tableaux
 412  Schur functions
@@ -194,19 +194,19 @@ Insert between "Browse by date" and "Random" in the header.
 
 | File | Change |
 |------|--------|
-| `arxiv/src/tags_helper.py` | Add `parse_msc_codes()` |
-| `arxiv/src/fetch_arxiv.py` | Auto-tag in `insert_or_update_paper()` |
-| `arxiv/src/backfill_tags.py` | **New** — backfill script (MSC + keywords) |
-| `arxiv/src/generate_keyword_dict.py` | **New** — builds draft dictionary from catalog |
-| `arxiv/src/discover_keywords.py` | **New** — one-time abstract analysis for keyword suggestions |
-| `arxiv/src/keyword_dictionary.json` | **New** — curated keyword -> tag/URL mapping |
-| `arxiv/src/static/style.css` | Tag pill styles, tag cloud, dark mode |
-| `arxiv/src/templates/_macros.html` | Tag display in render_paper |
-| `arxiv/src/templates/paper.html` | Tags in detail + linked abstract |
-| `arxiv/src/templates/tags.html` | **New** — tag browse page |
-| `arxiv/src/templates/tag.html` | **New** — papers-by-tag page |
-| `arxiv/src/app.py` | `get_paper_tags()`, `linkify_abstract`, routes, tag attachment |
-| `arxiv/src/templates/base.html` | "Tags" nav link |
+| `src/tags_helper.py` | Add `parse_msc_codes()` |
+| `src/fetch_arxiv.py` | Auto-tag in `insert_or_update_paper()` |
+| `src/backfill_tags.py` | **New** — backfill script (MSC + keywords) |
+| `src/generate_keyword_dict.py` | **New** — builds draft dictionary from catalog |
+| `src/discover_keywords.py` | **New** — one-time abstract analysis for keyword suggestions |
+| `src/keyword_dictionary.json` | **New** — curated keyword -> tag/URL mapping |
+| `src/static/style.css` | Tag pill styles, tag cloud, dark mode |
+| `src/templates/_macros.html` | Tag display in render_paper |
+| `src/templates/paper.html` | Tags in detail + linked abstract |
+| `src/templates/tags.html` | **New** — tag browse page |
+| `src/templates/tag.html` | **New** — papers-by-tag page |
+| `src/app.py` | `get_paper_tags()`, `linkify_abstract`, routes, tag attachment |
+| `src/templates/base.html` | "Tags" nav link |
 
 ## Verification
 

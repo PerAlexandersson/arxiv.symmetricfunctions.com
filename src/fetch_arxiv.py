@@ -16,26 +16,15 @@ Usage:
 import argparse
 import arxiv
 import pymysql
+from calendar import monthrange
 from datetime import datetime, timedelta
 import sys
-import re
-import unicodedata
 from config import DB_CONFIG, validate_config
+from utils import slugify
 
-
-def strip_accents(text):
-    """Strip diacritics/accents from text."""
-    nfkd = unicodedata.normalize('NFKD', text)
-    return ''.join(c for c in nfkd if not unicodedata.combining(c))
-
-
-def slugify(name):
-    """Convert a name to a URL-friendly slug."""
-    s = strip_accents(name).lower()
-    s = re.sub(r"[^a-z0-9\s-]", '', s)
-    s = re.sub(r'[\s]+', '-', s.strip())
-    s = re.sub(r'-+', '-', s)
-    return s
+# Max results per query
+MAX_RESULTS_RECENT = 500
+MAX_RESULTS_BACKFILL = 5000
 
 # Validate configuration on startup
 validate_config()
@@ -127,36 +116,24 @@ def insert_or_update_paper(cursor, paper):
     return paper_id
 
 
-def fetch_recent_papers(days=2):
+def _fetch_papers(query, max_results):
     """
-    Fetch papers from the last N days.
+    Fetch papers from arXiv matching a query and store in database.
 
     Args:
-        days: Number of days to look back (default: 2)
+        query: arXiv search query string
+        max_results: Maximum number of results to fetch
     """
-    print(f"Fetching papers from the last {days} days...")
-
-    # Calculate date range
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=days)
-
-    # Build arXiv query
-    query = f"cat:math.CO AND submittedDate:[{start_date.strftime('%Y%m%d')}0000 TO {end_date.strftime('%Y%m%d')}2359]"
-
     print(f"Query: {query}")
 
-    # Search arXiv
     search = arxiv.Search(
         query=query,
-        max_results=500,  # Adjust if needed
+        max_results=max_results,
         sort_by=arxiv.SortCriterion.SubmittedDate,
         sort_order=arxiv.SortOrder.Descending
     )
 
-    # Create client for fetching results
     client = arxiv.Client()
-
-    # Process results
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -171,7 +148,6 @@ def fetch_recent_papers(days=2):
                 errors += 1
                 arxiv_id = paper.entry_id.split('/abs/')[-1] if hasattr(paper, 'entry_id') else 'unknown'
                 print(f"  Error processing {arxiv_id}: {e}")
-                # Continue processing other papers
 
         conn.commit()
         print(f"\nSuccessfully processed {count} papers.")
@@ -184,65 +160,24 @@ def fetch_recent_papers(days=2):
     finally:
         cursor.close()
         conn.close()
+
+
+def fetch_recent_papers(days=2):
+    """Fetch papers from the last N days."""
+    print(f"Fetching papers from the last {days} days...")
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=days)
+    query = f"cat:math.CO AND submittedDate:[{start_date.strftime('%Y%m%d')}0000 TO {end_date.strftime('%Y%m%d')}2359]"
+    _fetch_papers(query, MAX_RESULTS_RECENT)
 
 
 def fetch_date_range(start_date_str, end_date_str):
-    """
-    Fetch papers from a specific date range.
-
-    Args:
-        start_date_str: Start date in YYYY-MM-DD format
-        end_date_str: End date in YYYY-MM-DD format
-    """
+    """Fetch papers from a specific date range (YYYY-MM-DD format)."""
     start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
     end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
-
     print(f"Fetching papers from {start_date_str} to {end_date_str}...")
-
-    # Build arXiv query
     query = f"cat:math.CO AND submittedDate:[{start_date.strftime('%Y%m%d')}0000 TO {end_date.strftime('%Y%m%d')}2359]"
-
-    print(f"Query: {query}")
-
-    # Search arXiv
-    search = arxiv.Search(
-        query=query,
-        max_results=5000,  # Increased for backfilling large date ranges
-        sort_by=arxiv.SortCriterion.SubmittedDate,
-        sort_order=arxiv.SortOrder.Descending
-    )
-
-    # Create client for fetching results
-    client = arxiv.Client()
-
-    # Process results
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    count = 0
-    errors = 0
-    try:
-        for paper in client.results(search):
-            try:
-                insert_or_update_paper(cursor, paper)
-                count += 1
-            except Exception as e:
-                errors += 1
-                arxiv_id = paper.entry_id.split('/abs/')[-1] if hasattr(paper, 'entry_id') else 'unknown'
-                print(f"  Error processing {arxiv_id}: {e}")
-                # Continue processing other papers
-
-        conn.commit()
-        print(f"\nSuccessfully processed {count} papers.")
-        if errors > 0:
-            print(f"Encountered {errors} errors (skipped those papers).")
-    except Exception as e:
-        conn.rollback()
-        print(f"Fatal error: {e}")
-        raise
-    finally:
-        cursor.close()
-        conn.close()
+    _fetch_papers(query, MAX_RESULTS_BACKFILL)
 
 
 def fetch_by_arxiv_id(arxiv_id):
@@ -282,8 +217,6 @@ def fill_gap():
     Scans forward from arXiv founding to the present, finds the earliest
     gap, and fills it. Run repeatedly to gradually fill all months.
     """
-    from calendar import monthrange
-
     ARXIV_START_YEAR = 1991
     ARXIV_START_MONTH = 1
 

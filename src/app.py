@@ -8,9 +8,10 @@ Main web interface for browsing arXiv papers.
 from flask import Flask, render_template, request, jsonify, abort, redirect, url_for, Response
 import pymysql
 from config import DB_CONFIG, FLASK_CONFIG, FETCH_SECRET, validate_config
-from datetime import datetime
+from datetime import datetime, date
+import calendar
 import re
-import unicodedata
+from utils import strip_accents, slugify
 
 # Validate configuration on startup
 validate_config()
@@ -49,20 +50,6 @@ def protect_capitals_for_bibtex(title):
 
     return first_char + rest
 
-
-def strip_accents(text):
-    """Strip diacritics/accents from text: Erdős -> Erdos, García -> Garcia."""
-    nfkd = unicodedata.normalize('NFKD', text)
-    return ''.join(c for c in nfkd if not unicodedata.combining(c))
-
-
-def slugify(name):
-    """Convert a name to a URL-friendly slug: 'Per Alexandersson' -> 'per-alexandersson'."""
-    s = strip_accents(name).lower()
-    s = re.sub(r"[^a-z0-9\s-]", '', s)   # remove non-alphanumeric (keep spaces and hyphens)
-    s = re.sub(r'[\s]+', '-', s.strip())  # spaces to hyphens
-    s = re.sub(r'-+', '-', s)             # collapse multiple hyphens
-    return s
 
 
 def generate_bibtex_key(authors, year, published=False):
@@ -219,6 +206,26 @@ def get_paper_authors(cursor, paper_id):
     return [row['name'] for row in cursor.fetchall()]
 
 
+def attach_authors(cursor, papers):
+    """Attach authors to a list of papers in a single query (avoids N+1)."""
+    if not papers:
+        return
+    paper_ids = [p['id'] for p in papers]
+    placeholders = ','.join(['%s'] * len(paper_ids))
+    cursor.execute(f"""
+        SELECT pa.paper_id, a.name
+        FROM authors a
+        JOIN paper_authors pa ON a.id = pa.author_id
+        WHERE pa.paper_id IN ({placeholders})
+        ORDER BY pa.paper_id, pa.author_order
+    """, paper_ids)
+    authors_by_paper = {}
+    for row in cursor.fetchall():
+        authors_by_paper.setdefault(row['paper_id'], []).append(row['name'])
+    for paper in papers:
+        paper['authors'] = authors_by_paper.get(paper['id'], [])
+
+
 @app.route('/')
 def index():
     """Homepage - list recent papers."""
@@ -251,9 +258,7 @@ def index():
 
     papers = cursor.fetchall()
 
-    # Get authors for each paper
-    for paper in papers:
-        paper['authors'] = get_paper_authors(cursor, paper['id'])
+    attach_authors(cursor, papers)
 
     cursor.close()
     conn.close()
@@ -512,9 +517,7 @@ def search():
 
     papers = cursor.fetchall()
 
-    # Get authors for each paper
-    for paper in papers:
-        paper['authors'] = get_paper_authors(cursor, paper['id'])
+    attach_authors(cursor, papers)
 
     cursor.close()
     conn.close()
@@ -581,9 +584,7 @@ def author_papers(author_slug):
 
     papers = cursor.fetchall()
 
-    # Get authors for each paper
-    for paper in papers:
-        paper['authors'] = get_paper_authors(cursor, paper['id'])
+    attach_authors(cursor, papers)
 
     cursor.close()
     conn.close()
@@ -602,9 +603,6 @@ def author_papers(author_slug):
 @app.route('/browse')
 def browse_by_date():
     """Browse papers by calendar date."""
-    from datetime import datetime, date
-    import calendar
-
     year = request.args.get('year', datetime.now().year, type=int)
 
     conn = get_db_connection()
@@ -667,7 +665,6 @@ def browse_by_date():
 @app.route('/date/<date_str>')
 def papers_by_date(date_str):
     """Show papers from a specific date."""
-    from datetime import datetime
     try:
         date = datetime.strptime(date_str, '%Y-%m-%d').date()
     except ValueError:
@@ -686,9 +683,7 @@ def papers_by_date(date_str):
 
     papers = cursor.fetchall()
 
-    # Get authors for each paper
-    for paper in papers:
-        paper['authors'] = get_paper_authors(cursor, paper['id'])
+    attach_authors(cursor, papers)
 
     cursor.close()
     conn.close()
@@ -735,9 +730,9 @@ def author_bibtex(author_slug):
     """, (author['id'],))
 
     papers = cursor.fetchall()
+    attach_authors(cursor, papers)
     entries = []
     for paper in papers:
-        paper['authors'] = get_paper_authors(cursor, paper['id'])
         # Always include arXiv entry
         entries.append(arxiv2bib(paper))
         # If published, also include the published entry

@@ -15,8 +15,7 @@ venv/
 env/
 ENV/
 
-# Database
-database/
+# Database files (schema is tracked, data files are not)
 *.db
 *.sqlite
 
@@ -35,6 +34,9 @@ log/
 deployment/
 backfill_production.sh
 use_local.sh
+
+# Claude Code
+.claude/
 
 # OS
 .DS_Store

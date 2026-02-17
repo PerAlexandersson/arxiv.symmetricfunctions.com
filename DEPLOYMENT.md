@@ -119,7 +119,7 @@ Create systemd service file:
 sudo nano /etc/systemd/system/arxiv.service
 ```
 
-Paste the contents from `deployment/arxiv.service` (see configuration files below).
+Paste a systemd service unit for gunicorn (see example below in Configuration Files).
 
 ```bash
 # Reload systemd and start service
@@ -137,7 +137,7 @@ sudo systemctl status arxiv
 sudo nano /etc/nginx/sites-available/arxiv
 ```
 
-Paste the contents from `deployment/nginx.conf` (see configuration files below).
+Paste an Nginx reverse proxy config for gunicorn (see example below in Configuration Files).
 
 ```bash
 # Enable site
@@ -240,10 +240,45 @@ Add:
 
 ## Configuration Files
 
-See the `deployment/` directory for:
-- `arxiv.service` - Systemd service configuration
-- `nginx.conf` - Nginx reverse proxy configuration
-- `gunicorn.conf.py` - Gunicorn WSGI server configuration
+You'll need to create these configuration files for your deployment:
+
+**`/etc/systemd/system/arxiv.service`** - Systemd service:
+```ini
+[Unit]
+Description=arXiv Combinatorics Frontend
+After=network.target mariadb.service
+
+[Service]
+User=www-data
+WorkingDirectory=/var/www/arxiv
+ExecStart=/var/www/arxiv/venv/bin/gunicorn --bind 127.0.0.1:8000 --workers 3 src.app:app
+Restart=always
+EnvironmentFile=/var/www/arxiv/.env
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**`/etc/nginx/sites-available/arxiv`** - Nginx reverse proxy:
+```nginx
+server {
+    listen 80;
+    server_name arxiv.yourdomain.com;
+
+    location /static/ {
+        alias /var/www/arxiv/src/static/;
+        expires 30d;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
 
 ## Useful Commands
 

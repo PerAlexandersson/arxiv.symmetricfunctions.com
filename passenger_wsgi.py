@@ -7,14 +7,14 @@ This file is required for deploying Flask apps on shared hosting with Passenger
 import sys
 import os
 
-# Set up paths (Passenger already uses correct Python from .htaccess)
-sys.path.insert(0, os.path.expanduser('~/domains/arxiv.symmetricfunctions.com/src'))
-sys.path.insert(0, os.path.expanduser('~/domains/arxiv.symmetricfunctions.com'))
+# Derive paths relative to this file's location
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(BASE_DIR, 'src'))
+sys.path.insert(0, BASE_DIR)
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
-env_path = os.path.expanduser('~/domains/arxiv.symmetricfunctions.com/.env')
-load_dotenv(env_path)
+load_dotenv(os.path.join(BASE_DIR, '.env'))
 
 # Import the Flask application
 from src.app import app as application

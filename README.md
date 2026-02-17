@@ -2,6 +2,8 @@
 
 A web interface for browsing arXiv papers in combinatorics (math.CO category).
 
+**Tech stack:** Python 3 / Flask, MariaDB, plain HTML/CSS/JS, arXiv API.
+
 **Features:** Browse papers, search by author/title, one-click BibTeX export, KaTeX math rendering.
 
 ---
@@ -157,27 +159,35 @@ LIMIT 10;
 
 ```
 arxiv.symmetricfunctions.com/
-├── .env                      # Database credentials (NOT in git!)
 ├── .env.example              # Template for environment variables
-├── venv/                     # Python virtual environment (local, not synced)
 ├── requirements.txt          # Python dependencies
-├── README.md                 # This file
-├── SPEC.md                   # Project specification
+├── setup_venv.sh             # Virtual environment setup
+├── activate_venv.sh          # Source to activate venv
+├── run_app.sh                # Start the Flask dev server
+├── fetch_papers.sh           # Fetch papers from arXiv
+├── passenger_wsgi.py         # WSGI entry point (shared hosting)
 ├── database/
 │   ├── schema.sql            # Database schema
 │   └── setup_database.sh     # Database setup script
 └── src/
-    ├── config.py             # Configuration loader
-    ├── fetch_arxiv.py        # arXiv scraping script
     ├── app.py                # Flask web application
+    ├── config.py             # Configuration loader
+    ├── fetch_arxiv.py        # arXiv fetching script
+    ├── utils.py              # Shared utilities (slugify, etc.)
+    ├── tags_helper.py        # Tag management CLI
     ├── static/
-    │   └── style.css         # Styles matching symmetricfunctions.com
-    └── templates/            # HTML templates
+    │   ├── style.css         # Stylesheet
+    │   └── utils.js          # Client-side utilities
+    └── templates/
         ├── base.html         # Base template with KaTeX
-        ├── index.html        # Homepage
+        ├── _macros.html      # Reusable template macros
+        ├── index.html         # Homepage
         ├── paper.html        # Paper details
         ├── author.html       # Author page
-        └── search.html       # Search results
+        ├── search.html       # Search results
+        ├── browse.html       # Calendar browse
+        ├── date.html         # Papers by date
+        └── tools.html        # BibTeX tools
 ```
 
 **Note:** The `venv/` directory is machine-local and not included in the repository.
@@ -212,4 +222,18 @@ arxiv.symmetricfunctions.com/
 
 ---
 
-For more details, see [SPEC.md](SPEC.md) for project architecture and features.
+## Database Design
+
+See `database/schema.sql` for the complete schema.
+
+- **`papers`** — Main paper metadata (arxiv_id, title, abstract, dates)
+- **`authors`** — Author names (normalized, no duplicates)
+- **`paper_authors`** — Many-to-many junction table
+
+---
+
+## Future Ideas
+
+- Track favorites and organize papers
+- Keyword tagging system (see [TAGGING_PLAN.md](TAGGING_PLAN.md))
+- Link recognized keywords in abstracts to the symmetric functions catalog
