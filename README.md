@@ -2,6 +2,8 @@
 
 A web interface for browsing arXiv papers in combinatorics (math.CO category).
 
+Built with [Claude Code](https://claude.ai/claude-code).
+
 **Tech stack:** Python 3 / Flask, MariaDB, plain HTML/CSS/JS, arXiv API.
 
 **Features:** Browse papers, search by author/title, one-click BibTeX export, KaTeX math rendering.
@@ -235,5 +237,5 @@ See `database/schema.sql` for the complete schema.
 ## Future Ideas
 
 - Track favorites and organize papers
-- Keyword tagging system (see [TAGGING_PLAN.md](TAGGING_PLAN.md))
+- Keyword tagging system (MSC codes, arXiv categories)
 - Link recognized keywords in abstracts to the symmetric functions catalog
