@@ -31,6 +31,11 @@ log/
 *.swo
 *~
 
+# Deployment (contains private hosting details)
+deployment/
+backfill_production.sh
+use_local.sh
+
 # OS
 .DS_Store
 Thumbs.db
