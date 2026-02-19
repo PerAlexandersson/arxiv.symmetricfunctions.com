@@ -18,6 +18,8 @@ ENV/
 # Database files (schema is tracked, data files are not)
 *.db
 *.sqlite
+*dump*.sql
+*_dump.sql
 
 # Logs
 *.log
