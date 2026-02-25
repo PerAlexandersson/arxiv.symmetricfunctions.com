@@ -218,11 +218,24 @@ def mark_candidate():
 def keywords():
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM keywords ORDER BY score DESC, phrase ASC")
+    cursor.execute("SELECT * FROM keywords ORDER BY phrase ASC")
     kws = cursor.fetchall()
     cursor.close()
     conn.close()
     return render_template('admin/keywords.html', keywords=kws)
+
+
+@admin.route('/keywords/<int:kid>/score', methods=['POST'])
+@login_required
+def set_score(kid):
+    score = max(1, min(10, request.form.get('score', 5, type=int)))
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE keywords SET score=%s WHERE id=%s", (score, kid))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return redirect(url_for('admin.keywords'))
 
 
 @admin.route('/keywords/<int:kid>/edit', methods=['GET', 'POST'])
@@ -263,4 +276,19 @@ def delete_keyword(kid):
     conn.commit()
     cursor.close()
     conn.close()
+    return redirect(url_for('admin.keywords'))
+
+
+@admin.route('/keywords/bulk_delete', methods=['POST'])
+@login_required
+def bulk_delete():
+    ids = request.form.getlist('ids', type=int)
+    if ids:
+        conn = get_db()
+        cursor = conn.cursor()
+        placeholders = ','.join(['%s'] * len(ids))
+        cursor.execute(f"DELETE FROM keywords WHERE id IN ({placeholders})", ids)
+        conn.commit()
+        cursor.close()
+        conn.close()
     return redirect(url_for('admin.keywords'))

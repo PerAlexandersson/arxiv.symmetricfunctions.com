@@ -13,14 +13,15 @@ table.kw-table th {
 }
 table.kw-table td { padding: 0.35rem 0.6rem; border-bottom: 1px solid var(--c-border-light, #eee); vertical-align: middle; }
 table.kw-table tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
+table.kw-table tr.selected td { background: #fffbe6; }
 
-.score-badge {
-  display: inline-block; width: 1.8em; text-align: center;
-  background: var(--c-link, #0066cc); color: #fff;
-  border-radius: 3px; font-size: 0.82rem; padding: 0.1rem 0.2rem;
-}
 .url-cell { font-size: 0.8rem; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .phrase { font-family: monospace; }
+
+.bulk-bar {
+  margin-top: 0.8rem; display: flex; gap: 0.6rem; align-items: center;
+  font-size: 0.85rem;
+}
 </style>
 {% endblock %}
 
@@ -34,10 +35,15 @@ table.kw-table tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
 
 <h2 style="margin-top: 0;">Keywords</h2>
 
+{# Hidden bulk-action form — checkboxes reference it via form="bulk-form" #}
+<form id="bulk-form" method="post" action="{{ url_for('admin.bulk_delete') }}"
+      onsubmit="return confirm('Delete ' + document.querySelectorAll('input[name=ids]:checked').length + ' keyword(s)?')"></form>
+
 {% if keywords %}
 <table class="kw-table">
   <thead>
     <tr>
+      <th><input type="checkbox" id="select-all" title="Select all"></th>
       <th>Score</th>
       <th>Phrase</th>
       <th>Tag name</th>
@@ -48,7 +54,14 @@ table.kw-table tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
   <tbody>
   {% for kw in keywords %}
   <tr>
-    <td><span class="score-badge">{{ kw.score }}</span></td>
+    <td><input type="checkbox" name="ids" value="{{ kw.id }}" form="bulk-form"></td>
+    <td>
+      <form method="post" action="{{ url_for('admin.set_score', kid=kw.id) }}" style="display:inline">
+        <input type="number" name="score" value="{{ kw.score }}" min="1" max="10"
+               style="width:3em; text-align:center; padding:0.1rem; border:1px solid var(--c-border,#ccc); border-radius:3px; background:var(--c-bg,#fff); color:var(--c-text,#000); font-size:0.85rem;"
+               onchange="this.form.submit()">
+      </form>
+    </td>
     <td class="phrase">{{ kw.phrase }}</td>
     <td style="font-size:0.85rem; color:var(--c-muted,#666)">
       {% if kw.tag_name != kw.phrase %}{{ kw.tag_name }}{% endif %}
@@ -68,7 +81,40 @@ table.kw-table tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
   {% endfor %}
   </tbody>
 </table>
+
+<div class="bulk-bar">
+  <button type="submit" form="bulk-form"
+          style="padding:0.3rem 0.8rem; background:#f8d7da; color:#721c24; border:1px solid #f5c6cb; border-radius:3px; cursor:pointer;">
+    Delete selected
+  </button>
+  <span id="sel-count" style="color:var(--c-muted,#666)"></span>
+</div>
+
 {% else %}
 <p style="color: var(--c-muted, #666)">No keywords yet. <a href="{{ url_for('admin.candidates') }}">Add some from candidates →</a></p>
 {% endif %}
+
+<script>
+const selectAll = document.getElementById('select-all');
+const selCount  = document.getElementById('sel-count');
+
+function updateCount() {
+  const n = document.querySelectorAll('input[name=ids]:checked').length;
+  selCount.textContent = n ? n + ' selected' : '';
+  // Highlight selected rows
+  document.querySelectorAll('input[name=ids]').forEach(cb => {
+    cb.closest('tr').classList.toggle('selected', cb.checked);
+  });
+}
+
+if (selectAll) {
+  selectAll.addEventListener('change', function() {
+    document.querySelectorAll('input[name=ids]').forEach(cb => cb.checked = this.checked);
+    updateCount();
+  });
+  document.querySelectorAll('input[name=ids]').forEach(cb =>
+    cb.addEventListener('change', updateCount)
+  );
+}
+</script>
 {% endblock %}

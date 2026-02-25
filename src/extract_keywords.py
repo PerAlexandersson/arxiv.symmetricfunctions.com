@@ -38,6 +38,7 @@ MATH_SINGULAR_OVERRIDES = {
     'rhombus':    'rhombus',  # inflect mangles this to 'rhombu'
     'locus':      'locus',    # inflect mangles this to 'locu'
     'foci':       'focus',
+    'torus':      'torus',          # inflect returns 'toru'
     'tori':       'torus',
     'lemmata':    'lemma',
     'automata':   'automaton',
@@ -59,6 +60,33 @@ MATH_SINGULAR_OVERRIDES = {
     'basis':         'basis',         # inflect returns 'basi'
     'analysis':      'analysis',      # inflect returns 'analysi'
     'oeis':          'oeis',          # inflect returns 'oei'
+    'genus':         'genus',         # inflect returns 'genu'
+    'genera':        'genus',         # correct plural of genus
+    'modulus':       'modulus',       # inflect returns 'modulu'
+    'moduli':        'modulus',       # correct plural of modulus
+    'cactus':        'cactus',        # inflect returns 'cactu'
+    'cacti':         'cactus',        # correct plural of cactus
+    # Mathematician names ending in -s that inflect mangles
+    'jones':         'jones',
+    'rogers':        'rogers',
+    'andrews':       'andrews',
+    'burns':         'burns',
+    'waters':        'waters',
+    'commons':       'commons',
+    'adams':         'adams',
+    'williams':      'williams',
+    'thomas':        'thomas',
+    'gross':         'gross',
+    'weiss':         'weiss',
+    'fuss':          'fuss',
+    'brooks':        'brooks',
+    'phillips':      'phillips',
+    'gauss':         'gauss',         # inflect returns 'gaus'
+    'kreweras':      'kreweras',      # inflect returns 'krewera'
+    'lucas':         'lucas',         # inflect returns 'luca'
+
+    'bias':          'bias',          # inflect returns 'bia'
+    'submatrices':   'submatrix',     # inflect returns 'submatrice'
 }
 
 
@@ -71,8 +99,23 @@ def singularize(word: str) -> str:
             # Don't singularize stopwords — inflect mangles function words
             # (e.g. this->thi, was->wa) producing forms that bypass the filter
             _singular_cache[word] = word
-        elif word.endswith('less'):
-            # inflect strips the final 's' from -less adjectives (signless->signles)
+        elif word.endswith('less') or word.endswith('ness'):
+            # inflect strips the final 's' from -less/-ness words
+            # (signless->signles, completeness->completenes)
+            _singular_cache[word] = word
+        elif word.endswith('ous'):
+            # inflect strips the final 's' from -ous words
+            # (ubiquitous->ubiquitou, continuous->continuou, homogeneous->homogeneou)
+            _singular_cache[word] = word
+        elif word.endswith('ss'):
+            # inflect strips the final 's' from -ss words (success->succes,
+            # stress->stres, guess->gues, chess->ches, progress->progres)
+            # Note: 'class' is already handled via MATH_SINGULAR_OVERRIDES
+            _singular_cache[word] = word
+        elif word.endswith('is'):
+            # -is words are either already overridden above (axis, basis, analysis)
+            # or are proper names (lewis, harris, davis, morris) that inflect
+            # mangles to -i by stripping the final 's'
             _singular_cache[word] = word
         else:
             result = _inflect.singular_noun(word)
@@ -140,7 +183,7 @@ STOPWORDS = {
     'parametrise', 'parametrised', 'parametrize', 'parametrized', 'parametrizing',
     'proc', 'procedure', 'produced', 'producing', 'proof', 'property', 'proportion', 'quite', 'quote', 'quoting',
     'qft', 'question',
-    'rare', 'rather', 'realized', 'realizing', 'reasonable', 'recall', 'recalling', 'recent', 'recently',
+    'rare', 'rather', 'realized', 'realizing', 'reasonable', 'recall', 'recalling', 'recent', 'recently', 'regardless',
     'relation', 'relative', 'relatively', 'remain', 'remaining', 'require', 'required', 'research', 'resp', 'respectively', 'restricted', 'right', 'robustly',
     'moderate', 'opposite', 'prescribed',
     'same', 'satisfy', 'satisfied', 'satisfying', 'say', 'saying', 'seeming', 'seems', 'select', 'setting', 'simplest', 'since',
@@ -151,6 +194,8 @@ STOPWORDS = {
     'bound', 'family', 'lower', 'size', 'term', 'upper', 'value',
     'way', 'what', 'whereas', 'whereby', 'while', 'whose', 'without', 'yield', 'yielding',
     'zero', 'zeroth',
+    'nevertheless',
+    'consensus',
 }
 
 
