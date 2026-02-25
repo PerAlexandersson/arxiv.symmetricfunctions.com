@@ -19,6 +19,9 @@ validate_config()
 app = Flask(__name__)
 app.config.update(FLASK_CONFIG)
 
+from admin import admin as admin_blueprint
+app.register_blueprint(admin_blueprint)
+
 # Register slugify as a Jinja filter
 app.jinja_env.filters['slugify'] = lambda name: slugify(name) if name else ''
 

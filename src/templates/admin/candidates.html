@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% block title %}Keyword Candidates — Admin{% endblock %}
+
+{% block extra_css %}
+<style>
+.admin-nav { margin-bottom: 1.5rem; font-size: 0.9rem; }
+.admin-nav a { margin-right: 1rem; }
+
+.filters {
+  display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: flex-end;
+  background: var(--c-bg-alt, #f5f5f5); padding: 0.8rem 1rem;
+  border-radius: 4px; margin-bottom: 1rem;
+}
+.filters label { display: flex; flex-direction: column; font-size: 0.82rem; gap: 0.2rem; }
+.filters input[type=number], .filters input[type=text], .filters select {
+  padding: 0.3rem 0.4rem; border: 1px solid var(--c-border, #ccc); border-radius: 3px;
+  background: var(--c-bg, #fff); color: var(--c-text, #000);
+}
+.filters input[type=number] { width: 5em; }
+.filters input[type=text]   { width: 12em; }
+
+.stats { font-size: 0.85rem; color: var(--c-muted, #666); margin-bottom: 0.8rem; }
+
+table.candidates { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+table.candidates th {
+  text-align: left; padding: 0.4rem 0.6rem;
+  border-bottom: 2px solid var(--c-border, #ccc); white-space: nowrap;
+}
+table.candidates td {
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid var(--c-border-light, #eee);
+  vertical-align: middle;
+}
+table.candidates tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
+
+.phrase { font-family: monospace; font-size: 0.95rem; }
+
+/* Status badges */
+.badge {
+  display: inline-block; font-size: 0.75rem; padding: 0.1rem 0.45rem;
+  border-radius: 3px; white-space: nowrap;
+}
+.badge-useful   { background: #d4edda; color: #1a6630; }
+.badge-math     { background: #cce5ff; color: #004085; }
+.badge-ignore   { background: #f8d7da; color: #721c24; }
+
+/* Action buttons — single form with hidden status input */
+.action-btns { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+.action-btns button {
+  padding: 0.2rem 0.55rem; font-size: 0.8rem; border-radius: 3px;
+  cursor: pointer; border: 1px solid transparent;
+}
+.btn-useful  { background: #d4edda; color: #1a6630; border-color: #b1dfbb; }
+.btn-math    { background: #cce5ff; color: #004085; border-color: #b8daff; }
+.btn-ignore  { background: #f8d7da; color: #721c24; border-color: #f5c6cb; }
+.btn-undo    { background: none; color: var(--c-muted,#888); border-color: var(--c-border,#ccc); font-size: 0.75rem; }
+.btn-edit    { background: none; color: var(--c-link,#06c); border-color: var(--c-border,#ccc); font-size: 0.8rem; }
+.action-btns button:hover { filter: brightness(0.93); }
+
+.pagination { margin-top: 1.2rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.pagination a, .pagination span {
+  padding: 0.3rem 0.7rem; border: 1px solid var(--c-border, #ccc); border-radius: 3px; font-size: 0.85rem;
+}
+.pagination a { color: var(--c-link, #0066cc); text-decoration: none; }
+.pagination a:hover { background: var(--c-bg-alt, #f5f5f5); }
+.pagination .current { background: var(--c-link, #0066cc); color: #fff; border-color: var(--c-link, #0066cc); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-nav">
+  <strong>Admin:</strong>
+  <a href="{{ url_for('admin.candidates') }}">Candidates</a>
+  <a href="{{ url_for('admin.keywords') }}">Keywords ({{ useful_count }})</a>
+  <a href="{{ url_for('admin.logout') }}" style="float:right; color: var(--c-muted,#666)">Log out</a>
+</div>
+
+<h2 style="margin-top: 0;">Keyword Candidates</h2>
+
+{# ── Filters ── #}
+<form method="get" class="filters">
+  <label>Min words
+    <input type="number" name="min_words" value="{{ min_words }}" min="1" max="4">
+  </label>
+  <label>Max words
+    <input type="number" name="max_words" value="{{ max_words }}" min="1" max="4">
+  </label>
+  <label>Min papers
+    <input type="number" name="min_count" value="{{ min_count }}" min="1">
+  </label>
+  <label>Search
+    <input type="text" name="search" value="{{ search }}" placeholder="filter phrase…">
+  </label>
+  <label>Show
+    <select name="show">
+      {% for val, label in [
+          ('unreviewed', 'Unreviewed'),
+          ('useful',     'Useful'),
+          ('math',       'Math'),
+          ('ignore',     'Ignore'),
+          ('all',        'All')] %}
+        <option value="{{ val }}" {% if show == val %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button type="submit" style="align-self: flex-end; padding: 0.35rem 0.8rem;">Apply</button>
+</form>
+
+{# ── Stats ── #}
+<p class="stats">
+  Showing <strong>{{ total }}</strong> {{ show }} candidates
+  &nbsp;·&nbsp; <span style="color:#1a6630">{{ useful_count }} useful</span>
+  &nbsp;·&nbsp; <span style="color:#004085">{{ math_count }} math</span>
+  &nbsp;·&nbsp; <span style="color:#721c24">{{ ignored_count }} ignored</span>
+  &nbsp;·&nbsp; page {{ page }}/{{ total_pages }}
+</p>
+
+{# ── Legend ── #}
+<p style="font-size:0.8rem; color:var(--c-muted,#666); margin-bottom:0.8rem;">
+  <span class="badge badge-useful">useful</span> tag papers + score &nbsp;
+  <span class="badge badge-math">math</span> valid but too broad alone &nbsp;
+  <span class="badge badge-ignore">ignore</span> not math / typo / boilerplate
+</p>
+
+{# ── Table ── #}
+{% if candidates %}
+<table class="candidates">
+  <thead>
+    <tr>
+      <th>Phrase</th>
+      <th style="text-align:right">Papers</th>
+      <th style="text-align:right">Words</th>
+      <th>Status</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for c in candidates %}
+  <tr>
+    <td class="phrase">{{ c.phrase }}</td>
+    <td style="text-align:right">{{ c.paper_count }}</td>
+    <td style="text-align:right">{{ c.word_count }}</td>
+    <td>
+      {% if c.status == 'useful' %}
+        <span class="badge badge-useful">useful</span>
+      {% elif c.status == 'math' %}
+        <span class="badge badge-math">math</span>
+      {% elif c.status == 'ignore' %}
+        <span class="badge badge-ignore">ignore</span>
+      {% endif %}
+    </td>
+    <td>
+      <div class="action-btns">
+        {# All actions go through a single route with a 'status' field #}
+        {% if c.status == 'useful' %}
+          <a href="{{ url_for('admin.keywords') }}" class="btn-edit" style="padding:0.2rem 0.55rem; font-size:0.8rem; border:1px solid var(--c-border,#ccc); border-radius:3px; text-decoration:none;">Edit ↗</a>
+          <form method="post" action="{{ url_for('admin.mark_candidate') }}" style="display:contents">
+            <input type="hidden" name="phrase" value="{{ c.phrase }}">
+            <input type="hidden" name="status" value="unreviewed">
+            <button type="submit" class="btn-undo">✕ unmark</button>
+          </form>
+        {% else %}
+          <form method="post" action="{{ url_for('admin.mark_candidate') }}" style="display:contents">
+            <input type="hidden" name="phrase" value="{{ c.phrase }}">
+            {% if c.status != 'useful' %}
+              <input type="hidden" name="status" value="useful">
+              <button type="submit" class="btn-useful">Useful</button>
+            {% endif %}
+          </form>
+          <form method="post" action="{{ url_for('admin.mark_candidate') }}" style="display:contents">
+            <input type="hidden" name="phrase" value="{{ c.phrase }}">
+            {% if c.status != 'math' %}
+              <input type="hidden" name="status" value="math">
+              <button type="submit" class="btn-math">Math</button>
+            {% endif %}
+          </form>
+          <form method="post" action="{{ url_for('admin.mark_candidate') }}" style="display:contents">
+            <input type="hidden" name="phrase" value="{{ c.phrase }}">
+            {% if c.status != 'ignore' %}
+              <input type="hidden" name="status" value="ignore">
+              <button type="submit" class="btn-ignore">Ignore</button>
+            {% endif %}
+          </form>
+          {% if c.status != 'unreviewed' %}
+          <form method="post" action="{{ url_for('admin.mark_candidate') }}" style="display:contents">
+            <input type="hidden" name="phrase" value="{{ c.phrase }}">
+            <input type="hidden" name="status" value="unreviewed">
+            <button type="submit" class="btn-undo">✕</button>
+          </form>
+          {% endif %}
+        {% endif %}
+      </div>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p style="color: var(--c-muted, #666)">No candidates match the current filters.</p>
+{% endif %}
+
+{# ── Pagination ── #}
+{% if total_pages > 1 %}
+<div class="pagination">
+  {% if page > 1 %}
+    <a href="?min_words={{ min_words }}&max_words={{ max_words }}&min_count={{ min_count }}&search={{ search }}&show={{ show }}&page={{ page - 1 }}">← Prev</a>
+  {% endif %}
+  {% for p in range([1, page-2]|max, [total_pages+1, page+3]|min) %}
+    {% if p == page %}
+      <span class="current">{{ p }}</span>
+    {% else %}
+      <a href="?min_words={{ min_words }}&max_words={{ max_words }}&min_count={{ min_count }}&search={{ search }}&show={{ show }}&page={{ p }}">{{ p }}</a>
+    {% endif %}
+  {% endfor %}
+  {% if page < total_pages %}
+    <a href="?min_words={{ min_words }}&max_words={{ max_words }}&min_count={{ min_count }}&search={{ search }}&show={{ show }}&page={{ page + 1 }}">Next →</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

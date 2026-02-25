@@ -28,6 +28,9 @@ FLASK_CONFIG = {
 # Secret key for triggering paper fetches via URL
 FETCH_SECRET = os.getenv('FETCH_SECRET', '')
 
+# Admin UI password
+ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', '')
+
 def validate_config():
     """Validate that required configuration is set."""
     if not DB_CONFIG['password']:

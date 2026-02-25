@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Keywords — Admin{% endblock %}
+
+{% block extra_css %}
+<style>
+.admin-nav { margin-bottom: 1.5rem; font-size: 0.9rem; }
+.admin-nav a { margin-right: 1rem; }
+
+table.kw-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+table.kw-table th {
+  text-align: left; padding: 0.4rem 0.6rem;
+  border-bottom: 2px solid var(--c-border, #ccc);
+}
+table.kw-table td { padding: 0.35rem 0.6rem; border-bottom: 1px solid var(--c-border-light, #eee); vertical-align: middle; }
+table.kw-table tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
+
+.score-badge {
+  display: inline-block; width: 1.8em; text-align: center;
+  background: var(--c-link, #0066cc); color: #fff;
+  border-radius: 3px; font-size: 0.82rem; padding: 0.1rem 0.2rem;
+}
+.url-cell { font-size: 0.8rem; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.phrase { font-family: monospace; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-nav">
+  <strong>Admin:</strong>
+  <a href="{{ url_for('admin.candidates') }}">Candidates</a>
+  <a href="{{ url_for('admin.keywords') }}"><strong>Keywords ({{ keywords|length }})</strong></a>
+  <a href="{{ url_for('admin.logout') }}" style="float:right; color: var(--c-muted,#666)">Log out</a>
+</div>
+
+<h2 style="margin-top: 0;">Keywords</h2>
+
+{% if keywords %}
+<table class="kw-table">
+  <thead>
+    <tr>
+      <th>Score</th>
+      <th>Phrase</th>
+      <th>Tag name</th>
+      <th>URL</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for kw in keywords %}
+  <tr>
+    <td><span class="score-badge">{{ kw.score }}</span></td>
+    <td class="phrase">{{ kw.phrase }}</td>
+    <td style="font-size:0.85rem; color:var(--c-muted,#666)">
+      {% if kw.tag_name != kw.phrase %}{{ kw.tag_name }}{% endif %}
+    </td>
+    <td class="url-cell">
+      {% if kw.url %}<a href="{{ kw.url }}" target="_blank">{{ kw.url }}</a>{% endif %}
+    </td>
+    <td style="white-space:nowrap">
+      <a href="{{ url_for('admin.edit_keyword', kid=kw.id) }}" style="font-size:0.85rem">Edit</a>
+      &nbsp;
+      <form method="post" action="{{ url_for('admin.delete_keyword', kid=kw.id) }}" style="display:inline"
+            onsubmit="return confirm('Delete keyword «{{ kw.phrase }}»?')">
+        <button type="submit" style="font-size:0.82rem; background:none; border:none; color:#c00; cursor:pointer; padding:0">Delete</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p style="color: var(--c-muted, #666)">No keywords yet. <a href="{{ url_for('admin.candidates') }}">Add some from candidates →</a></p>
+{% endif %}
+{% endblock %}

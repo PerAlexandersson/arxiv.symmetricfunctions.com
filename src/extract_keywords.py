@@ -56,6 +56,9 @@ MATH_SINGULAR_OVERRIDES = {
     'process':       'process',       # inflect returns 'proces'
     'thesis':        'thesis',        # inflect returns 'thesi'
     'combinatorics': 'combinatorics', # inflect returns 'combinatoric'
+    'basis':         'basis',         # inflect returns 'basi'
+    'analysis':      'analysis',      # inflect returns 'analysi'
+    'oeis':          'oeis',          # inflect returns 'oei'
 }
 
 
@@ -67,6 +70,9 @@ def singularize(word: str) -> str:
         elif word in STOPWORDS:
             # Don't singularize stopwords — inflect mangles function words
             # (e.g. this->thi, was->wa) producing forms that bypass the filter
+            _singular_cache[word] = word
+        elif word.endswith('less'):
+            # inflect strips the final 's' from -less adjectives (signless->signles)
             _singular_cache[word] = word
         else:
             result = _inflect.singular_noun(word)
