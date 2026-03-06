@@ -97,10 +97,11 @@ async function copyDoiBibtex(arxivId) {
  * Fetch BibTeX and display in element
  * @param {string} arxivId - The arXiv paper ID
  * @param {string} elementId - Target element ID for display
+ * @param {string} [apiPath='/api/bibtex/'] - API endpoint prefix (override for DOI bibtex)
  */
-async function fetchBibtex(arxivId, elementId) {
+async function fetchBibtex(arxivId, elementId, apiPath = '/api/bibtex/') {
     try {
-        const response = await fetch(`/api/bibtex/${arxivId}`);
+        const response = await fetch(`${apiPath}${arxivId}`);
         const bibtex = await response.text();
         document.getElementById(elementId).textContent = bibtex;
     } catch (error) {
@@ -275,6 +276,33 @@ function initDarkMode() {
         document.documentElement.classList.add('dark');
     }
     updateDarkModeLabel();
+}
+
+// ============================================================================
+// UI FEATURES - Tab Switching
+// ============================================================================
+
+/**
+ * Switch between tab panels (shared by tools.html and paper.html)
+ * Tab content IDs must match button IDs as "<tabId>-btn"
+ * @param {string} tabId - ID of the tab content panel to show
+ */
+function showTab(tabId) {
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.style.display = 'none';
+    });
+    document.querySelectorAll('.tab-button').forEach(btn => {
+        btn.style.borderBottomColor = 'transparent';
+        btn.style.color = 'var(--c-text-sub)';
+        btn.style.fontWeight = 'normal';
+    });
+    document.getElementById(tabId).style.display = 'block';
+    const btn = document.getElementById(tabId + '-btn');
+    if (btn) {
+        btn.style.borderBottomColor = 'var(--c-link)';
+        btn.style.color = 'var(--c-link)';
+        btn.style.fontWeight = '600';
+    }
 }
 
 // ============================================================================

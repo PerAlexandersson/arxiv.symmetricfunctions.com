@@ -64,11 +64,11 @@
 
     {% if paper.doi %}
     <div id="tabs" style="border-bottom: 2px solid var(--c-border); margin-bottom: 1rem;">
-        <button class="tab-button active" onclick="showBibtexTab('arxiv-tab')" id="arxiv-tab-btn"
+        <button class="tab-button active" onclick="showTab('arxiv-tab')" id="arxiv-tab-btn"
                 style="padding: 0.5rem 1rem; margin-right: 0.5rem; background: none; border: none; border-bottom: 3px solid var(--c-link); cursor: pointer; font-weight: 600; color: var(--c-link);">
             arXiv BibTeX
         </button>
-        <button class="tab-button" onclick="showBibtexTab('published-tab')" id="published-tab-btn"
+        <button class="tab-button" onclick="showTab('published-tab')" id="published-tab-btn"
                 style="padding: 0.5rem 1rem; background: none; border: none; border-bottom: 3px solid transparent; cursor: pointer; color: var(--c-text-sub);">
             Published BibTeX
         </button>
@@ -92,52 +92,11 @@
 
 {% block extra_js %}
 <script>
-// Fetch BibTeX on page load
-async function loadBibtex() {
-    try {
-        const response = await fetch('/api/bibtex/{{ paper.arxiv_id }}');
-        const bibtex = await response.text();
-        document.getElementById('arxiv-bibtex').textContent = bibtex;
-    } catch (error) {
-        document.getElementById('arxiv-bibtex').textContent = 'Error loading BibTeX';
-    }
-
-    {% if paper.doi %}
-    try {
-        const response = await fetch('/api/doi-bibtex/{{ paper.arxiv_id }}');
-        const bibtex = await response.text();
-        document.getElementById('published-bibtex').textContent = bibtex;
-    } catch (error) {
-        document.getElementById('published-bibtex').textContent = 'Error loading published BibTeX';
-    }
-    {% endif %}
-}
-
-loadBibtex();
-
-function showBibtexTab(tabId) {
-    // Hide all tabs
-    document.querySelectorAll('.tab-content').forEach(tab => {
-        tab.style.display = 'none';
-    });
-
-    // Remove active class from all buttons
-    document.querySelectorAll('.tab-button').forEach(btn => {
-        btn.style.borderBottomColor = 'transparent';
-        btn.style.color = 'var(--c-text-sub)';
-        btn.style.fontWeight = 'normal';
-    });
-
-    // Show selected tab
-    document.getElementById(tabId).style.display = 'block';
-
-    // Activate button
-    const btnId = tabId + '-btn';
-    const btn = document.getElementById(btnId);
-    btn.style.borderBottomColor = 'var(--c-link)';
-    btn.style.color = 'var(--c-link)';
-    btn.style.fontWeight = '600';
-}
+// Fetch BibTeX on page load using utils.js fetchBibtex()
+fetchBibtex('{{ paper.arxiv_id }}', 'arxiv-bibtex');
+{% if paper.doi %}
+fetchBibtex('{{ paper.arxiv_id }}', 'published-bibtex', '/api/doi-bibtex/');
+{% endif %}
 
 function copyBibtexContent(elementId) {
     const bibtex = document.getElementById(elementId).textContent;

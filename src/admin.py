@@ -21,7 +21,7 @@ import csv
 import functools
 
 from flask import (Blueprint, render_template, request, redirect,
-                   url_for, session, flash, abort)
+                   url_for, session, flash, abort, jsonify)
 import pymysql
 from config import DB_CONFIG, ADMIN_PASSWORD
 
@@ -238,7 +238,7 @@ def set_score(kid):
     conn.commit()
     cursor.close()
     conn.close()
-    return redirect(url_for('admin.keywords'))
+    return jsonify({'ok': True, 'score': score})
 
 
 @admin.route('/keywords/<int:kid>/edit', methods=['GET', 'POST'])

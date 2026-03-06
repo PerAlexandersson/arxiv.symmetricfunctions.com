@@ -106,34 +106,10 @@ async function generateBibtex(event) {
     }
 }
 
-function showTab(tabId) {
-    // Hide all tabs
-    document.querySelectorAll('.tab-content').forEach(tab => {
-        tab.style.display = 'none';
-    });
-
-    // Remove active class from all buttons
-    document.querySelectorAll('.tab-button').forEach(btn => {
-        btn.style.borderBottomColor = 'transparent';
-        btn.style.color = 'var(--c-text-sub)';
-        btn.style.fontWeight = 'normal';
-    });
-
-    // Show selected tab
-    document.getElementById(tabId).style.display = 'block';
-
-    // Activate button
-    const btnId = tabId + '-btn';
-    const btn = document.getElementById(btnId);
-    btn.style.borderBottomColor = 'var(--c-link)';
-    btn.style.color = 'var(--c-link)';
-    btn.style.fontWeight = '600';
-}
-
 async function copyText(elementId) {
     const text = document.getElementById(elementId).textContent;
     try {
-        await navigator.clipboard.writeText(text);
+        await copyToClipboard(text);
         alert('Copied to clipboard!');
     } catch (err) {
         alert('Failed to copy: ' + err);

@@ -56,11 +56,9 @@ table.kw-table tr.selected td { background: #fffbe6; }
   <tr>
     <td><input type="checkbox" name="ids" value="{{ kw.id }}" form="bulk-form"></td>
     <td>
-      <form method="post" action="{{ url_for('admin.set_score', kid=kw.id) }}" style="display:inline">
-        <input type="number" name="score" value="{{ kw.score }}" min="1" max="10"
-               style="width:3em; text-align:center; padding:0.1rem; border:1px solid var(--c-border,#ccc); border-radius:3px; background:var(--c-bg,#fff); color:var(--c-text,#000); font-size:0.85rem;"
-               onchange="this.form.submit()">
-      </form>
+      <input type="number" value="{{ kw.score }}" min="1" max="10"
+             style="width:3em; text-align:center; padding:0.1rem; border:1px solid var(--c-border,#ccc); border-radius:3px; background:var(--c-bg,#fff); color:var(--c-text,#000); font-size:0.85rem;"
+             onchange="setScore({{ kw.id }}, this)">
     </td>
     <td class="phrase">{{ kw.phrase }}</td>
     <td style="font-size:0.85rem; color:var(--c-muted,#666)">
@@ -115,6 +113,22 @@ if (selectAll) {
   document.querySelectorAll('input[name=ids]').forEach(cb =>
     cb.addEventListener('change', updateCount)
   );
+}
+
+async function setScore(kid, input) {
+  const prev = input.defaultValue;
+  const fd = new FormData();
+  fd.append('score', input.value);
+  try {
+    const res = await fetch(`/admin/keywords/${kid}/score`, { method: 'POST', body: fd });
+    if (!res.ok) throw new Error('server error');
+    input.defaultValue = input.value;
+    input.style.outline = '2px solid #4a4';
+    setTimeout(() => input.style.outline = '', 800);
+  } catch (err) {
+    alert('Failed to save score');
+    input.value = prev;
+  }
 }
 </script>
 {% endblock %}
