@@ -363,6 +363,34 @@ def tools():
     return render_template('tools.html')
 
 
+@app.route('/authors')
+def prolific_authors():
+    """List authors with 50 or more papers."""
+    sort = request.args.get('sort', 'count')
+    conn = get_db_connection()
+    cursor = conn.cursor(pymysql.cursors.DictCursor)
+    if sort == 'name':
+        order = "SUBSTRING_INDEX(a.name, ' ', -1) ASC, a.name ASC"
+    else:
+        order = "paper_count DESC, a.name ASC"
+    cursor.execute(f"""
+        SELECT a.name, a.slug, COUNT(*) AS paper_count
+        FROM paper_authors pa
+        JOIN authors a ON pa.author_id = a.id
+        GROUP BY a.id, a.name, a.slug
+        HAVING paper_count >= 50
+        ORDER BY {order}
+    """)
+    authors = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    # Split into 3 roughly equal columns
+    n = len(authors)
+    col_size = (n + 2) // 3
+    columns = [authors[i:i + col_size] for i in range(0, n, col_size)]
+    return render_template('authors.html', columns=columns, total=n, sort=sort)
+
+
 @app.route('/api/generate-bibtex', methods=['POST'])
 def generate_bibtex_api():
     """API endpoint to generate BibTeX from arXiv ID or DOI."""

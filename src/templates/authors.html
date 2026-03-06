@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Prolific Authors — arXiv Combinatorics Browser{% endblock %}
+
+{% block extra_css %}
+<style>
+.sort-bar { margin-bottom: 1.2rem; font-size: 0.9rem; color: var(--c-text-sub, #666); }
+.sort-bar a { margin-left: 0.5rem; }
+.sort-bar .active { font-weight: 700; color: var(--c-text); text-decoration: none; }
+
+.author-columns {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0 2rem;
+}
+@media (max-width: 700px) {
+  .author-columns { grid-template-columns: 1fr; }
+}
+
+.author-list { list-style: none; margin: 0; padding: 0; }
+.author-list li {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 0.2rem 0;
+  border-bottom: 1px solid var(--c-border-light, #eee);
+  font-size: 0.9rem;
+}
+.author-list li a { color: var(--c-link); text-decoration: none; }
+.author-list li a:hover { text-decoration: underline; }
+.paper-count {
+  font-size: 0.78rem; color: var(--c-text-sub, #888);
+  white-space: nowrap; margin-left: 0.4rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<h2 style="margin-top:0">Prolific Authors <span style="font-weight:300; font-size:0.8em">({{ total }} authors with 50+ papers)</span></h2>
+
+<div class="sort-bar">
+  Sort by:
+  <a href="?sort=count" class="{{ 'active' if sort == 'count' else '' }}">Paper count</a>
+  ·
+  <a href="?sort=name" class="{{ 'active' if sort == 'name' else '' }}">Last name</a>
+</div>
+
+<div class="author-columns">
+  {% for col in columns %}
+  <ul class="author-list">
+    {% for a in col %}
+    <li>
+      <a href="/author/{{ a.slug }}">{{ a.name }}</a>
+      <span class="paper-count">{{ a.paper_count }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endfor %}
+</div>
+{% endblock %}
