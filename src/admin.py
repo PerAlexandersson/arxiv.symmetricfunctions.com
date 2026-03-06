@@ -57,7 +57,7 @@ def load_candidates():
     return _candidates_cache
 
 
-def get_db():
+def get_db_connection():
     return pymysql.connect(**DB_CONFIG, cursorclass=pymysql.cursors.DictCursor)
 
 
@@ -104,8 +104,11 @@ def login():
     if request.method == 'POST':
         if ADMIN_PASSWORD and request.form.get('password') == ADMIN_PASSWORD:
             session['admin_logged_in'] = True
-            next_url = request.args.get('next') or url_for('admin.candidates')
-            return redirect(next_url)
+            next_url = request.args.get('next', '')
+            # Only allow redirects to local paths (prevent open redirect)
+            if next_url and next_url.startswith('/') and not next_url.startswith('//'):
+                return redirect(next_url)
+            return redirect(url_for('admin.candidates'))
         flash('Wrong password.')
     return render_template('admin/login.html')
 
@@ -131,7 +134,7 @@ def candidates():
 
     all_candidates = load_candidates()
 
-    conn = get_db()
+    conn = get_db_connection()
     cursor = conn.cursor()
     useful, math, ignored = _get_reviewed(cursor)
     cursor.close()
@@ -182,7 +185,7 @@ def mark_candidate():
     if not phrase:
         return redirect(request.referrer or url_for('admin.candidates'))
 
-    conn = get_db()
+    conn = get_db_connection()
     cursor = conn.cursor()
 
     # Remove from all three tables first (clean slate)
@@ -216,7 +219,7 @@ def mark_candidate():
 @admin.route('/keywords')
 @login_required
 def keywords():
-    conn = get_db()
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM keywords ORDER BY phrase ASC")
     kws = cursor.fetchall()
@@ -229,7 +232,7 @@ def keywords():
 @login_required
 def set_score(kid):
     score = max(1, min(10, request.form.get('score', 5, type=int)))
-    conn = get_db()
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("UPDATE keywords SET score=%s WHERE id=%s", (score, kid))
     conn.commit()
@@ -241,7 +244,7 @@ def set_score(kid):
 @admin.route('/keywords/<int:kid>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_keyword(kid):
-    conn = get_db()
+    conn = get_db_connection()
     cursor = conn.cursor()
 
     if request.method == 'POST':
@@ -270,7 +273,7 @@ def edit_keyword(kid):
 @admin.route('/keywords/<int:kid>/delete', methods=['POST'])
 @login_required
 def delete_keyword(kid):
-    conn = get_db()
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM keywords WHERE id = %s", (kid,))
     conn.commit()
@@ -284,7 +287,7 @@ def delete_keyword(kid):
 def bulk_delete():
     ids = request.form.getlist('ids', type=int)
     if ids:
-        conn = get_db()
+        conn = get_db_connection()
         cursor = conn.cursor()
         placeholders = ','.join(['%s'] * len(ids))
         cursor.execute(f"DELETE FROM keywords WHERE id IN ({placeholders})", ids)

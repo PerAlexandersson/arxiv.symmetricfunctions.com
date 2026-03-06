@@ -5,7 +5,7 @@ app.py - Flask web application for arXiv combinatorics frontend
 Main web interface for browsing arXiv papers.
 """
 
-from flask import Flask, render_template, request, jsonify, abort, redirect, url_for, Response
+from flask import Flask, render_template, request, jsonify, abort, redirect, url_for
 import pymysql
 from config import DB_CONFIG, FLASK_CONFIG, FETCH_SECRET, validate_config
 from datetime import datetime, date
@@ -209,6 +209,26 @@ def get_paper_authors(cursor, paper_id):
     return [row['name'] for row in cursor.fetchall()]
 
 
+def attach_keywords(cursor, papers):
+    """Attach keywords to a list of papers in a single query (avoids N+1)."""
+    if not papers:
+        return
+    paper_ids = [p['id'] for p in papers]
+    placeholders = ','.join(['%s'] * len(paper_ids))
+    cursor.execute(f"""
+        SELECT pk.paper_id, k.phrase, k.url
+        FROM paper_keywords pk
+        JOIN keywords k ON pk.keyword_id = k.id
+        WHERE pk.paper_id IN ({placeholders})
+        ORDER BY pk.paper_id, k.score DESC, k.phrase ASC
+    """, paper_ids)
+    kw_by_paper = {}
+    for row in cursor.fetchall():
+        kw_by_paper.setdefault(row['paper_id'], []).append({'phrase': row['phrase'], 'url': row['url']})
+    for paper in papers:
+        paper['keywords'] = kw_by_paper.get(paper['id'], [])
+
+
 def attach_authors(cursor, papers):
     """Attach authors to a list of papers in a single query (avoids N+1)."""
     if not papers:
@@ -262,6 +282,7 @@ def index():
     papers = cursor.fetchall()
 
     attach_authors(cursor, papers)
+    attach_keywords(cursor, papers)
 
     cursor.close()
     conn.close()
@@ -296,6 +317,15 @@ def paper_detail(arxiv_id):
         abort(404)
 
     paper['authors'] = get_paper_authors(cursor, paper['id'])
+
+    cursor.execute("""
+        SELECT k.phrase, k.score, k.url
+        FROM paper_keywords pk
+        JOIN keywords k ON pk.keyword_id = k.id
+        WHERE pk.paper_id = %s
+        ORDER BY k.score DESC, k.phrase ASC
+    """, (paper['id'],))
+    paper['keywords'] = cursor.fetchall()
 
     cursor.close()
     conn.close()
@@ -470,12 +500,13 @@ def generate_bibtex_api():
 def search():
     """Search papers by title or author."""
     query = request.args.get('q', '').strip()
-    page = request.args.get('page', 1, type=int)
+    sort  = request.args.get('sort', 'relevance')  # 'relevance' or 'date'
+    page  = request.args.get('page', 1, type=int)
     per_page = 20
     offset = (page - 1) * per_page
 
     if not query:
-        return render_template('search.html', papers=[], query='', total=0)
+        return render_template('search.html', papers=[], query='', total=0, sort=sort)
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -485,6 +516,18 @@ def search():
     # Get latest published date
     cursor.execute("SELECT MAX(published_date) as latest FROM papers")
     latest_date = cursor.fetchone()['latest']
+
+    # Keyword score subquery — aggregated per paper, independent of author join
+    kw_subquery = """
+        (SELECT pk.paper_id, COALESCE(SUM(k.score), 0) AS kw_score
+         FROM paper_keywords pk
+         JOIN keywords k ON pk.keyword_id = k.id
+         GROUP BY pk.paper_id) kw
+    """
+
+    order_clause = ("kw_score DESC, p.published_date DESC, p.id DESC"
+                    if sort == 'relevance'
+                    else "p.published_date DESC, p.id DESC")
 
     # Use FULLTEXT for title/abstract when words are long enough (min 3 chars),
     # fall back to LIKE for very short queries
@@ -502,19 +545,23 @@ def search():
             WHERE MATCH(p.title, p.abstract) AGAINST(%s IN BOOLEAN MODE)
                OR a.name LIKE %s
         """, (ft_query, author_term))
-
         total = cursor.fetchone()['count']
 
-        cursor.execute("""
-            SELECT DISTINCT p.id, p.arxiv_id, p.title, p.abstract,
+        cursor.execute(f"""
+            SELECT p.id, p.arxiv_id, p.title, p.abstract,
                    p.published_date, p.updated_date, p.journal_ref, p.doi,
-                   p.comment, p.primary_category
+                   p.comment, p.primary_category,
+                   COALESCE(kw.kw_score, 0) AS kw_score
             FROM papers p
             LEFT JOIN paper_authors pa ON p.id = pa.paper_id
             LEFT JOIN authors a ON pa.author_id = a.id
+            LEFT JOIN {kw_subquery} ON p.id = kw.paper_id
             WHERE MATCH(p.title, p.abstract) AGAINST(%s IN BOOLEAN MODE)
                OR a.name LIKE %s
-            ORDER BY p.published_date DESC, p.id DESC
+            GROUP BY p.id, p.arxiv_id, p.title, p.abstract,
+                     p.published_date, p.updated_date, p.journal_ref, p.doi,
+                     p.comment, p.primary_category, kw.kw_score
+            ORDER BY {order_clause}
             LIMIT %s OFFSET %s
         """, (ft_query, author_term, per_page, offset))
     else:
@@ -529,26 +576,30 @@ def search():
                OR p.abstract LIKE %s
                OR a.name LIKE %s
         """, (like_term, like_term, like_term))
-
         total = cursor.fetchone()['count']
 
-        cursor.execute("""
-            SELECT DISTINCT p.id, p.arxiv_id, p.title, p.abstract,
+        cursor.execute(f"""
+            SELECT p.id, p.arxiv_id, p.title, p.abstract,
                    p.published_date, p.updated_date, p.journal_ref, p.doi,
-                   p.comment, p.primary_category
+                   p.comment, p.primary_category,
+                   COALESCE(kw.kw_score, 0) AS kw_score
             FROM papers p
             LEFT JOIN paper_authors pa ON p.id = pa.paper_id
             LEFT JOIN authors a ON pa.author_id = a.id
+            LEFT JOIN {kw_subquery} ON p.id = kw.paper_id
             WHERE p.title LIKE %s
                OR p.abstract LIKE %s
                OR a.name LIKE %s
-            ORDER BY p.published_date DESC, p.id DESC
+            GROUP BY p.id, p.arxiv_id, p.title, p.abstract,
+                     p.published_date, p.updated_date, p.journal_ref, p.doi,
+                     p.comment, p.primary_category, kw.kw_score
+            ORDER BY {order_clause}
             LIMIT %s OFFSET %s
         """, (like_term, like_term, like_term, per_page, offset))
 
     papers = cursor.fetchall()
-
     attach_authors(cursor, papers)
+    attach_keywords(cursor, papers)
 
     cursor.close()
     conn.close()
@@ -556,12 +607,60 @@ def search():
     total_pages = (total + per_page - 1) // per_page
 
     return render_template('search.html',
-                         papers=papers,
-                         query=query,
-                         page=page,
-                         total_pages=total_pages,
-                         total=total,
-                         latest_date=latest_date)
+                           papers=papers,
+                           query=query,
+                           sort=sort,
+                           page=page,
+                           total_pages=total_pages,
+                           total=total,
+                           latest_date=latest_date)
+
+
+@app.route('/keyword/<path:phrase>')
+def keyword_papers(phrase):
+    """List papers tagged with a specific keyword, ordered by date."""
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    offset = (page - 1) * per_page
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, phrase, score, url FROM keywords WHERE phrase = %s AND active = 1", (phrase,))
+    keyword = cursor.fetchone()
+    if not keyword:
+        abort(404)
+
+    cursor.execute("""
+        SELECT COUNT(*) as count FROM paper_keywords WHERE keyword_id = %s
+    """, (keyword['id'],))
+    total = cursor.fetchone()['count']
+
+    cursor.execute("""
+        SELECT p.id, p.arxiv_id, p.title, p.abstract,
+               p.published_date, p.updated_date, p.journal_ref, p.doi,
+               p.comment, p.primary_category
+        FROM paper_keywords pk
+        JOIN papers p ON pk.paper_id = p.id
+        WHERE pk.keyword_id = %s
+        ORDER BY p.published_date DESC, p.id DESC
+        LIMIT %s OFFSET %s
+    """, (keyword['id'], per_page, offset))
+    papers = cursor.fetchall()
+
+    attach_authors(cursor, papers)
+    attach_keywords(cursor, papers)
+
+    cursor.close()
+    conn.close()
+
+    total_pages = (total + per_page - 1) // per_page
+    return render_template('keyword.html',
+                           keyword=keyword,
+                           papers=papers,
+                           page=page,
+                           total_pages=total_pages,
+                           total=total)
 
 
 @app.route('/author/<author_slug>')
@@ -616,6 +715,7 @@ def author_papers(author_slug):
     papers = cursor.fetchall()
 
     attach_authors(cursor, papers)
+    attach_keywords(cursor, papers)
 
     cursor.close()
     conn.close()
@@ -715,6 +815,7 @@ def papers_by_date(date_str):
     papers = cursor.fetchall()
 
     attach_authors(cursor, papers)
+    attach_keywords(cursor, papers)
 
     cursor.close()
     conn.close()
@@ -762,6 +863,7 @@ def author_bibtex(author_slug):
 
     papers = cursor.fetchall()
     attach_authors(cursor, papers)
+    attach_keywords(cursor, papers)
     entries = []
     for paper in papers:
         # Always include arXiv entry

@@ -1,3 +1,28 @@
+{% macro render_pagination(page, total_pages, base_url) %}
+{% if total_pages > 1 %}
+<div class="pagination">
+    {% if page > 1 %}
+        <a href="{{ base_url }}{{ page - 1 }}">« Previous</a>
+    {% endif %}
+
+    {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+            <span class="current">{{ p }}</span>
+        {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+            <a href="{{ base_url }}{{ p }}">{{ p }}</a>
+        {% elif p == page - 3 or p == page + 3 %}
+            <span>...</span>
+        {% endif %}
+    {% endfor %}
+
+    {% if page < total_pages %}
+        <a href="{{ base_url }}{{ page + 1 }}">Next »</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+
+
 {% macro render_paper(paper, latest_date=None) %}
 <div class="paper" id="paper-{{ paper.arxiv_id }}">
     <div class="paper-authors-row">
@@ -47,6 +72,14 @@
         <div class="paper-abstract">
             {{ paper.abstract }}
         </div>
+
+        {% if paper.keywords %}
+        <div class="paper-kw-tags paper-kw-tags--list">
+          {% for kw in paper.keywords %}
+            <a href="/keyword/{{ kw.phrase | urlencode }}" class="kw-tag kw-tag--small">{{ kw.phrase }}</a>
+          {% endfor %}
+        </div>
+        {% endif %}
     </details>
 </div>
 {% endmacro %}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% from '_macros.html' import render_paper, render_pagination %}
+
+{% block title %}{{ keyword.phrase }} — arXiv Combinatorics{% endblock %}
+
+{% block content %}
+<h2 style="margin-top: 0;">
+  {{ keyword.phrase }}
+  {% if keyword.url %}
+    <a href="{{ keyword.url }}" target="_blank" rel="noopener"
+       style="font-size: 0.6em; font-weight: 400; margin-left: 0.6rem; vertical-align: middle;">↗ reference</a>
+  {% endif %}
+</h2>
+
+<div class="stats">{{ total }} paper{% if total != 1 %}s{% endif %} tagged with this keyword</div>
+
+{% if papers %}
+  {% for paper in papers %}
+    {{ render_paper(paper, none) }}
+  {% endfor %}
+  {{ render_pagination(page, total_pages, '/keyword/' ~ (keyword.phrase | urlencode) ~ '?page=') }}
+{% else %}
+  <p>No papers tagged with this keyword yet.</p>
+{% endif %}
+{% endblock %}

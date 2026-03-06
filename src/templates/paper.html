@@ -39,6 +39,14 @@
     </div>
     {% endif %}
 
+    {% if paper.keywords %}
+    <div class="paper-kw-tags" style="margin-top: 0.8rem; line-height: 2;">
+      {% for kw in paper.keywords %}
+        <a href="/keyword/{{ kw.phrase | urlencode }}" class="kw-tag">{{ kw.phrase }}</a>
+      {% endfor %}
+    </div>
+    {% endif %}
+
     <div class="paper-links paper-detail-links" style="margin-top: 1.5rem;">
         <a href="https://arxiv.org/abs/{{ paper.arxiv_id }}" target="_blank" rel="noopener">View on arXiv</a>
         <span class="bullet">•</span>

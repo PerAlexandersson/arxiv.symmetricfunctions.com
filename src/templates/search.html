@@ -1,40 +1,27 @@
 {% extends "base.html" %}
-{% from '_macros.html' import render_paper %}
+{% from '_macros.html' import render_paper, render_pagination %}
 
 {% block title %}Search Results - arXiv Combinatorics{% endblock %}
 
 {% block content %}
 {% if query %}
-    <div class="stats">
-        Found {{ total }} paper(s) matching "{{ query }}"
+    <div class="stats" style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:0.5rem;">
+      <span>Found {{ total }} paper(s) matching "{{ query }}"</span>
+      <span style="font-size:0.85rem; color:var(--c-text-sub,#666);">
+        Sort:
+        <a href="?q={{ query | urlencode }}&sort=relevance"
+           {% if sort == 'relevance' %}style="font-weight:700; color:var(--c-text); text-decoration:none;"{% endif %}>Relevance</a>
+        ·
+        <a href="?q={{ query | urlencode }}&sort=date"
+           {% if sort == 'date' %}style="font-weight:700; color:var(--c-text); text-decoration:none;"{% endif %}>Date</a>
+      </span>
     </div>
 
     {% if papers %}
         {% for paper in papers %}
             {{ render_paper(paper, latest_date) }}
         {% endfor %}
-
-        {% if total_pages > 1 %}
-        <div class="pagination">
-            {% if page > 1 %}
-                <a href="/search?q={{ query }}&page={{ page - 1 }}">« Previous</a>
-            {% endif %}
-
-            {% for p in range(1, total_pages + 1) %}
-                {% if p == page %}
-                    <span class="current">{{ p }}</span>
-                {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
-                    <a href="/search?q={{ query }}&page={{ p }}">{{ p }}</a>
-                {% elif p == page - 3 or p == page + 3 %}
-                    <span>...</span>
-                {% endif %}
-            {% endfor %}
-
-            {% if page < total_pages %}
-                <a href="/search?q={{ query }}&page={{ page + 1 }}">Next »</a>
-            {% endif %}
-        </div>
-        {% endif %}
+        {{ render_pagination(page, total_pages, '/search?q=' ~ (query | urlencode) ~ '&sort=' ~ sort ~ '&page=') }}
     {% else %}
         <p>No papers found matching your search.</p>
     {% endif %}

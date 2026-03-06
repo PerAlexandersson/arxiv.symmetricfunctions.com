@@ -12,7 +12,6 @@ Usage:
 
 import re
 import csv
-import sys
 import argparse
 import unicodedata
 from collections import defaultdict
