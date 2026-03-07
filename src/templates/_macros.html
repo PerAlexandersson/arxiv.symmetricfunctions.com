@@ -60,7 +60,6 @@
         <div class="paper-publication">
             Published in {{ paper.journal_ref }}
             {% if paper.doi %}
-                • <a href="https://doi.org/{{ paper.doi }}" target="_blank" rel="noopener">DOI</a>
                 • <a href="https://doi.org/{{ paper.doi }}" target="_blank" rel="noopener">View Publication</a>
                 • <a href="#" onclick="copyDoiBibtex('{{ paper.arxiv_id }}'); return false;" title="Copy published BibTeX entry">BIB</a>
             {% elif paper.journal_ref %}
