@@ -6,12 +6,17 @@ Main web interface for browsing arXiv papers.
 """
 
 from flask import Flask, render_template, request, jsonify, abort, redirect, url_for
-import pymysql
-from config import DB_CONFIG, FLASK_CONFIG, FETCH_SECRET, validate_config
-from datetime import datetime, date
+from urllib.parse import unquote
+import io
+import contextlib
 import calendar
 import re
+import pymysql
+import requests
+from config import DB_CONFIG, FLASK_CONFIG, FETCH_SECRET, validate_config
+from datetime import datetime, date
 from utils import strip_accents, slugify
+from fetch_arxiv import fetch_recent_papers
 
 # Validate configuration on startup
 validate_config()
@@ -129,8 +134,6 @@ def doi2bib(doi, paper_data=None):
     Returns:
         BibTeX string or None on error
     """
-    import requests
-
     if paper_data:
         # Generate custom BibTeX with user's preferred format
         year = paper_data['published_date'].year if hasattr(paper_data['published_date'], 'year') else paper_data['published_date']
@@ -193,7 +196,7 @@ def ensure_author_slugs():
 # Populate slugs on startup
 try:
     ensure_author_slugs()
-except Exception:
+except pymysql.Error:
     pass  # DB may not be available during development
 
 
@@ -619,6 +622,7 @@ def search():
 @app.route('/keyword/<path:phrase>')
 def keyword_papers(phrase):
     """List papers tagged with a specific keyword, ordered by date."""
+    phrase = unquote(phrase).replace('+', ' ')  # handle both %20 and + encodings
     page = request.args.get('page', 1, type=int)
     per_page = 20
     offset = (page - 1) * per_page
@@ -892,9 +896,6 @@ def fetch_papers():
 
     # Cap days to prevent abuse
     days = min(days, 30)
-
-    from fetch_arxiv import fetch_recent_papers
-    import io, contextlib
 
     # Capture output from fetch function
     output = io.StringIO()

@@ -1,108 +1,88 @@
-# Keywords & Auto-Tagging — Plan
+# Keywords & Auto-Tagging — Status
 
-## Goals
+## Data Model — DONE
 
-1. **Auto-tag papers** based on a curated keyword list
-2. **Score papers** by personal interest (weighted keyword matches, stored in DB)
-3. **Link keywords** in abstracts to pages on symmetricfunctions.com
-
----
-
-## Data Model
-
-### New DB tables
+### DB tables
 
 ```sql
 CREATE TABLE keywords (
     id            INT AUTO_INCREMENT PRIMARY KEY,
-    phrase        VARCHAR(255) NOT NULL UNIQUE,  -- canonical form, e.g. "schur function"
-    score         INT NOT NULL DEFAULT 1,         -- personal interest weight, 1–10
-    url           VARCHAR(500),                   -- link to symmetricfunctions.com (if any)
-    tag_name      VARCHAR(255),                   -- tag to apply (defaults to phrase)
-    active        BOOL NOT NULL DEFAULT TRUE,     -- disable without deleting
+    phrase        VARCHAR(255) NOT NULL UNIQUE,
+    score         INT NOT NULL DEFAULT 5,          -- personal interest weight, 1–10
+    url           TEXT,                            -- link to symmetricfunctions.com (if any)
+    tag_name      VARCHAR(255),                    -- display name (defaults to phrase)
+    active        BOOL NOT NULL DEFAULT TRUE,
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE keyword_aliases (
     id            INT AUTO_INCREMENT PRIMARY KEY,
     keyword_id    INT NOT NULL,
-    alias         VARCHAR(255) NOT NULL,          -- e.g. "schur polynomial", "s-function"
+    alias         VARCHAR(255) NOT NULL UNIQUE,
     FOREIGN KEY (keyword_id) REFERENCES keywords(id) ON DELETE CASCADE
 );
+
+-- Junction table written by auto_tag.py
+CREATE TABLE paper_keywords (
+    paper_id   INT NOT NULL,
+    keyword_id INT NOT NULL,
+    PRIMARY KEY (paper_id, keyword_id),
+    FOREIGN KEY (paper_id)   REFERENCES papers(id)   ON DELETE CASCADE,
+    FOREIGN KEY (keyword_id) REFERENCES keywords(id) ON DELETE CASCADE
+);
+
+-- Triage tables for candidate workflow
+CREATE TABLE ignored_candidates ( id INT AUTO_INCREMENT PRIMARY KEY, phrase VARCHAR(255) NOT NULL UNIQUE );
+CREATE TABLE math_words          ( id INT AUTO_INCREMENT PRIMARY KEY, phrase VARCHAR(255) NOT NULL UNIQUE );
 ```
 
-### Modify papers table
-
-```sql
-ALTER TABLE papers ADD COLUMN relevance_score INT NOT NULL DEFAULT 0;
-```
-
-Score = sum of `keywords.score` for all keywords matched in title+abstract.
-Cached in DB (depends on personal preferences, not recomputable from content alone).
+`relevance_score` on `papers` was considered but not added; `paper_keywords` serves the same purpose via a JOIN.
 
 ---
 
-## Components to Build
+## Components — Status
 
-### 1. DB schema migration
-Apply the above schema changes to both local and production databases.
+### ✅ 1. DB schema
+All tables exist in `database/schema.sql` (full reset) and `database/migrate.sql` (safe, additive).
 
-### 2. Auto-tagger script (`src/auto_tag.py`)
-- Reads all active keywords + aliases from DB
-- Scans papers (title + abstract) using same tokenization as `extract_keywords.py`
-  (strip LaTeX, lowercase, singularize, match n-grams)
-- For each match: insert into `paper_tags`, accumulate score
-- Writes final `relevance_score` to `papers` table
-- Supports full re-scan or incremental (new/unscored papers only)
+### ✅ 2. Auto-tagger — `src/auto_tag.py`
+- Reads active keywords from DB
+- Tokenizes title + abstract (via `extract_keywords.tokenize`)
+- Writes matches to `paper_keywords`
+- Supports `--all`, `--days N`, `--since YYYY-MM-DD`
+- Run via `./tag_papers.sh` locally or `./sync_to_prod.sh` for production
 
-### 3. symmetricfunctions.com keyword map import (`src/import_keyword_urls.py`)
-- symmetricfunctions.com build (from .tex files) exports a JSON file:
-  ```json
-  {"schur function": "/sf.htm#schur", "hall-littlewood": "/hl.htm", ...}
-  ```
-- Import script reads this JSON and updates `keywords.url` for matching phrases
-- The two sites stay fully decoupled; run this script after rebuilding the wiki
-
-### 4. Admin UI (Flask blueprint, `/admin`)
+### ✅ 3. Admin UI — `src/admin.py`
 Password-protected via `ADMIN_PASSWORD` in `.env`.
 
-Pages:
-- `/admin/keywords` — list all keywords (phrase, score, url, alias count, paper count)
-  - Add new keyword
-  - Quick-edit score inline
-  - Delete / deactivate
-- `/admin/keywords/<id>` — edit single keyword: phrase, score, url, tag_name, aliases
-- `/admin/retag` — trigger full auto-tagger run, show progress/summary
-- (Future) `/admin/papers` — browse papers sorted by relevance score
+| Route | Status |
+|-------|--------|
+| `/admin/candidates` | ✅ — triage CSV candidates (mark useful / math / ignore) |
+| `/admin/keywords` | ✅ — list all useful keywords with paper count |
+| `/admin/keywords/<id>/edit` | ✅ — edit phrase, score, url, tag_name |
+| `/admin/keywords/<id>/delete` | ✅ |
+| `/admin/keywords/bulk_delete` | ✅ |
+| `/admin/keywords/<id>/score` | ✅ — inline score update (JSON API) |
+| `/admin/retag` | ❌ — not yet; run `./tag_papers.sh --all` from CLI instead |
 
-### 5. Abstract keyword linking (template rendering)
-- At display time in `paper.html` (and anywhere else abstracts are shown),
-  post-process abstract text to wrap matched keywords in `<a href="...">` links
-- Only link keywords that have a `url` set
-- Should be done at render time (not stored in DB), so URL changes propagate automatically
+### ✅ 4. Keyword pages — `src/app.py` + `src/templates/keyword.html`
+`/keyword/<phrase>` lists all papers tagged with a keyword, with optional `keyword.url` reference link.
 
----
+### ✅ 5. Keyword tags on paper pages
+Tags displayed on paper detail (`paper.html`) and paper cards (`_macros.html`).
 
-## Notes on keyword curation
+### ❌ 6. Abstract keyword linking
+At render time, wrap matched keyword phrases in `<a href="keyword.url">` for keywords that have a URL set.
+Not yet implemented; keywords appear as tags only.
 
-- The `keywords` table is hand-curated (~50–200 entries), not auto-populated
-- Use `keywords.csv` and `keywords_multiword.csv` (from `extract_keywords.py`) as
-  inspiration/discovery aids only
-- Single-word keywords are fine (e.g. `matroid`, `quasisymmetric`, `tableau`)
-- Multi-word phrases have more false positives in extraction, but are fine in the
-  curated list (e.g. `hall-littlewood polynomial`, `symmetric group`)
-- Score guidelines (suggested):
-  - 10 — core topic (symmetric functions, Schur functions, etc.)
-  - 7  — closely related (matroids, tableaux, RSK, etc.)
-  - 5  — interesting but broader (polytopes, Coxeter groups, etc.)
-  - 3  — tangentially relevant
-  - 1  — general combinatorics (graph coloring, posets, etc.)
+### ❌ 7. `src/import_keyword_urls.py`
+Import a JSON map `{"phrase": "/url"}` exported from the symmetricfunctions.com build.
+Blocked by: unclear build toolchain for that site.
 
 ---
 
 ## Open Questions
 
-- [ ] What is the exact build tool for symmetricfunctions.com? (custom Python/Perl, Sphinx, other?)
-      → determines how easy the JSON export is to add
-- [ ] Should `/admin` be accessible on production, or local-only?
-- [ ] Re-tag trigger: manual (admin button) only for now, or also nightly cron?
+- [ ] Build tool for symmetricfunctions.com? (determines how easy the JSON export is)
+- [ ] Should `/admin` be accessible on production, or local-only via SSH tunnel?
+- [ ] Re-tag: add `/admin/retag` web route, or keep CLI-only?

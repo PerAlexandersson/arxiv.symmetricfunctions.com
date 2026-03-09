@@ -75,7 +75,7 @@
         {% if paper.keywords %}
         <div class="paper-kw-tags paper-kw-tags--list">
           {% for kw in paper.keywords %}
-            <a href="/keyword/{{ kw.phrase | urlencode }}" class="kw-tag kw-tag--small">{{ kw.phrase }}</a>
+            <a href="/keyword/{{ kw.phrase | replace(' ', '%20') }}" class="kw-tag kw-tag--small">{{ kw.phrase }}</a>
           {% endfor %}
         </div>
         {% endif %}

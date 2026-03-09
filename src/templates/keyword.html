@@ -18,7 +18,7 @@
   {% for paper in papers %}
     {{ render_paper(paper, none) }}
   {% endfor %}
-  {{ render_pagination(page, total_pages, '/keyword/' ~ (keyword.phrase | urlencode) ~ '?page=') }}
+  {{ render_pagination(page, total_pages, '/keyword/' ~ (keyword.phrase | replace(' ', '%20')) ~ '?page=') }}
 {% else %}
   <p>No papers tagged with this keyword yet.</p>
 {% endif %}
