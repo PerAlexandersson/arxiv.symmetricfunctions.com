@@ -8,12 +8,14 @@ Routes:
     GET  /logout                 → clear session
 """
 
+import os
+import requests as http_requests
 import pymysql
 from flask import (Blueprint, render_template, redirect, url_for,
                    session, request, flash, current_app)
 from authlib.integrations.flask_client import OAuth
 from config import DB_CONFIG, ORCID_CLIENT_ID, ORCID_CLIENT_SECRET
-import os
+
 DEV_ORCID_ID = os.getenv('DEV_ORCID_ID', '')
 
 auth = Blueprint('auth', __name__)
@@ -40,6 +42,33 @@ def init_oauth(app):
 
 def _get_db():
     return pymysql.connect(**DB_CONFIG, cursorclass=pymysql.cursors.DictCursor)
+
+
+def _fetch_orcid_name(orcid_id):
+    """Fetch display name from ORCID public API. Returns orcid_id on failure."""
+    try:
+        resp = http_requests.get(
+            f"https://pub.orcid.org/v3.0/{orcid_id}/person",
+            headers={'Accept': 'application/json'},
+            timeout=5
+        )
+        if resp.ok:
+            data = resp.json()
+            name_obj = data.get('name') or {}
+            given  = (name_obj.get('given-names')  or {}).get('value', '')
+            family = (name_obj.get('family-name')   or {}).get('value', '')
+            full   = ' '.join(filter(None, [given, family]))
+            return full or orcid_id
+    except Exception:
+        pass
+    return orcid_id
+
+
+def _set_session(user_id, name, orcid_id):
+    session.permanent = True   # persist across browser restarts
+    session['user_id']   = user_id
+    session['user_name'] = name
+    session['orcid_id']  = orcid_id
 
 
 def _upsert_user(provider, provider_id, display_name):
@@ -98,15 +127,14 @@ def orcid_callback():
         flash('Could not retrieve ORCID iD. Please try again.')
         return redirect(url_for('auth.login'))
 
-    # Build display name: prefer full name, fall back to ORCID iD
-    name = userinfo.get('name') or (
-        ' '.join(filter(None, [userinfo.get('given_name'), userinfo.get('family_name')]))
-    ) or orcid_id
+    # Build display name: prefer full name from id_token, else ORCID API, else iD
+    name = (userinfo.get('name') or
+            ' '.join(filter(None, [userinfo.get('given_name'), userinfo.get('family_name')])))
+    if not name:
+        name = _fetch_orcid_name(orcid_id)
 
     user_id = _upsert_user('orcid', orcid_id, name)
-    session['user_id']   = user_id
-    session['user_name'] = name
-    session['orcid_id']  = orcid_id
+    _set_session(user_id, name, orcid_id)
 
     next_url = session.pop('login_next', None)
     return redirect(next_url or url_for('index'))
@@ -119,10 +147,9 @@ def dev_login():
     """
     if not DEV_ORCID_ID:
         return 'Dev login not configured (DEV_ORCID_ID not set).', 403
-    user_id = _upsert_user('orcid', DEV_ORCID_ID, DEV_ORCID_ID)
-    session['user_id']   = user_id
-    session['user_name'] = DEV_ORCID_ID
-    session['orcid_id']  = DEV_ORCID_ID
+    name = _fetch_orcid_name(DEV_ORCID_ID)
+    user_id = _upsert_user('orcid', DEV_ORCID_ID, name)
+    _set_session(user_id, name, DEV_ORCID_ID)
     return redirect(url_for('index'))
 
 

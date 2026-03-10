@@ -14,7 +14,7 @@ import re
 import pymysql
 import requests
 from config import DB_CONFIG, FLASK_CONFIG, FETCH_SECRET, validate_config
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from utils import strip_accents, slugify
 from fetch_arxiv import fetch_recent_papers
 
@@ -23,6 +23,7 @@ validate_config()
 
 app = Flask(__name__)
 app.config.update(FLASK_CONFIG)
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
 
 from admin import admin as admin_blueprint
 app.register_blueprint(admin_blueprint)

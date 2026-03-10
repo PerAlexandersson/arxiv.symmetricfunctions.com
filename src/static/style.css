@@ -245,9 +245,13 @@ main {
 }
 
 .paper-date.latest-date {
+  background: #ff6b35;
+  color: #fff;
   font-weight: 700;
-  color: #ff6b35;
+  padding: 0.1em 0.5em;
+  border-radius: 999px;
 }
+
 
 .version-indicator {
   display: inline-block;
@@ -708,6 +712,62 @@ footer a {
   color: var(--c-link);
   text-decoration: none;
   border-bottom: 1px dotted var(--c-link);
+}
+
+/* Nav icon buttons */
+.nav-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: 0.6rem;
+  vertical-align: middle;
+}
+
+.nav-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: var(--c-text-sub);
+  cursor: pointer;
+  padding: 0.25rem;
+  text-decoration: none !important;
+  border-bottom: none !important;
+  transition: background 0.15s, color 0.15s;
+  font-size: inherit;
+}
+.nav-icon-btn:hover {
+  background: var(--c-bg-gray);
+  color: var(--c-brand);
+  text-decoration: none;
+}
+.nav-icon-btn svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  display: block;
+  flex-shrink: 0;
+}
+
+/* Sun/moon icon: show active mode (sun in light, moon in dark) */
+.nav-icon-btn svg.icon-moon { display: none; }
+.nav-icon-btn svg.icon-sun  { display: block; }
+:root.dark .nav-icon-btn svg.icon-sun  { display: none; }
+:root.dark .nav-icon-btn svg.icon-moon { display: block; }
+
+/* Signed-in username: small, muted, slightly offset */
+.nav-username {
+  font-size: 0.72rem;
+  color: var(--c-text-muted);
+  margin-left: 0.1rem;
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
 /* Authors page */

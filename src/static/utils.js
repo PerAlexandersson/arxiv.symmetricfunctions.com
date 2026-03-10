@@ -257,13 +257,14 @@ function toggleDarkMode() {
 }
 
 /**
- * Update the toggle link text
+ * Update the dark-mode toggle button aria-label (icons handled via CSS)
  */
 function updateDarkModeLabel() {
     const toggle = document.getElementById('dark-mode-toggle');
     if (toggle) {
         const isDark = document.documentElement.classList.contains('dark');
-        toggle.textContent = isDark ? 'Light mode' : 'Dark mode';
+        toggle.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
+        toggle.setAttribute('title',      isDark ? 'Switch to light mode' : 'Switch to dark mode');
     }
 }
 

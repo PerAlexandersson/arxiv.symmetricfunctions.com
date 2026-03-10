@@ -24,9 +24,10 @@
 
 
 {% macro render_paper(paper, latest_date=None) %}
-<div class="paper" id="paper-{{ paper.arxiv_id }}">
+{% set is_latest = latest_date and paper.published_date == latest_date %}
+<div class="paper{% if is_latest %} paper--new{% endif %}" id="paper-{{ paper.arxiv_id }}">
     <div class="paper-authors-row">
-        <div class="paper-date{% if latest_date and paper.published_date == latest_date %} latest-date{% endif %}">
+        <div class="paper-date{% if is_latest %} latest-date{% endif %}">
             {{ paper.published_date }}
             {% if 'v' in paper.arxiv_id and paper.arxiv_id.split('v')[-1].isdigit() %}
                 {% set version_num = paper.arxiv_id.split('v')[-1] %}
@@ -54,7 +55,7 @@
     </div>
 
     <details class="abstract-details" data-arxiv-id="{{ paper.arxiv_id }}">
-        <summary class="paper-title{% if paper.journal_ref or paper.doi %} published-paper{% endif %}">{{ paper.title }}</summary>
+        <summary class="paper-title{% if paper.journal_ref or paper.doi %} published-paper{% endif %}{% if is_latest %} paper-title--new{% endif %}">{{ paper.title }}</summary>
 
         {% if paper.journal_ref or paper.doi %}
         <div class="paper-publication">
