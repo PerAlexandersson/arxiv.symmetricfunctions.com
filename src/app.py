@@ -16,7 +16,6 @@ import requests
 from config import DB_CONFIG, FLASK_CONFIG, FETCH_SECRET, validate_config
 from datetime import datetime, date, timedelta
 from utils import strip_accents, slugify
-from fetch_arxiv import fetch_recent_papers
 
 # Validate configuration on startup
 validate_config()
@@ -915,7 +914,7 @@ def fetch_papers():
     # Cap days to prevent abuse
     days = min(days, 30)
 
-    # Capture output from fetch function
+    from fetch_arxiv import fetch_recent_papers
     output = io.StringIO()
     with contextlib.redirect_stdout(output):
         fetch_recent_papers(days=days)

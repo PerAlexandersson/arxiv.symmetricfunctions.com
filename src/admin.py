@@ -11,10 +11,13 @@ Routes:
     /admin/login         → password login
     /admin/logout        → clear session
     /admin/candidates    → browse keywords.csv and triage
-    /admin/keywords      → list all useful keywords
-    /admin/keywords/<id>/edit   → edit a keyword
-    /admin/keywords/<id>/delete → delete a keyword
-    /admin/retag                → re-tag papers by date range
+    /admin/keywords      → list all useful keywords (inline-editable)
+    /admin/keywords/<id>/inline  → AJAX: update phrase/url
+    /admin/keywords/<id>/score   → AJAX: update score
+    /admin/keywords/<id>/aliases/add    → AJAX: add alias
+    /admin/keywords/<id>/aliases/<aid>/delete → AJAX: remove alias
+    /admin/keywords/<id>/delete  → delete a keyword
+    /admin/retag                 → re-tag papers by date range
 """
 
 import os
@@ -73,19 +76,30 @@ def login_required(f):
 
 
 def _get_reviewed(cursor):
-    """Return (useful_set, math_set, ignored_set) from DB."""
+    """Return (useful_set, aliases_map, math_set, ignored_set) from DB.
+
+    aliases_map: alias phrase -> canonical keyword phrase
+    """
     cursor.execute("SELECT phrase FROM keywords")
     useful = {row['phrase'] for row in cursor.fetchall()}
+    cursor.execute("""
+        SELECT ka.alias, k.phrase AS canonical
+        FROM keyword_aliases ka
+        JOIN keywords k ON k.id = ka.keyword_id
+    """)
+    aliases_map = {row['alias']: row['canonical'] for row in cursor.fetchall()}
     cursor.execute("SELECT phrase FROM math_words")
     math = {row['phrase'] for row in cursor.fetchall()}
     cursor.execute("SELECT phrase FROM ignored_candidates")
     ignored = {row['phrase'] for row in cursor.fetchall()}
-    return useful, math, ignored
+    return useful, aliases_map, math, ignored
 
 
-def _phrase_status(phrase, useful, math, ignored):
+def _phrase_status(phrase, useful, aliases_map, math, ignored):
     if phrase in useful:
         return 'useful'
+    if phrase in aliases_map:
+        return 'alias'
     if phrase in math:
         return 'math'
     if phrase in ignored:
@@ -138,7 +152,7 @@ def candidates():
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    useful, math, ignored = _get_reviewed(cursor)
+    useful, aliases_map, math, ignored = _get_reviewed(cursor)
     cursor.close()
     conn.close()
 
@@ -150,10 +164,11 @@ def candidates():
             continue
         if search and search not in c['phrase']:
             continue
-        status = _phrase_status(c['phrase'], useful, math, ignored)
+        status = _phrase_status(c['phrase'], useful, aliases_map, math, ignored)
         if show != 'all' and status != show:
             continue
-        filtered.append({**c, 'status': status})
+        extra = {'alias_of': aliases_map.get(c['phrase'])} if status == 'alias' else {}
+        filtered.append({**c, 'status': status, **extra})
 
     total = len(filtered)
     total_pages = max(1, (total + per_page - 1) // per_page)
@@ -163,6 +178,7 @@ def candidates():
     return render_template(
         'admin/candidates.html',
         candidates=page_candidates,
+        keyword_phrases=sorted(useful),
         page=page,
         total_pages=total_pages,
         total=total,
@@ -180,9 +196,13 @@ def candidates():
 @admin.route('/candidates/mark', methods=['POST'])
 @login_required
 def mark_candidate():
-    """Mark a candidate as useful / math / ignore, or unmark it."""
+    """Mark a candidate as useful / alias / math / ignore, or unmark it."""
     phrase = request.form.get('phrase', '').strip()
-    status = request.form.get('status', '')   # useful | math | ignore | unreviewed
+    status = request.form.get('status', '')   # useful | alias | math | ignore | unreviewed
+    # keyword_phrase: corrected phrase (for useful) or the alias text (for alias)
+    keyword_phrase = request.form.get('keyword_phrase', '').strip() or phrase
+    # alias_of: canonical keyword phrase this candidate is an alias of
+    alias_of = request.form.get('alias_of', '').strip()
 
     if not phrase:
         return redirect(request.referrer or url_for('admin.candidates'))
@@ -190,16 +210,32 @@ def mark_candidate():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Remove from all three tables first (clean slate)
+    # Remove from all three tables and any existing alias entry (clean slate)
     cursor.execute("DELETE FROM keywords           WHERE phrase = %s", (phrase,))
     cursor.execute("DELETE FROM math_words         WHERE phrase = %s", (phrase,))
     cursor.execute("DELETE FROM ignored_candidates WHERE phrase = %s", (phrase,))
+    cursor.execute("DELETE FROM keyword_aliases    WHERE alias  = %s", (phrase,))
 
     if status == 'useful':
         cursor.execute(
-            "INSERT INTO keywords (phrase, score, tag_name) VALUES (%s, 5, %s)",
-            (phrase, phrase)
+            "INSERT INTO keywords (phrase, score) VALUES (%s, 5)",
+            (keyword_phrase,)
         )
+    elif status == 'alias' and alias_of:
+        # Look up the canonical keyword
+        cursor.execute("SELECT id FROM keywords WHERE phrase = %s", (alias_of,))
+        row = cursor.fetchone()
+        if row:
+            cursor.execute(
+                "INSERT IGNORE INTO keyword_aliases (keyword_id, alias) VALUES (%s, %s)",
+                (row['id'], keyword_phrase)
+            )
+        else:
+            # Canonical not found — fall back to creating a new keyword
+            cursor.execute(
+                "INSERT INTO keywords (phrase, score) VALUES (%s, 5)",
+                (keyword_phrase,)
+            )
     elif status == 'math':
         cursor.execute(
             "INSERT INTO math_words (phrase) VALUES (%s)", (phrase,)
@@ -235,9 +271,12 @@ def keywords():
     aliases_by_kw = {}
     for a in cursor.fetchall():
         aliases_by_kw.setdefault(a['keyword_id'], []).append(a)
+    all_phrases = sorted(row['phrase'] for row in kws)
     cursor.close()
     conn.close()
-    return render_template('admin/keywords.html', keywords=kws, aliases_by_kw=aliases_by_kw)
+    return render_template('admin/keywords.html', keywords=kws,
+                           aliases_by_kw=aliases_by_kw,
+                           keyword_phrases=all_phrases)
 
 
 @admin.route('/keywords/add', methods=['POST'])
@@ -248,8 +287,8 @@ def add_keyword():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT IGNORE INTO keywords (phrase, score, tag_name) VALUES (%s, 5, %s)",
-            (phrase, phrase)
+            "INSERT IGNORE INTO keywords (phrase, score) VALUES (%s, 5)",
+            (phrase,)
         )
         conn.commit()
         cursor.close()
@@ -261,9 +300,11 @@ def add_keyword():
 @login_required
 def inline_edit(kid):
     field = request.form.get('field')
-    if field not in ('url', 'tag_name'):
+    if field not in ('url', 'phrase'):
         abort(400)
     value = request.form.get('value', '').strip() or None
+    if field == 'phrase' and not value:
+        return jsonify({'ok': False, 'error': 'phrase cannot be empty'}), 400
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(f"UPDATE keywords SET {field}=%s WHERE id=%s", (value, kid))
@@ -321,34 +362,6 @@ def set_score(kid):
     conn.close()
     return jsonify({'ok': True, 'score': score})
 
-
-@admin.route('/keywords/<int:kid>/edit', methods=['GET', 'POST'])
-@login_required
-def edit_keyword(kid):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    if request.method == 'POST':
-        phrase   = request.form.get('phrase', '').strip()
-        score    = max(1, min(10, request.form.get('score', 5, type=int)))
-        url      = request.form.get('url', '').strip() or None
-        tag_name = request.form.get('tag_name', '').strip() or phrase
-        cursor.execute(
-            "UPDATE keywords SET phrase=%s, score=%s, url=%s, tag_name=%s WHERE id=%s",
-            (phrase, score, url, tag_name, kid)
-        )
-        conn.commit()
-        cursor.close()
-        conn.close()
-        return redirect(url_for('admin.keywords'))
-
-    cursor.execute("SELECT * FROM keywords WHERE id = %s", (kid,))
-    kw = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    if not kw:
-        abort(404)
-    return render_template('admin/keyword_edit.html', kw=kw)
 
 
 @admin.route('/keywords/<int:kid>/delete', methods=['POST'])

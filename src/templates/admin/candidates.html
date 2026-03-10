@@ -33,7 +33,19 @@ table.candidates td {
 }
 table.candidates tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
 
-.phrase { font-family: monospace; font-size: 0.95rem; }
+/* Phrase cell: looks like plain text, becomes an input on focus */
+.phrase-edit {
+  font-family: monospace; font-size: 0.95rem;
+  background: none; border: none;
+  border-bottom: 1px dashed transparent;
+  padding: 0; width: 100%; color: inherit; cursor: text;
+}
+.phrase-edit:hover  { border-bottom-color: var(--c-border, #ccc); }
+.phrase-edit:focus  {
+  outline: none; background: var(--c-bg, #fff);
+  border: 1px solid var(--c-link, #06c); border-radius: 3px;
+  padding: 0.1rem 0.3rem;
+}
 
 /* Status badges */
 .badge {
@@ -43,6 +55,7 @@ table.candidates tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
 .badge-useful   { background: #d4edda; color: #1a6630; }
 .badge-math     { background: #cce5ff; color: #004085; }
 .badge-ignore   { background: #f8d7da; color: #721c24; }
+.badge-alias    { background: #e8d5f5; color: #5a1a8a; }
 
 /* Action buttons — single form with hidden status input */
 .action-btns { display: flex; gap: 0.35rem; flex-wrap: wrap; }
@@ -180,9 +193,14 @@ table.candidates tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
 {# ── Legend ── #}
 <p style="font-size:0.8rem; color:var(--c-muted,#666); margin-bottom:0.8rem;">
   <span class="badge badge-useful">useful</span> tag papers + score &nbsp;
+  <span class="badge badge-alias">alias → …</span> synonym of another keyword &nbsp;
   <span class="badge badge-math">math</span> valid but too broad alone &nbsp;
   <span class="badge badge-ignore">ignore</span> not math / typo / boilerplate
 </p>
+
+<datalist id="kw-list">
+  {% for phrase in keyword_phrases %}<option value="{{ phrase }}">{% endfor %}
+</datalist>
 
 {# ── Table ── #}
 {% if candidates %}
@@ -198,13 +216,17 @@ table.candidates tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
   </thead>
   <tbody>
   {% for c in candidates %}
-  <tr>
-    <td class="phrase">{{ c.phrase }}</td>
+  <tr data-orig="{{ c.phrase }}">
+    <td>
+      <input class="phrase-edit" type="text" value="{{ c.phrase }}" title="Click to edit before adding">
+    </td>
     <td style="text-align:right">{{ c.paper_count }}</td>
     <td style="text-align:right">{{ c.word_count }}</td>
     <td>
       {% if c.status == 'useful' %}
         <span class="badge badge-useful">useful</span>
+      {% elif c.status == 'alias' %}
+        <span class="badge badge-alias" title="alias of: {{ c.alias_of }}">alias → {{ c.alias_of }}</span>
       {% elif c.status == 'math' %}
         <span class="badge badge-math">math</span>
       {% elif c.status == 'ignore' %}
@@ -213,35 +235,48 @@ table.candidates tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
     </td>
     <td>
       <div class="action-btns">
-        {# All actions go through a single route with a 'status' field #}
-        {% if c.status == 'useful' %}
-          <a href="{{ url_for('admin.keywords') }}" class="btn-edit" style="padding:0.2rem 0.55rem; font-size:0.8rem; border:1px solid var(--c-border,#ccc); border-radius:3px; text-decoration:none;">Edit ↗</a>
+        {% if c.status in ('useful', 'alias') %}
+          {% if c.status == 'useful' %}
+          <a href="{{ url_for('admin.keywords') }}" class="btn-edit"
+             style="padding:0.2rem 0.55rem; font-size:0.8rem; border:1px solid var(--c-border,#ccc); border-radius:3px; text-decoration:none;">Edit ↗</a>
+          {% endif %}
           <form method="post" action="{{ url_for('admin.mark_candidate') }}" style="display:contents">
             <input type="hidden" name="phrase" value="{{ c.phrase }}">
             <input type="hidden" name="status" value="unreviewed">
             <button type="submit" class="btn-undo">✕ unmark</button>
           </form>
         {% else %}
-          <form method="post" action="{{ url_for('admin.mark_candidate') }}" style="display:contents">
+          {# Useful: reads edited phrase from the phrase-edit input in this row #}
+          <form method="post" action="{{ url_for('admin.mark_candidate') }}" class="useful-form" style="display:contents">
             <input type="hidden" name="phrase" value="{{ c.phrase }}">
-            {% if c.status != 'useful' %}
-              <input type="hidden" name="status" value="useful">
-              <button type="submit" class="btn-useful">Useful</button>
-            {% endif %}
+            <input type="hidden" name="keyword_phrase" value="{{ c.phrase }}">
+            <input type="hidden" name="status" value="useful">
+            <button type="submit" class="btn-useful">Useful</button>
+          </form>
+          {# Alias: reads phrase-edit as alias text, prompts for canonical #}
+          <button type="button" class="btn-alias btn-edit" onclick="showAliasEdit(this)"
+                  style="background:#e8d5f5; color:#5a1a8a; border-color:#c9aaec;">Alias →</button>
+          <form method="post" action="{{ url_for('admin.mark_candidate') }}" class="alias-form"
+                style="display:none; align-items:center; gap:0.3rem; flex-wrap:wrap;">
+            <input type="hidden" name="phrase" value="{{ c.phrase }}">
+            <input type="hidden" name="status" value="alias">
+            <input type="hidden" name="keyword_phrase" value="{{ c.phrase }}">
+            <input type="text" name="alias_of" placeholder="canonical keyword…" list="kw-list"
+                   style="padding:0.2rem 0.4rem; font-size:0.85rem; font-family:monospace;
+                          border:1px solid var(--c-border,#ccc); border-radius:3px;
+                          background:var(--c-bg,#fff); color:var(--c-text,#000); min-width:14em;">
+            <button type="submit" class="btn-useful" style="white-space:nowrap">Add ✓</button>
+            <button type="button" class="btn-undo" onclick="hideAliasEdit(this)">✕</button>
           </form>
           <form method="post" action="{{ url_for('admin.mark_candidate') }}" style="display:contents">
             <input type="hidden" name="phrase" value="{{ c.phrase }}">
-            {% if c.status != 'math' %}
-              <input type="hidden" name="status" value="math">
-              <button type="submit" class="btn-math">Math</button>
-            {% endif %}
+            <input type="hidden" name="status" value="math">
+            <button type="submit" class="btn-math">Math</button>
           </form>
           <form method="post" action="{{ url_for('admin.mark_candidate') }}" style="display:contents">
             <input type="hidden" name="phrase" value="{{ c.phrase }}">
-            {% if c.status != 'ignore' %}
-              <input type="hidden" name="status" value="ignore">
-              <button type="submit" class="btn-ignore">Ignore</button>
-            {% endif %}
+            <input type="hidden" name="status" value="ignore">
+            <button type="submit" class="btn-ignore">Ignore</button>
           </form>
           {% if c.status != 'unreviewed' %}
           <form method="post" action="{{ url_for('admin.mark_candidate') }}" style="display:contents">
@@ -283,5 +318,35 @@ table.candidates tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
 function openHelp()  { document.getElementById('help-overlay').style.display='block'; document.getElementById('help-popup').style.display='block'; }
 function closeHelp() { document.getElementById('help-overlay').style.display='none';  document.getElementById('help-popup').style.display='none'; }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHelp(); });
+
+// Keep keyword_phrase in sync with the editable phrase cell
+document.querySelectorAll('tr[data-orig]').forEach(row => {
+  const phraseInput = row.querySelector('.phrase-edit');
+  if (!phraseInput) return;
+  const syncPhrase = () => {
+    const val = phraseInput.value.trim();
+    row.querySelectorAll('input[name=keyword_phrase]').forEach(h => h.value = val);
+  };
+  phraseInput.addEventListener('input', syncPhrase);
+  phraseInput.addEventListener('change', syncPhrase);
+});
+
+function showAliasEdit(btn) {
+  const cell = btn.closest('td');
+  const form = cell.querySelector('.alias-form');
+  const row  = btn.closest('tr');
+  // Sync current phrase into keyword_phrase before showing
+  const phrase = row.querySelector('.phrase-edit').value.trim();
+  form.querySelector('input[name=keyword_phrase]').value = phrase;
+  btn.style.display = 'none';
+  form.style.display = 'flex';
+  form.querySelector('input[name=alias_of]').focus();
+}
+
+function hideAliasEdit(btn) {
+  const cell = btn.closest('td');
+  cell.querySelector('.alias-form').style.display = 'none';
+  cell.querySelector('.btn-alias').style.display = '';
+}
 </script>
 {% endblock %}

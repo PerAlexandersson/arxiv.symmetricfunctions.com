@@ -181,7 +181,6 @@ CREATE TABLE keywords (
     phrase    VARCHAR(255) NOT NULL,
     score     INT NOT NULL DEFAULT 5,          -- Relevance weight 1-10
     url       TEXT,                            -- Reference URL (e.g. symmetricfunctions.com page)
-    tag_name  VARCHAR(255),                    -- Display name if different from phrase
     active    BOOLEAN NOT NULL DEFAULT 1,      -- Set to 0 to disable without deleting
 
     UNIQUE KEY idx_unique_phrase (phrase),

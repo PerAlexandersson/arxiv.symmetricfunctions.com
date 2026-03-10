@@ -4,29 +4,30 @@
 
 set -e
 
-# ── Production SSH config (from deploy_shared.sh) ─────────────────────────────
+# ── Production SSH config ─────────────────────────────────────────────────────
 REMOTE_HOST="symmetricf@ns12.inleed.net"
 REMOTE_PORT="2020"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # ── Load production DB credentials ────────────────────────────────────────────
-PROD_ENV="../.env.production"
-if [ ! -f "$PROD_ENV" ]; then
-    echo "Error: $PROD_ENV not found."
-    exit 1
-fi
-export $(grep -v '^#' "$PROD_ENV" | xargs)
+PROD_ENV="$SCRIPT_DIR/../.env.production"
+[ -f "$PROD_ENV" ] || { echo "Error: $PROD_ENV not found."; exit 1; }
+set -a
+# shellcheck disable=SC1090
+source "$PROD_ENV"
+set +a
 PROD_DB_NAME="$DB_NAME"
 PROD_DB_USER="$DB_USER"
 PROD_DB_PASS="$DB_PASSWORD"
 
-# ── Load local DB credentials ─────────────────────────────────────────────────
-LOCAL_ENV="../.env"
-if [ ! -f "$LOCAL_ENV" ]; then
-    echo "Error: $LOCAL_ENV not found."
-    exit 1
-fi
-# Re-export with local values (overwrite prod vars)
-export $(grep -v '^#' "$LOCAL_ENV" | xargs)
+# ── Load local DB credentials (overwrite prod vars) ───────────────────────────
+LOCAL_ENV="$SCRIPT_DIR/../.env"
+[ -f "$LOCAL_ENV" ] || { echo "Error: $LOCAL_ENV not found."; exit 1; }
+set -a
+# shellcheck disable=SC1090
+source "$LOCAL_ENV"
+set +a
 LOCAL_DB_NAME="$DB_NAME"
 LOCAL_DB_USER="$DB_USER"
 LOCAL_DB_PASS="$DB_PASSWORD"
@@ -50,8 +51,8 @@ if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
     exit 0
 fi
 
-DUMP_FILE="/tmp/arxiv_prod_dump_$$.sql"
-trap "rm -f $DUMP_FILE" EXIT
+DUMP_FILE="$(mktemp /tmp/arxiv_prod_dump_XXXXXX.sql)"
+trap 'rm -f "$DUMP_FILE"' EXIT
 
 echo ""
 echo -e "${YELLOW}Step 1: Dumping production database over SSH...${NC}"

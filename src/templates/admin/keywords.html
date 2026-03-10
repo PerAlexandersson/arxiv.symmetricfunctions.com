@@ -6,17 +6,48 @@
 .admin-nav { margin-bottom: 1.5rem; font-size: 0.9rem; }
 .admin-nav a { margin-right: 1rem; }
 
-table.kw-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+table.kw-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; table-layout: fixed; }
 table.kw-table th {
   text-align: left; padding: 0.4rem 0.6rem;
   border-bottom: 2px solid var(--c-border, #ccc); white-space: nowrap;
+  position: relative; overflow: hidden; user-select: none;
 }
-table.kw-table td { padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--c-border-light, #eee); vertical-align: middle; }
+table.kw-table td { padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--c-border-light, #eee); vertical-align: middle; overflow: hidden; }
+
+/* Drag handle injected by JS */
+.col-resize-handle {
+  position: absolute; right: -4px; top: 0; bottom: 0; width: 9px;
+  cursor: col-resize; z-index: 2;
+}
+.col-resize-handle::after {
+  content: ''; position: absolute; left: 50%; top: 15%; bottom: 15%;
+  width: 2px; transform: translateX(-50%);
+  background: var(--c-border, #ccc); border-radius: 1px; transition: background 0.1s, width 0.1s;
+}
+.col-resize-handle:hover::after, .col-resize-handle.dragging::after {
+  background: var(--c-accent, #2a6); width: 3px;
+}
 table.kw-table tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
 table.kw-table tr.selected td { background: #fffbe6; }
 
-.phrase { font-family: monospace; white-space: nowrap; }
+/* Fixed column widths (px) — resizable cols get the remainder */
+table.kw-table col.col-check    { width: 28px; }
+table.kw-table col.col-score    { width: 52px; }
+table.kw-table col.col-phrase   { width: 18%; }
+table.kw-table col.col-aliases  { width: 24%; }
+table.kw-table col.col-url      { width: 7%; }
+table.kw-table col.col-papers   { width: 48px; }
+table.kw-table col.col-del      { width: 34px; }
+
 .paper-count { text-align: right; color: var(--c-muted, #666); font-size: 0.8rem; }
+
+.help-tip {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1em; height: 1em; border-radius: 50%;
+  background: var(--c-muted, #999); color: #fff;
+  font-size: 0.65rem; font-weight: bold; line-height: 1;
+  cursor: help; vertical-align: middle; margin-left: 2px;
+}
 
 /* Inline editable inputs */
 .inline-edit {
@@ -28,6 +59,7 @@ table.kw-table tr.selected td { background: #fffbe6; }
 .inline-edit:focus { background: var(--c-bg, #fff); outline: 1px solid var(--c-accent, #2a6); }
 .inline-edit.saved { outline: 2px solid #4a4 !important; }
 .inline-edit.error  { outline: 2px solid #c44 !important; }
+.inline-edit.phrase-field { font-family: monospace; }
 
 /* Alias chips */
 .alias-list { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; min-width: 120px; }
@@ -54,6 +86,14 @@ table.kw-table tr.selected td { background: #fffbe6; }
   padding: 0.1rem 0.35rem; width: 130px;
   background: var(--c-bg, #fff); color: var(--c-text, #000);
 }
+
+/* Trashcan delete button */
+.btn-trash {
+  background: none; border: none; cursor: pointer; padding: 0.1rem 0.2rem;
+  color: var(--c-muted, #aaa); line-height: 1;
+}
+.btn-trash:hover { color: #c00; }
+.btn-trash svg { width: 1rem; height: 1rem; vertical-align: middle; }
 
 .bulk-bar { margin-top: 0.8rem; display: flex; gap: 0.6rem; align-items: center; font-size: 0.85rem; }
 </style>
@@ -82,21 +122,30 @@ table.kw-table tr.selected td { background: #fffbe6; }
                  border:none; border-radius:4px;">Add</button>
 </form>
 
-{# Hidden bulk-action form — checkboxes reference it via form="bulk-form" #}
+{# Datalist for alias autocomplete #}
+<datalist id="kw-list">
+  {% for phrase in keyword_phrases %}<option value="{{ phrase }}">{% endfor %}
+</datalist>
+
+{# Hidden bulk-action form #}
 <form id="bulk-form" method="post" action="{{ url_for('admin.bulk_delete') }}"
       onsubmit="return confirm('Delete ' + document.querySelectorAll('input[name=ids]:checked').length + ' keyword(s)?')"></form>
 
 {% if keywords %}
 <table class="kw-table">
+  <colgroup>
+    <col class="col-check"><col class="col-score"><col class="col-phrase">
+    <col class="col-aliases"><col class="col-url">
+    <col class="col-papers"><col class="col-del">
+  </colgroup>
   <thead>
     <tr>
       <th><input type="checkbox" id="select-all" title="Select all"></th>
-      <th>Score</th>
-      <th>Phrase</th>
-      <th>Aliases <span style="font-weight:normal; color:var(--c-muted,#999); font-size:0.8rem">(synonyms)</span></th>
-      <th>Tag name</th>
-      <th>URL</th>
-      <th style="text-align:right">Papers</th>
+      <th>Score <span class="help-tip" title="Relevance weight 1–10. Higher score = keyword contributes more to a paper's relevance ranking.">?</span></th>
+      <th>Phrase <span class="help-tip" title="The canonical display name shown on papers and used for filtering. Both phrase and aliases are searched in title/abstract during tagging.">?</span></th>
+      <th>Aliases <span style="font-weight:normal; color:var(--c-muted,#999); font-size:0.8rem">(synonyms)</span> <span class="help-tip" title="Alternate strings that also trigger this keyword during tagging (e.g. plural forms, abbreviations). All aliases map to the same canonical phrase.">?</span></th>
+      <th>URL <span class="help-tip" title="Optional link to a reference page (e.g. symmetricfunctions.com). Shown as a link on the keyword's tag.">?</span></th>
+      <th style="text-align:right">Count</th>
       <th></th>
     </tr>
   </thead>
@@ -111,7 +160,11 @@ table.kw-table tr.selected td { background: #fffbe6; }
                     background:var(--c-bg,#fff); color:var(--c-text,#000); font-size:0.85rem;"
              onchange="setScore({{ kw.id }}, this)">
     </td>
-    <td class="phrase">{{ kw.phrase }}</td>
+    <td>
+      <input type="text" class="inline-edit phrase-field" data-kid="{{ kw.id }}" data-field="phrase"
+             value="{{ kw.phrase }}" title="Click to rename"
+             onblur="saveInline(this)" onkeydown="inlineKeydown(event, this)">
+    </td>
     <td>
       <div class="alias-list" id="aliases-{{ kw.id }}">
         {% for a in aliases_by_kw.get(kw.id, []) %}
@@ -123,16 +176,10 @@ table.kw-table tr.selected td { background: #fffbe6; }
         <button type="button" class="alias-add-btn" id="alias-btn-{{ kw.id }}"
                 onclick="showAliasInput({{ kw.id }})">+ alias</button>
         <input type="text" class="alias-add-input" id="alias-input-{{ kw.id }}"
-               placeholder="synonym…" autocomplete="off"
+               placeholder="synonym…" list="kw-list"
                onkeydown="aliasKeydown(event, {{ kw.id }})"
                onblur="scheduleHideAlias({{ kw.id }})">
       </div>
-    </td>
-    <td>
-      <input type="text" class="inline-edit" data-kid="{{ kw.id }}" data-field="tag_name"
-             value="{{ kw.tag_name or kw.phrase }}"
-             title="Tag name shown on papers"
-             onblur="saveInline(this)" onkeydown="inlineKeydown(event, this)">
     </td>
     <td>
       <input type="text" class="inline-edit" data-kid="{{ kw.id }}" data-field="url"
@@ -141,14 +188,15 @@ table.kw-table tr.selected td { background: #fffbe6; }
              onblur="saveInline(this)" onkeydown="inlineKeydown(event, this)">
     </td>
     <td class="paper-count">{{ kw.paper_count }}</td>
-    <td style="white-space:nowrap">
-      <a href="{{ url_for('admin.edit_keyword', kid=kw.id) }}"
-         style="font-size:0.82rem; color:var(--c-muted,#888)">rename</a>
-      &nbsp;
+    <td>
       <form method="post" action="{{ url_for('admin.delete_keyword', kid=kw.id) }}"
             style="display:inline"
             onsubmit="return confirm('Delete keyword «{{ kw.phrase }}»?')">
-        <button type="submit" style="font-size:0.82rem; background:none; border:none; color:#c00; cursor:pointer; padding:0">delete</button>
+        <button type="submit" class="btn-trash" title="Delete keyword">
+          <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>
+          </svg>
+        </button>
       </form>
     </td>
   </tr>
@@ -202,7 +250,7 @@ async function setScore(kid, input) {
   } catch { alert('Failed to save score'); input.value = prev; }
 }
 
-// ── Inline edit (tag_name, url) ───────────────────────────────────────────────
+// ── Inline edit (phrase, tag_name, url) ───────────────────────────────────────
 function inlineKeydown(e, input) {
   if (e.key === 'Enter')  { e.preventDefault(); input.blur(); }
   if (e.key === 'Escape') { input.value = input.defaultValue; input.blur(); }
@@ -213,6 +261,7 @@ async function saveInline(input) {
   const field = input.dataset.field;
   const value = input.value.trim();
   if (value === (input.defaultValue || '')) return;
+  if (field === 'phrase' && !value) { input.value = input.defaultValue; return; }
   const fd = new FormData(); fd.append('field', field); fd.append('value', value);
   try {
     const res = await fetch(`/admin/keywords/${kid}/inline`, { method: 'POST', body: fd });
@@ -284,5 +333,69 @@ function flash(el, ok) {
   el.classList.add(ok ? 'saved' : 'error');
   setTimeout(() => el.classList.remove('saved', 'error'), 800);
 }
+
+// ── Column resize with drag handles + localStorage persistence ────────────────
+(function() {
+  const STORE_KEY = 'kw-table-col-widths';
+  const FIXED = new Set([0, 1, 5, 6]); // check, score, count, del
+  const cols  = Array.from(document.querySelectorAll('table.kw-table col'));
+  const ths   = Array.from(document.querySelectorAll('table.kw-table thead th'));
+
+  // Restore saved widths (only resizable cols)
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+    if (saved && saved.length === cols.length) {
+      saved.forEach((w, i) => { if (w && !FIXED.has(i)) cols[i].style.width = w; });
+    }
+  } catch(e) {}
+
+  function saveWidths() {
+    const widths = cols.map((c, i) => FIXED.has(i) ? null : (c.style.width || c.offsetWidth + 'px'));
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(widths)); } catch(e) {}
+  }
+
+  // Add handle between each pair of adjacent resizable columns
+  ths.forEach((th, i) => {
+    if (FIXED.has(i)) return;         // this col is fixed
+    if (FIXED.has(i + 1)) return;     // next col is fixed (or out of bounds)
+    if (i + 1 >= ths.length) return;
+
+    const handle = document.createElement('div');
+    handle.className = 'col-resize-handle';
+    th.appendChild(handle);
+
+    handle.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      handle.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+
+      const startX    = e.clientX;
+      const startW    = th.offsetWidth;
+      const nextTh    = ths[i + 1];
+      const nextStartW = nextTh.offsetWidth;
+      const MIN = 40;
+
+      function onMove(e) {
+        const delta   = e.clientX - startX;
+        const newW    = Math.max(MIN, startW + delta);
+        const newNextW = Math.max(MIN, nextStartW - delta);
+        // Only allow if both stay above minimum
+        if (startW + delta >= MIN && nextStartW - delta >= MIN) {
+          cols[i].style.width     = newW + 'px';
+          cols[i + 1].style.width = newNextW + 'px';
+        }
+      }
+      function onUp() {
+        handle.classList.remove('dragging');
+        document.body.style.cursor = '';
+        saveWidths();
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
+})();
 </script>
 {% endblock %}

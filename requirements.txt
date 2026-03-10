@@ -24,3 +24,5 @@ inflect
 
 # ORCID / OAuth login
 Authlib
+cffi==2.0.0
+cryptography==46.0.5
