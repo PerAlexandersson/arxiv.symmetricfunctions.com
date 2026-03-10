@@ -14,11 +14,13 @@ Routes:
     /admin/keywords      → list all useful keywords
     /admin/keywords/<id>/edit   → edit a keyword
     /admin/keywords/<id>/delete → delete a keyword
+    /admin/retag                → re-tag papers by date range
 """
 
 import os
 import csv
 import functools
+from datetime import date as date_type
 
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, session, flash, abort, jsonify)
@@ -221,11 +223,90 @@ def mark_candidate():
 def keywords():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM keywords ORDER BY phrase ASC")
+    cursor.execute("""
+        SELECT k.*, COUNT(pk.paper_id) AS paper_count
+        FROM keywords k
+        LEFT JOIN paper_keywords pk ON k.id = pk.keyword_id
+        GROUP BY k.id
+        ORDER BY k.phrase ASC
+    """)
     kws = cursor.fetchall()
+    cursor.execute("SELECT * FROM keyword_aliases ORDER BY alias")
+    aliases_by_kw = {}
+    for a in cursor.fetchall():
+        aliases_by_kw.setdefault(a['keyword_id'], []).append(a)
     cursor.close()
     conn.close()
-    return render_template('admin/keywords.html', keywords=kws)
+    return render_template('admin/keywords.html', keywords=kws, aliases_by_kw=aliases_by_kw)
+
+
+@admin.route('/keywords/add', methods=['POST'])
+@login_required
+def add_keyword():
+    phrase = request.form.get('phrase', '').strip().lower()
+    if phrase:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT IGNORE INTO keywords (phrase, score, tag_name) VALUES (%s, 5, %s)",
+            (phrase, phrase)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+    return redirect(url_for('admin.keywords'))
+
+
+@admin.route('/keywords/<int:kid>/inline', methods=['POST'])
+@login_required
+def inline_edit(kid):
+    field = request.form.get('field')
+    if field not in ('url', 'tag_name'):
+        abort(400)
+    value = request.form.get('value', '').strip() or None
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(f"UPDATE keywords SET {field}=%s WHERE id=%s", (value, kid))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({'ok': True, 'value': value})
+
+
+@admin.route('/keywords/<int:kid>/aliases/add', methods=['POST'])
+@login_required
+def add_alias(kid):
+    alias = request.form.get('alias', '').strip().lower()
+    if not alias:
+        return jsonify({'ok': False, 'error': 'empty'}), 400
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO keyword_aliases (keyword_id, alias) VALUES (%s, %s)",
+            (kid, alias)
+        )
+        conn.commit()
+        aid = cursor.lastrowid
+        cursor.close()
+        conn.close()
+        return jsonify({'ok': True, 'id': aid, 'alias': alias})
+    except pymysql.IntegrityError:
+        cursor.close()
+        conn.close()
+        return jsonify({'ok': False, 'error': 'duplicate'}), 409
+
+
+@admin.route('/keywords/<int:kid>/aliases/<int:aid>/delete', methods=['POST'])
+@login_required
+def delete_alias(kid, aid):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM keyword_aliases WHERE id=%s AND keyword_id=%s", (aid, kid))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return jsonify({'ok': True})
 
 
 @admin.route('/keywords/<int:kid>/score', methods=['POST'])
@@ -295,3 +376,46 @@ def bulk_delete():
         cursor.close()
         conn.close()
     return redirect(url_for('admin.keywords'))
+
+
+# ── Retag ─────────────────────────────────────────────────────────────────────
+
+@admin.route('/retag', methods=['GET', 'POST'])
+@login_required
+def retag():
+    from auto_tag import load_keywords, tag_papers
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT MIN(published_date) as earliest FROM papers")
+    row = cursor.fetchone()
+    earliest = str(row['earliest']) if row and row['earliest'] else '2000-01-01'
+    today = str(date_type.today())
+
+    result = None
+
+    if request.method == 'POST':
+        from_date = request.form.get('from_date', earliest)
+        to_date   = request.form.get('to_date',   today)
+
+        phrase_to_id = load_keywords(cursor)
+        if not phrase_to_id:
+            flash('No active keywords found.')
+        else:
+            max_ngram = max(len(p.split()) for p in phrase_to_id)
+            cursor.execute(
+                "SELECT id, title, abstract FROM papers"
+                " WHERE published_date BETWEEN %s AND %s ORDER BY published_date",
+                (from_date, to_date)
+            )
+            papers = [(r['id'], r['title'], r['abstract']) for r in cursor.fetchall()]
+            n_tags = tag_papers(cursor, papers, phrase_to_id, max_ngram)
+            conn.commit()
+            result = {'papers': len(papers), 'tags': n_tags,
+                      'from': from_date, 'to': to_date}
+
+    cursor.close()
+    conn.close()
+    return render_template('admin/retag.html',
+                           earliest=earliest, today=today, result=result)

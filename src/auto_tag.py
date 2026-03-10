@@ -24,13 +24,30 @@ from extract_keywords import tokenize
 
 
 def load_keywords(cursor):
-    """Load all active keywords as {phrase: keyword_id}."""
-    cursor.execute("""
-        SELECT id, phrase FROM keywords WHERE active = 1
-    """)
+    """Load all active keywords and aliases as {phrase: keyword_id}."""
+    cursor.execute("SELECT id, phrase FROM keywords WHERE active = 1")
     rows = cursor.fetchall()
-    phrase_to_id = {phrase: kid for kid, phrase in rows}
-    print(f"  {len(phrase_to_id)} active keywords loaded.")
+    if rows and isinstance(rows[0], dict):
+        phrase_to_id = {r['phrase']: r['id'] for r in rows}
+    else:
+        phrase_to_id = {phrase: kid for kid, phrase in rows}
+
+    # Also load aliases so they match papers to the canonical keyword
+    cursor.execute("""
+        SELECT ka.alias, ka.keyword_id
+        FROM keyword_aliases ka
+        JOIN keywords k ON ka.keyword_id = k.id
+        WHERE k.active = 1
+    """)
+    alias_rows = cursor.fetchall()
+    if alias_rows and isinstance(alias_rows[0], dict):
+        for r in alias_rows:
+            phrase_to_id[r['alias']] = r['keyword_id']
+    else:
+        for alias, kid in alias_rows:
+            phrase_to_id[alias] = kid
+
+    print(f"  {len(phrase_to_id)} active keywords+aliases loaded.")
     return phrase_to_id
 
 

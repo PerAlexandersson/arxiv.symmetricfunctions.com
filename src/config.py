@@ -31,6 +31,10 @@ FETCH_SECRET = os.getenv('FETCH_SECRET', '')
 # Admin UI password
 ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', '')
 
+# ORCID OAuth credentials (register at https://orcid.org/developer-tools)
+ORCID_CLIENT_ID     = os.getenv('ORCID_CLIENT_ID', '')
+ORCID_CLIENT_SECRET = os.getenv('ORCID_CLIENT_SECRET', '')
+
 def validate_config():
     """Validate that required configuration is set."""
     if not DB_CONFIG['password']:

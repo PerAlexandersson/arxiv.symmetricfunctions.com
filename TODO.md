@@ -25,33 +25,6 @@ combinatorialists already have one. The public API is free.
 - `Authlib` pip package (`pip install Authlib`)
 - New DB table (see below)
 
-**Pros:** Fits the audience perfectly; no Google dependency; ORCID iD doubles as a
-verifiable researcher identity (could link user profile to their publications).
-
-**Cons:** Slightly less familiar UI than "Sign in with Google"; a few researchers
-may not have an ORCID yet.
-
-### Option B: Google login
-
-Standard OAuth 2.0 via Google. More universally recognised.
-
-**Flow:** Same OAuth dance, but via `accounts.google.com`. Returns a `sub` (stable
-user ID) and email.
-
-**What you need:**
-- Google Cloud Console project + OAuth 2.0 credentials (free)
-- `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` in `.env`
-- `Authlib` pip package
-
-**Pros:** Familiar to everyone; reliable infrastructure.
-
-**Cons:** Google dependency; less thematically appropriate for a math tool.
-
-### Option C: Both (let user choose)
-
-Offer "Sign in with ORCID" and "Sign in with Google" buttons. Use the provider +
-sub-ID as the composite user key. Adds some complexity but maximises reach.
-
 ---
 
 ### DB schema for auth + lists
@@ -144,16 +117,8 @@ falls through to localStorage depending on session state.
   `<a href="keyword.url">` links at render time (for keywords that have a URL set).
   Would make abstracts navigable to the symmetricfunctions.com reference pages.
 
-- **RSS / Atom feed** — expose recent papers as a feed for feed-reader users.
-
 - **"Similar papers" section** — on the paper detail page, list papers sharing the
   most keyword tags (easy to query from `paper_keywords`).
 
 - **Keyword cloud** — a `/keywords` page listing all active keywords sized by paper
   count, linking to their `/keyword/<phrase>` pages.
-
-- **Admin: bulk re-tag button** — trigger `auto_tag.py --all` from the admin UI
-  without SSH access, with a progress indicator.
-
-- **Production deployment** — push current codebase + schema changes to
-  `symmetricf@ns12.inleed.net:2020`, run `auto_tag.py --all` there.

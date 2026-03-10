@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Sign In — arXiv Combinatorics Browser{% endblock %}
+
+{% block extra_css %}
+<style>
+.login-box {
+  max-width: 420px;
+  margin: 3rem auto;
+  text-align: center;
+}
+.login-box h2 { margin-bottom: 0.4rem; }
+.login-box p  { color: var(--c-muted, #666); font-size: 0.92rem; margin-bottom: 2rem; }
+
+.orcid-btn {
+  display: inline-flex; align-items: center; gap: 0.7rem;
+  padding: 0.65rem 1.4rem;
+  background: #a6ce39; color: #000;
+  border: none; border-radius: 5px;
+  font-size: 1rem; font-weight: 600;
+  text-decoration: none; cursor: pointer;
+}
+.orcid-btn:hover { background: #8fb82e; }
+.orcid-btn svg { width: 1.4em; height: 1.4em; }
+
+.login-note {
+  margin-top: 1.8rem;
+  font-size: 0.8rem;
+  color: var(--c-muted, #888);
+  line-height: 1.5;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="login-box">
+  <h2>Sign In</h2>
+  <p>Sign in to save personal paper lists that sync across devices.</p>
+
+  {% if orcid_enabled %}
+  <a href="{{ url_for('auth.login_orcid') }}" class="orcid-btn">
+    {# ORCID logo (green circle + iD) #}
+    <svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <circle cx="128" cy="128" r="128" fill="#a6ce39"/>
+      <path d="M86 178V86h84v14H102v26h60v14h-60v38H86z" fill="#fff"/>
+      <ellipse cx="77" cy="75" rx="9" ry="9" fill="#fff"/>
+    </svg>
+    Sign in with ORCID
+  </a>
+  {% else %}
+  <p style="color: var(--c-muted, #888);">Login is not available on this server.</p>
+  {% endif %}
+
+  <p class="login-note">
+    <a href="https://orcid.org" target="_blank" rel="noopener">ORCID</a>
+    is a free researcher identifier used by most academic publishers.
+    We only request your ORCID iD and name — nothing else.
+  </p>
+</div>
+{% endblock %}

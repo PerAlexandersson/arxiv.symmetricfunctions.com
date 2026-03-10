@@ -5,7 +5,7 @@ app.py - Flask web application for arXiv combinatorics frontend
 Main web interface for browsing arXiv papers.
 """
 
-from flask import Flask, render_template, request, jsonify, abort, redirect, url_for
+from flask import Flask, render_template, request, jsonify, abort, redirect, url_for, session
 from urllib.parse import unquote
 import io
 import contextlib
@@ -26,6 +26,23 @@ app.config.update(FLASK_CONFIG)
 
 from admin import admin as admin_blueprint
 app.register_blueprint(admin_blueprint)
+
+from auth import auth as auth_blueprint, init_oauth
+app.register_blueprint(auth_blueprint)
+init_oauth(app)
+
+
+@app.context_processor
+def inject_current_user():
+    user_id = session.get('user_id')
+    if user_id:
+        return {'current_user': {
+            'id':       user_id,
+            'name':     session.get('user_name', ''),
+            'orcid_id': session.get('orcid_id', ''),
+        }}
+    return {'current_user': None}
+
 
 # Register slugify as a Jinja filter
 app.jinja_env.filters['slugify'] = lambda name: slugify(name) if name else ''

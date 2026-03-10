@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Retag Papers — Admin{% endblock %}
+
+{% block extra_css %}
+<style>
+.admin-nav { margin-bottom: 1.5rem; font-size: 0.9rem; }
+.admin-nav a { margin-right: 1rem; }
+.retag-form { max-width: 480px; margin-top: 1rem; }
+.retag-form .row { display: flex; gap: 1rem; margin-bottom: 1rem; }
+.retag-form label { display: block; font-size: 0.9rem; margin-bottom: 0.3rem; }
+.retag-form input[type=date] {
+  width: 100%; padding: 0.4rem 0.6rem; font-size: 0.9rem;
+  border: 1px solid var(--c-border, #ccc); border-radius: 4px;
+  background: var(--c-bg, #fff); color: var(--c-text, #000);
+}
+.result-box {
+  margin-top: 1.5rem; padding: 1rem 1.2rem;
+  background: #f0f8f0; border: 1px solid #b2d9b2; border-radius: 4px;
+  font-size: 0.95rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-nav">
+  <strong>Admin:</strong>
+  <a href="{{ url_for('admin.candidates') }}">Candidates</a>
+  <a href="{{ url_for('admin.keywords') }}">Keywords</a>
+  <a href="{{ url_for('admin.retag') }}"><strong>Retag</strong></a>
+  <a href="{{ url_for('admin.logout') }}" style="float:right; color: var(--c-muted,#666)">Log out</a>
+</div>
+
+<h2 style="margin-top: 0;">Retag Papers</h2>
+<p style="font-size: 0.9rem; color: var(--c-muted, #666);">
+  Re-applies all active keywords to papers in the selected date range.
+  Use this after adding or editing keywords to keep tags up to date.
+  Tagging all papers may take a minute or two.
+</p>
+
+<form class="retag-form" method="post">
+  <div class="row">
+    <div style="flex:1">
+      <label for="from_date">From</label>
+      <input type="date" id="from_date" name="from_date"
+             value="{{ request.form.get('from_date', earliest) }}"
+             min="{{ earliest }}" max="{{ today }}">
+    </div>
+    <div style="flex:1">
+      <label for="to_date">To</label>
+      <input type="date" id="to_date" name="to_date"
+             value="{{ request.form.get('to_date', today) }}"
+             min="{{ earliest }}" max="{{ today }}">
+    </div>
+  </div>
+  <button type="submit"
+          style="padding: 0.45rem 1.2rem; font-size: 0.9rem; cursor: pointer;
+                 background: var(--c-accent, #2a6); color: #fff;
+                 border: none; border-radius: 4px;"
+          onclick="this.disabled=true; this.textContent='Tagging…'; this.form.submit()">
+    Run retag
+  </button>
+</form>
+
+{% if result %}
+<div class="result-box">
+  Done. Tagged <strong>{{ result.papers }}</strong> paper{{ 's' if result.papers != 1 }}
+  ({{ result.from }} → {{ result.to }}) —
+  <strong>{{ result.tags }}</strong> keyword tag{{ 's' if result.tags != 1 }} applied.
+</div>
+{% endif %}
+
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    {% for msg in messages %}
+      <p style="color:#c00; margin-top:1rem">{{ msg }}</p>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+{% endblock %}

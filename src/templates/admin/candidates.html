@@ -64,6 +64,30 @@ table.candidates tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
 .pagination a { color: var(--c-link, #0066cc); text-decoration: none; }
 .pagination a:hover { background: var(--c-bg-alt, #f5f5f5); }
 .pagination .current { background: var(--c-link, #0066cc); color: #fff; border-color: var(--c-link, #0066cc); }
+
+/* Help tooltip */
+.help-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.3em; height: 1.3em; border-radius: 50%;
+  border: 1px solid var(--c-border, #ccc); background: var(--c-bg-alt, #f5f5f5);
+  color: var(--c-muted, #666); font-size: 0.75rem; font-weight: bold;
+  cursor: pointer; vertical-align: middle; margin-left: 0.4rem;
+  text-decoration: none; position: relative;
+}
+.help-popup {
+  display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  background: var(--c-bg, #fff); border: 1px solid var(--c-border, #ccc);
+  border-radius: 6px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  padding: 1.4rem 1.6rem; max-width: 520px; width: 90vw;
+  font-size: 0.88rem; line-height: 1.55; z-index: 1000;
+}
+.help-popup h3 { margin: 0 0 0.8rem; font-size: 1rem; }
+.help-popup ol { margin: 0.5rem 0 0.8rem; padding-left: 1.3rem; }
+.help-popup li { margin-bottom: 0.4rem; }
+.help-popup code { font-family: monospace; background: var(--c-bg-alt,#f0f0f0); padding: 0.1em 0.3em; border-radius: 2px; }
+.help-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 999;
+}
 </style>
 {% endblock %}
 
@@ -72,10 +96,48 @@ table.candidates tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
   <strong>Admin:</strong>
   <a href="{{ url_for('admin.candidates') }}">Candidates</a>
   <a href="{{ url_for('admin.keywords') }}">Keywords ({{ useful_count }})</a>
+  <a href="{{ url_for('admin.retag') }}">Retag</a>
   <a href="{{ url_for('admin.logout') }}" style="float:right; color: var(--c-muted,#666)">Log out</a>
 </div>
 
-<h2 style="margin-top: 0;">Keyword Candidates</h2>
+<div class="help-overlay" id="help-overlay" onclick="closeHelp()"></div>
+<div class="help-popup" id="help-popup">
+  <h3>How the keyword pipeline works</h3>
+  <ol>
+    <li><strong>Extract candidates</strong> — run <code>src/extract_keywords.py</code> locally.
+      It scans every paper title + abstract, strips LaTeX, singularizes words, and counts how many
+      papers each 1–4 word phrase appears in. Result: <code>keywords.csv</code> (≈49k phrases).</li>
+    <li><strong>Triage here</strong> — this page reads <code>keywords.csv</code> and lets you
+      classify each phrase:
+      <ul style="margin:0.3rem 0; padding-left:1.1rem">
+        <li><span class="badge badge-useful">useful</span> — specific enough to tag papers
+          (e.g. <em>schur function</em>). Saved to the <code>keywords</code> DB table.</li>
+        <li><span class="badge badge-math">math</span> — valid math but too broad alone
+          (e.g. <em>graph</em>, <em>polynomial</em>). Recorded but not used for tagging.</li>
+        <li><span class="badge badge-ignore">ignore</span> — boilerplate, stopword, or typo.
+          Recorded so it stays out of the unreviewed queue.</li>
+      </ul>
+    </li>
+    <li><strong>Tag papers</strong> — <code>src/auto_tag.py</code> loads all
+      <span class="badge badge-useful">useful</span> keywords (plus any aliases you've added)
+      from the DB, tokenizes each paper the same way, and writes matches to
+      <code>paper_keywords</code>. Runs automatically after each fetch, or manually via
+      <a href="{{ url_for('admin.retag') }}">Retag</a>.</li>
+    <li><strong>Refresh candidates</strong> — re-run <code>extract_keywords.py</code> periodically
+      (e.g. after many new papers arrive) to update phrase counts and surface new candidates.
+      Deploy the new CSV to update this page.</li>
+  </ol>
+  <button onclick="closeHelp()"
+          style="padding:0.35rem 0.9rem; border:1px solid var(--c-border,#ccc);
+                 border-radius:3px; cursor:pointer; background:var(--c-bg-alt,#f5f5f5);">
+    Close
+  </button>
+</div>
+
+<h2 style="margin-top: 0;">
+  Keyword Candidates
+  <button class="help-btn" onclick="openHelp()" title="How this works">?</button>
+</h2>
 
 {# ── Filters ── #}
 <form method="get" class="filters">
@@ -217,4 +279,9 @@ table.candidates tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
   {% endif %}
 </div>
 {% endif %}
+<script>
+function openHelp()  { document.getElementById('help-overlay').style.display='block'; document.getElementById('help-popup').style.display='block'; }
+function closeHelp() { document.getElementById('help-overlay').style.display='none';  document.getElementById('help-popup').style.display='none'; }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHelp(); });
+</script>
 {% endblock %}

@@ -21,3 +21,6 @@ gunicorn==21.2.0
 
 # Singularization for keyword normalization
 inflect
+
+# ORCID / OAuth login
+Authlib

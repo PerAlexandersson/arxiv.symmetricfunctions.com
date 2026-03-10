@@ -6,22 +6,56 @@
 .admin-nav { margin-bottom: 1.5rem; font-size: 0.9rem; }
 .admin-nav a { margin-right: 1rem; }
 
-table.kw-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+table.kw-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
 table.kw-table th {
   text-align: left; padding: 0.4rem 0.6rem;
-  border-bottom: 2px solid var(--c-border, #ccc);
+  border-bottom: 2px solid var(--c-border, #ccc); white-space: nowrap;
 }
-table.kw-table td { padding: 0.35rem 0.6rem; border-bottom: 1px solid var(--c-border-light, #eee); vertical-align: middle; }
+table.kw-table td { padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--c-border-light, #eee); vertical-align: middle; }
 table.kw-table tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
 table.kw-table tr.selected td { background: #fffbe6; }
 
-.url-cell { font-size: 0.8rem; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.phrase { font-family: monospace; }
+.phrase { font-family: monospace; white-space: nowrap; }
+.paper-count { text-align: right; color: var(--c-muted, #666); font-size: 0.8rem; }
 
-.bulk-bar {
-  margin-top: 0.8rem; display: flex; gap: 0.6rem; align-items: center;
-  font-size: 0.85rem;
+/* Inline editable inputs */
+.inline-edit {
+  border: none; background: transparent; width: 100%; min-width: 80px;
+  font-size: 0.85rem; font-family: inherit; color: inherit;
+  padding: 0.15rem 0.3rem; border-radius: 3px; outline: none;
 }
+.inline-edit:hover { background: var(--c-bg-alt, #f0f0f0); }
+.inline-edit:focus { background: var(--c-bg, #fff); outline: 1px solid var(--c-accent, #2a6); }
+.inline-edit.saved { outline: 2px solid #4a4 !important; }
+.inline-edit.error  { outline: 2px solid #c44 !important; }
+
+/* Alias chips */
+.alias-list { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; min-width: 120px; }
+.alias-chip {
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  padding: 0.1rem 0.45rem; border-radius: 99px;
+  background: var(--c-bg-alt, #eee); font-size: 0.78rem;
+  border: 1px solid var(--c-border, #ccc); font-family: monospace;
+}
+.alias-chip button {
+  background: none; border: none; cursor: pointer; padding: 0;
+  color: var(--c-muted, #999); font-size: 0.9rem; line-height: 1;
+}
+.alias-chip button:hover { color: #c00; }
+.alias-add-btn {
+  background: none; border: 1px dashed var(--c-border, #ccc);
+  border-radius: 99px; padding: 0.1rem 0.5rem; cursor: pointer;
+  font-size: 0.75rem; color: var(--c-muted, #999);
+}
+.alias-add-btn:hover { border-color: var(--c-accent, #2a6); color: var(--c-accent, #2a6); }
+.alias-add-input {
+  display: none; font-size: 0.8rem; font-family: monospace;
+  border: 1px solid var(--c-accent, #2a6); border-radius: 3px;
+  padding: 0.1rem 0.35rem; width: 130px;
+  background: var(--c-bg, #fff); color: var(--c-text, #000);
+}
+
+.bulk-bar { margin-top: 0.8rem; display: flex; gap: 0.6rem; align-items: center; font-size: 0.85rem; }
 </style>
 {% endblock %}
 
@@ -30,10 +64,23 @@ table.kw-table tr.selected td { background: #fffbe6; }
   <strong>Admin:</strong>
   <a href="{{ url_for('admin.candidates') }}">Candidates</a>
   <a href="{{ url_for('admin.keywords') }}"><strong>Keywords ({{ keywords|length }})</strong></a>
+  <a href="{{ url_for('admin.retag') }}">Retag</a>
   <a href="{{ url_for('admin.logout') }}" style="float:right; color: var(--c-muted,#666)">Log out</a>
 </div>
 
 <h2 style="margin-top: 0;">Keywords</h2>
+
+<form method="post" action="{{ url_for('admin.add_keyword') }}"
+      style="display:flex; gap:0.5rem; margin-bottom:1.2rem; max-width:420px;">
+  <input type="text" name="phrase" placeholder="Add keyword…" required
+         style="flex:1; padding:0.4rem 0.6rem; font-size:0.9rem;
+                border:1px solid var(--c-border,#ccc); border-radius:4px;
+                background:var(--c-bg,#fff); color:var(--c-text,#000);">
+  <button type="submit"
+          style="padding:0.4rem 0.9rem; font-size:0.9rem; cursor:pointer;
+                 background:var(--c-accent,#2a6); color:#fff;
+                 border:none; border-radius:4px;">Add</button>
+</form>
 
 {# Hidden bulk-action form — checkboxes reference it via form="bulk-form" #}
 <form id="bulk-form" method="post" action="{{ url_for('admin.bulk_delete') }}"
@@ -46,33 +93,62 @@ table.kw-table tr.selected td { background: #fffbe6; }
       <th><input type="checkbox" id="select-all" title="Select all"></th>
       <th>Score</th>
       <th>Phrase</th>
+      <th>Aliases <span style="font-weight:normal; color:var(--c-muted,#999); font-size:0.8rem">(synonyms)</span></th>
       <th>Tag name</th>
       <th>URL</th>
-      <th>Actions</th>
+      <th style="text-align:right">Papers</th>
+      <th></th>
     </tr>
   </thead>
   <tbody>
   {% for kw in keywords %}
-  <tr>
+  <tr data-kid="{{ kw.id }}">
     <td><input type="checkbox" name="ids" value="{{ kw.id }}" form="bulk-form"></td>
     <td>
       <input type="number" value="{{ kw.score }}" min="1" max="10"
-             style="width:3em; text-align:center; padding:0.1rem; border:1px solid var(--c-border,#ccc); border-radius:3px; background:var(--c-bg,#fff); color:var(--c-text,#000); font-size:0.85rem;"
+             style="width:3em; text-align:center; padding:0.1rem;
+                    border:1px solid var(--c-border,#ccc); border-radius:3px;
+                    background:var(--c-bg,#fff); color:var(--c-text,#000); font-size:0.85rem;"
              onchange="setScore({{ kw.id }}, this)">
     </td>
     <td class="phrase">{{ kw.phrase }}</td>
-    <td style="font-size:0.85rem; color:var(--c-muted,#666)">
-      {% if kw.tag_name != kw.phrase %}{{ kw.tag_name }}{% endif %}
+    <td>
+      <div class="alias-list" id="aliases-{{ kw.id }}">
+        {% for a in aliases_by_kw.get(kw.id, []) %}
+        <span class="alias-chip" id="alias-chip-{{ a.id }}">
+          <span>{{ a.alias }}</span>
+          <button type="button" onclick="deleteAlias({{ kw.id }}, {{ a.id }})" title="Remove">×</button>
+        </span>
+        {% endfor %}
+        <button type="button" class="alias-add-btn" id="alias-btn-{{ kw.id }}"
+                onclick="showAliasInput({{ kw.id }})">+ alias</button>
+        <input type="text" class="alias-add-input" id="alias-input-{{ kw.id }}"
+               placeholder="synonym…" autocomplete="off"
+               onkeydown="aliasKeydown(event, {{ kw.id }})"
+               onblur="scheduleHideAlias({{ kw.id }})">
+      </div>
     </td>
-    <td class="url-cell">
-      {% if kw.url %}<a href="{{ kw.url }}" target="_blank">{{ kw.url }}</a>{% endif %}
+    <td>
+      <input type="text" class="inline-edit" data-kid="{{ kw.id }}" data-field="tag_name"
+             value="{{ kw.tag_name or kw.phrase }}"
+             title="Tag name shown on papers"
+             onblur="saveInline(this)" onkeydown="inlineKeydown(event, this)">
     </td>
+    <td>
+      <input type="text" class="inline-edit" data-kid="{{ kw.id }}" data-field="url"
+             value="{{ kw.url or '' }}" placeholder="https://…"
+             title="Definition URL (optional)"
+             onblur="saveInline(this)" onkeydown="inlineKeydown(event, this)">
+    </td>
+    <td class="paper-count">{{ kw.paper_count }}</td>
     <td style="white-space:nowrap">
-      <a href="{{ url_for('admin.edit_keyword', kid=kw.id) }}" style="font-size:0.85rem">Edit</a>
+      <a href="{{ url_for('admin.edit_keyword', kid=kw.id) }}"
+         style="font-size:0.82rem; color:var(--c-muted,#888)">rename</a>
       &nbsp;
-      <form method="post" action="{{ url_for('admin.delete_keyword', kid=kw.id) }}" style="display:inline"
+      <form method="post" action="{{ url_for('admin.delete_keyword', kid=kw.id) }}"
+            style="display:inline"
             onsubmit="return confirm('Delete keyword «{{ kw.phrase }}»?')">
-        <button type="submit" style="font-size:0.82rem; background:none; border:none; color:#c00; cursor:pointer; padding:0">Delete</button>
+        <button type="submit" style="font-size:0.82rem; background:none; border:none; color:#c00; cursor:pointer; padding:0">delete</button>
       </form>
     </td>
   </tr>
@@ -93,18 +169,17 @@ table.kw-table tr.selected td { background: #fffbe6; }
 {% endif %}
 
 <script>
+// ── Select all ────────────────────────────────────────────────────────────────
 const selectAll = document.getElementById('select-all');
 const selCount  = document.getElementById('sel-count');
 
 function updateCount() {
   const n = document.querySelectorAll('input[name=ids]:checked').length;
   selCount.textContent = n ? n + ' selected' : '';
-  // Highlight selected rows
-  document.querySelectorAll('input[name=ids]').forEach(cb => {
-    cb.closest('tr').classList.toggle('selected', cb.checked);
-  });
+  document.querySelectorAll('input[name=ids]').forEach(cb =>
+    cb.closest('tr').classList.toggle('selected', cb.checked)
+  );
 }
-
 if (selectAll) {
   selectAll.addEventListener('change', function() {
     document.querySelectorAll('input[name=ids]').forEach(cb => cb.checked = this.checked);
@@ -115,20 +190,99 @@ if (selectAll) {
   );
 }
 
+// ── Score ─────────────────────────────────────────────────────────────────────
 async function setScore(kid, input) {
   const prev = input.defaultValue;
-  const fd = new FormData();
-  fd.append('score', input.value);
+  const fd = new FormData(); fd.append('score', input.value);
   try {
     const res = await fetch(`/admin/keywords/${kid}/score`, { method: 'POST', body: fd });
-    if (!res.ok) throw new Error('server error');
+    if (!res.ok) throw new Error();
     input.defaultValue = input.value;
-    input.style.outline = '2px solid #4a4';
-    setTimeout(() => input.style.outline = '', 800);
-  } catch (err) {
-    alert('Failed to save score');
-    input.value = prev;
-  }
+    flash(input, true);
+  } catch { alert('Failed to save score'); input.value = prev; }
+}
+
+// ── Inline edit (tag_name, url) ───────────────────────────────────────────────
+function inlineKeydown(e, input) {
+  if (e.key === 'Enter')  { e.preventDefault(); input.blur(); }
+  if (e.key === 'Escape') { input.value = input.defaultValue; input.blur(); }
+}
+
+async function saveInline(input) {
+  const kid   = input.dataset.kid;
+  const field = input.dataset.field;
+  const value = input.value.trim();
+  if (value === (input.defaultValue || '')) return;
+  const fd = new FormData(); fd.append('field', field); fd.append('value', value);
+  try {
+    const res = await fetch(`/admin/keywords/${kid}/inline`, { method: 'POST', body: fd });
+    if (!res.ok) throw new Error();
+    input.defaultValue = value;
+    flash(input, true);
+  } catch { flash(input, false); input.value = input.defaultValue; }
+}
+
+// ── Aliases ───────────────────────────────────────────────────────────────────
+function showAliasInput(kid) {
+  document.getElementById('alias-btn-' + kid).style.display = 'none';
+  const inp = document.getElementById('alias-input-' + kid);
+  inp.style.display = 'inline-block';
+  inp.focus();
+}
+
+let _hideTimer = {};
+function scheduleHideAlias(kid) {
+  _hideTimer[kid] = setTimeout(() => hideAliasInput(kid), 150);
+}
+function hideAliasInput(kid) {
+  const inp = document.getElementById('alias-input-' + kid);
+  inp.style.display = 'none';
+  inp.value = '';
+  document.getElementById('alias-btn-' + kid).style.display = '';
+}
+
+function aliasKeydown(e, kid) {
+  clearTimeout(_hideTimer[kid]);
+  if (e.key === 'Enter')  { e.preventDefault(); addAlias(kid); }
+  if (e.key === 'Escape') { hideAliasInput(kid); }
+}
+
+async function addAlias(kid) {
+  const inp   = document.getElementById('alias-input-' + kid);
+  const alias = inp.value.trim().toLowerCase();
+  if (!alias) { hideAliasInput(kid); return; }
+  const fd = new FormData(); fd.append('alias', alias);
+  try {
+    const res  = await fetch(`/admin/keywords/${kid}/aliases/add`, { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!data.ok) {
+      alert(data.error === 'duplicate' ? `«${alias}» is already an alias.` : 'Error adding alias.');
+      inp.select(); return;
+    }
+    const list = document.getElementById('aliases-' + kid);
+    const btn  = document.getElementById('alias-btn-' + kid);
+    const chip = document.createElement('span');
+    chip.className = 'alias-chip'; chip.id = 'alias-chip-' + data.id;
+    chip.innerHTML = `<span>${data.alias}</span>`
+      + `<button type="button" onclick="deleteAlias(${kid},${data.id})" title="Remove">×</button>`;
+    list.insertBefore(chip, btn);
+    hideAliasInput(kid);
+  } catch { alert('Error adding alias.'); }
+}
+
+async function deleteAlias(kid, aid) {
+  const fd = new FormData();
+  try {
+    const res  = await fetch(`/admin/keywords/${kid}/aliases/${aid}/delete`, { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.ok) document.getElementById('alias-chip-' + aid).remove();
+  } catch { alert('Error removing alias.'); }
+}
+
+// ── Visual feedback ───────────────────────────────────────────────────────────
+function flash(el, ok) {
+  el.classList.add(ok ? 'saved' : 'error');
+  setTimeout(() => el.classList.remove('saved', 'error'), 800);
 }
 </script>
 {% endblock %}

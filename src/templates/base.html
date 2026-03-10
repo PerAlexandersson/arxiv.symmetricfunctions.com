@@ -78,6 +78,11 @@
                 <a href="/tools">Tools</a> ·
                 <a href="/authors">Authors</a> ·
                 <a href="#" onclick="toggleDarkMode(); return false;" aria-label="Toggle dark mode" id="dark-mode-toggle">Dark mode</a>
+                {% if current_user %}
+                · <a href="{{ url_for('auth.logout') }}">Sign out ({{ current_user.name }})</a>
+                {% else %}
+                · <a href="{{ url_for('auth.login') }}">Sign in</a>
+                {% endif %}
             </p>
 
             <form action="/search" method="get" class="search-form" role="search" aria-label="Search papers">
