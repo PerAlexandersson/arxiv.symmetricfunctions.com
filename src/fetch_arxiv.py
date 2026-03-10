@@ -116,6 +116,19 @@ def insert_or_update_paper(cursor, paper):
     return paper_id
 
 
+def _auto_tag_papers(conn, cursor, papers):
+    """Tag a list of (paper_id, title, abstract) using active keywords from the DB."""
+    from auto_tag import load_keywords, tag_papers
+    phrase_to_id = load_keywords(cursor)
+    if not phrase_to_id:
+        print("  (No active keywords — skipping auto-tagging)")
+        return
+    max_ngram = max(len(p.split()) for p in phrase_to_id)
+    n_tags = tag_papers(cursor, papers, phrase_to_id, max_ngram)
+    conn.commit()
+    print(f"  Auto-tagged: {n_tags} keyword tags across {len(papers)} papers.")
+
+
 def _fetch_papers(query, max_results):
     """
     Fetch papers from arXiv matching a query and store in database.
@@ -139,10 +152,12 @@ def _fetch_papers(query, max_results):
 
     count = 0
     errors = 0
+    processed_papers = []
     try:
         for paper in client.results(search):
             try:
-                insert_or_update_paper(cursor, paper)
+                paper_id = insert_or_update_paper(cursor, paper)
+                processed_papers.append((paper_id, paper.title, paper.summary))
                 count += 1
             except Exception as e:
                 errors += 1
@@ -153,6 +168,9 @@ def _fetch_papers(query, max_results):
         print(f"\nSuccessfully processed {count} papers.")
         if errors > 0:
             print(f"Encountered {errors} errors (skipped those papers).")
+
+        if processed_papers:
+            _auto_tag_papers(conn, cursor, processed_papers)
     except Exception as e:
         conn.rollback()
         print(f"Fatal error: {e}")
@@ -197,9 +215,10 @@ def fetch_by_arxiv_id(arxiv_id):
 
     try:
         paper = next(client.results(search))
-        insert_or_update_paper(cursor, paper)
+        paper_id = insert_or_update_paper(cursor, paper)
         conn.commit()
         print(f"Successfully processed {arxiv_id}")
+        _auto_tag_papers(conn, cursor, [(paper_id, paper.title, paper.summary)])
     except StopIteration:
         print(f"Paper {arxiv_id} not found on arXiv")
     except Exception as e:
