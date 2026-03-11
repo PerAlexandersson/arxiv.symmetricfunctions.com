@@ -48,13 +48,16 @@ app.register_blueprint(lists_bp)
 @app.context_processor
 def inject_current_user():
     user_id = session.get('user_id')
+    ctx = {'is_admin': bool(session.get('admin_logged_in'))}
     if user_id:
-        return {'current_user': {
+        ctx['current_user'] = {
             'id':       user_id,
             'name':     session.get('user_name', ''),
             'orcid_id': session.get('orcid_id', ''),
-        }}
-    return {'current_user': None}
+        }
+    else:
+        ctx['current_user'] = None
+    return ctx
 
 
 # Register slugify as a Jinja filter

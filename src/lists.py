@@ -4,6 +4,7 @@ lists.py - User saved-paper lists ("My Lists")
 Routes (pages):
     GET  /lists                          → overview of all user categories
     GET  /lists/<int:cat_id>             → papers in a specific category
+    GET  /my-papers                      → redirect to /author/<slug> for the logged-in user
 
 Routes (API — JSON, CSRF-protected POST):
     POST /api/lists/star/<arxiv_id>      → toggle Starred
@@ -21,7 +22,7 @@ import logging
 from flask import (Blueprint, render_template, request, jsonify,
                    redirect, url_for, session, abort, g)
 from config import DB_CONFIG
-from utils import arxiv2bib
+from utils import arxiv2bib, slugify
 
 logger = logging.getLogger(__name__)
 lists_bp = Blueprint('lists', __name__)
@@ -154,6 +155,18 @@ def my_lists():
         return redirect(url_for('auth.login'))
     categories = _get_user_categories(user_id)
     return render_template('lists.html', categories=categories)
+
+
+@lists_bp.route('/my-papers')
+def my_papers():
+    user_id = session.get('user_id')
+    if not user_id:
+        session['login_next'] = url_for('lists.my_papers')
+        return redirect(url_for('auth.login'))
+    name = session.get('user_name', '')
+    if not name:
+        abort(404)
+    return redirect(url_for('author_papers', author_slug=slugify(name)))
 
 
 @lists_bp.route('/lists/<int:cat_id>')

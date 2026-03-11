@@ -770,6 +770,49 @@ footer a {
   vertical-align: middle;
 }
 
+/* Primary nav icons: colored blue */
+.nav-icon-primary {
+  color: var(--c-link) !important;
+}
+.nav-icon-primary:hover {
+  color: var(--c-brand) !important;
+}
+
+/* Disabled user icons: grayed out, not interactive */
+.nav-icon-btn.nav-icon-disabled {
+  opacity: 0.3;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Separator between icon groups */
+.nav-sep {
+  display: inline-block;
+  width: 1px;
+  height: 1.2rem;
+  background: var(--c-border);
+  margin: 0 0.15rem;
+  vertical-align: middle;
+}
+
+/* "Logged in as" line below site title */
+.site-logged-in {
+  font-size: 0.78rem;
+  color: var(--c-text-muted);
+  margin: -0.6rem 0 0.4rem;
+  font-family: 'Raleway', system-ui, sans-serif;
+  font-weight: 300;
+}
+.site-logged-in a {
+  color: var(--c-text-muted);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--c-border);
+}
+.site-logged-in a:hover {
+  color: var(--c-link);
+  border-bottom-color: var(--c-link);
+}
+
 /* ============================================================================
    BibTeX modal
    ============================================================================ */
