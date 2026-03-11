@@ -13,6 +13,7 @@ Routes:
     /admin/candidates    → browse keywords.csv and triage
     /admin/keywords      → list all useful keywords (inline-editable)
     /admin/keywords/<id>/inline  → AJAX: update phrase/url
+    /admin/keywords/<id>/merge   → AJAX: merge keyword into another (becomes alias)
     /admin/keywords/<id>/score   → AJAX: update score
     /admin/keywords/<id>/aliases/add    → AJAX: add alias
     /admin/keywords/<id>/aliases/<aid>/delete → AJAX: remove alias
@@ -26,9 +27,12 @@ import functools
 from datetime import date as date_type
 
 from flask import (Blueprint, render_template, request, redirect,
-                   url_for, session, flash, abort, jsonify)
+                   url_for, session, flash, abort, jsonify, g)
+import logging
 import pymysql
 from config import DB_CONFIG, ADMIN_PASSWORD
+
+logger = logging.getLogger(__name__)
 
 admin = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -63,7 +67,10 @@ def load_candidates():
 
 
 def get_db_connection():
-    return pymysql.connect(**DB_CONFIG, cursorclass=pymysql.cursors.DictCursor)
+    """Return a per-request DB connection (cached on Flask g, closed on teardown)."""
+    if 'db' not in g:
+        g.db = pymysql.connect(**DB_CONFIG, cursorclass=pymysql.cursors.DictCursor)
+    return g.db
 
 
 def login_required(f):
@@ -120,11 +127,13 @@ def login():
     if request.method == 'POST':
         if ADMIN_PASSWORD and request.form.get('password') == ADMIN_PASSWORD:
             session['admin_logged_in'] = True
+            logger.info("Admin login successful from %s", request.remote_addr)
             next_url = request.args.get('next', '')
             # Only allow redirects to local paths (prevent open redirect)
             if next_url and next_url.startswith('/') and not next_url.startswith('//'):
                 return redirect(next_url)
             return redirect(url_for('admin.candidates'))
+        logger.warning("Failed admin login attempt from %s", request.remote_addr)
         flash('Wrong password.')
     return render_template('admin/login.html')
 
@@ -154,7 +163,6 @@ def candidates():
     cursor = conn.cursor()
     useful, aliases_map, math, ignored = _get_reviewed(cursor)
     cursor.close()
-    conn.close()
 
     filtered = []
     for c in all_candidates:
@@ -210,45 +218,66 @@ def mark_candidate():
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    # If phrase is currently a keyword, save its id so we can reassign paper_keywords
+    # before deleting (avoids cascade-deleting paper associations).
+    cursor.execute("SELECT id FROM keywords WHERE phrase = %s", (phrase,))
+    existing_kw = cursor.fetchone()
+    existing_kw_id = existing_kw['id'] if existing_kw else None
+
     # Remove from all three tables and any existing alias entry (clean slate)
-    cursor.execute("DELETE FROM keywords           WHERE phrase = %s", (phrase,))
     cursor.execute("DELETE FROM math_words         WHERE phrase = %s", (phrase,))
     cursor.execute("DELETE FROM ignored_candidates WHERE phrase = %s", (phrase,))
     cursor.execute("DELETE FROM keyword_aliases    WHERE alias  = %s", (phrase,))
 
     if status == 'useful':
-        cursor.execute(
-            "INSERT INTO keywords (phrase, score) VALUES (%s, 5)",
-            (keyword_phrase,)
-        )
+        if existing_kw_id:
+            # Already a keyword — update phrase in place, keep paper_keywords intact
+            cursor.execute("UPDATE keywords SET phrase = %s WHERE id = %s",
+                           (keyword_phrase, existing_kw_id))
+        else:
+            cursor.execute(
+                "INSERT INTO keywords (phrase, score) VALUES (%s, 5)",
+                (keyword_phrase,)
+            )
     elif status == 'alias' and alias_of:
         # Look up the canonical keyword
         cursor.execute("SELECT id FROM keywords WHERE phrase = %s", (alias_of,))
         row = cursor.fetchone()
         if row:
+            canonical_id = row['id']
+            if existing_kw_id:
+                # Reassign paper_keywords and sub-aliases before deleting
+                cursor.execute("UPDATE paper_keywords SET keyword_id = %s WHERE keyword_id = %s",
+                               (canonical_id, existing_kw_id))
+                cursor.execute("UPDATE keyword_aliases SET keyword_id = %s WHERE keyword_id = %s",
+                               (canonical_id, existing_kw_id))
+                cursor.execute("DELETE FROM keywords WHERE id = %s", (existing_kw_id,))
             cursor.execute(
                 "INSERT IGNORE INTO keyword_aliases (keyword_id, alias) VALUES (%s, %s)",
-                (row['id'], keyword_phrase)
+                (canonical_id, keyword_phrase)
             )
         else:
             # Canonical not found — fall back to creating a new keyword
-            cursor.execute(
-                "INSERT INTO keywords (phrase, score) VALUES (%s, 5)",
-                (keyword_phrase,)
-            )
-    elif status == 'math':
-        cursor.execute(
-            "INSERT INTO math_words (phrase) VALUES (%s)", (phrase,)
-        )
-    elif status == 'ignore':
-        cursor.execute(
-            "INSERT INTO ignored_candidates (phrase) VALUES (%s)", (phrase,)
-        )
+            if existing_kw_id:
+                cursor.execute("UPDATE keywords SET phrase = %s WHERE id = %s",
+                               (keyword_phrase, existing_kw_id))
+            else:
+                cursor.execute(
+                    "INSERT INTO keywords (phrase, score) VALUES (%s, 5)",
+                    (keyword_phrase,)
+                )
+    else:
+        # math / ignore / unreviewed — delete the keyword if it existed
+        if existing_kw_id:
+            cursor.execute("DELETE FROM keywords WHERE id = %s", (existing_kw_id,))
+        if status == 'math':
+            cursor.execute("INSERT INTO math_words (phrase) VALUES (%s)", (phrase,))
+        elif status == 'ignore':
+            cursor.execute("INSERT INTO ignored_candidates (phrase) VALUES (%s)", (phrase,))
     # 'unreviewed' → already removed from all tables above
 
     conn.commit()
     cursor.close()
-    conn.close()
     return redirect(request.referrer or url_for('admin.candidates'))
 
 
@@ -273,7 +302,6 @@ def keywords():
         aliases_by_kw.setdefault(a['keyword_id'], []).append(a)
     all_phrases = sorted(row['phrase'] for row in kws)
     cursor.close()
-    conn.close()
     return render_template('admin/keywords.html', keywords=kws,
                            aliases_by_kw=aliases_by_kw,
                            keyword_phrases=all_phrases)
@@ -292,7 +320,6 @@ def add_keyword():
         )
         conn.commit()
         cursor.close()
-        conn.close()
     return redirect(url_for('admin.keywords'))
 
 
@@ -310,7 +337,6 @@ def inline_edit(kid):
     cursor.execute(f"UPDATE keywords SET {field}=%s WHERE id=%s", (value, kid))
     conn.commit()
     cursor.close()
-    conn.close()
     return jsonify({'ok': True, 'value': value})
 
 
@@ -323,6 +349,16 @@ def add_alias(kid):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
+        # If the alias phrase already exists as a standalone keyword, absorb it:
+        # reassign its paper_keywords and aliases to kid, then delete it.
+        cursor.execute("SELECT id FROM keywords WHERE phrase = %s AND id != %s", (alias, kid))
+        dup = cursor.fetchone()
+        if dup:
+            dup_id = dup['id']
+            cursor.execute("UPDATE paper_keywords   SET keyword_id = %s WHERE keyword_id = %s", (kid, dup_id))
+            cursor.execute("UPDATE keyword_aliases   SET keyword_id = %s WHERE keyword_id = %s", (kid, dup_id))
+            cursor.execute("DELETE FROM keywords WHERE id = %s", (dup_id,))
+
         cursor.execute(
             "INSERT INTO keyword_aliases (keyword_id, alias) VALUES (%s, %s)",
             (kid, alias)
@@ -330,11 +366,9 @@ def add_alias(kid):
         conn.commit()
         aid = cursor.lastrowid
         cursor.close()
-        conn.close()
-        return jsonify({'ok': True, 'id': aid, 'alias': alias})
+        return jsonify({'ok': True, 'id': aid, 'alias': alias, 'absorbed': bool(dup)})
     except pymysql.IntegrityError:
         cursor.close()
-        conn.close()
         return jsonify({'ok': False, 'error': 'duplicate'}), 409
 
 
@@ -346,8 +380,36 @@ def delete_alias(kid, aid):
     cursor.execute("DELETE FROM keyword_aliases WHERE id=%s AND keyword_id=%s", (aid, kid))
     conn.commit()
     cursor.close()
-    conn.close()
     return jsonify({'ok': True})
+
+
+@admin.route('/keywords/<int:kid>/merge', methods=['POST'])
+@login_required
+def merge_keyword(kid):
+    """Merge keyword kid into another keyword (by phrase). kid becomes an alias."""
+    into_phrase = request.form.get('into_phrase', '').strip().lower()
+    if not into_phrase:
+        return jsonify({'ok': False, 'error': 'empty'}), 400
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, phrase FROM keywords WHERE id = %s", (kid,))
+    src = cursor.fetchone()
+    if not src:
+        cursor.close();        return jsonify({'ok': False, 'error': 'not found'}), 404
+    cursor.execute("SELECT id FROM keywords WHERE phrase = %s AND id != %s", (into_phrase, kid))
+    dst = cursor.fetchone()
+    if not dst:
+        cursor.close();        return jsonify({'ok': False, 'error': 'target not found'}), 404
+    dst_id = dst['id']
+    # Reassign paper_keywords and sub-aliases, then delete src keyword
+    cursor.execute("UPDATE paper_keywords SET keyword_id = %s WHERE keyword_id = %s", (dst_id, kid))
+    cursor.execute("UPDATE keyword_aliases SET keyword_id = %s WHERE keyword_id = %s", (dst_id, kid))
+    cursor.execute("DELETE FROM keywords WHERE id = %s", (kid,))
+    # Add src phrase as alias of dst (ignore if already exists)
+    cursor.execute("INSERT IGNORE INTO keyword_aliases (keyword_id, alias) VALUES (%s, %s)",
+                   (dst_id, src['phrase']))
+    conn.commit()
+    cursor.close();    return jsonify({'ok': True})
 
 
 @admin.route('/keywords/<int:kid>/score', methods=['POST'])
@@ -359,7 +421,6 @@ def set_score(kid):
     cursor.execute("UPDATE keywords SET score=%s WHERE id=%s", (score, kid))
     conn.commit()
     cursor.close()
-    conn.close()
     return jsonify({'ok': True, 'score': score})
 
 
@@ -372,7 +433,6 @@ def delete_keyword(kid):
     cursor.execute("DELETE FROM keywords WHERE id = %s", (kid,))
     conn.commit()
     cursor.close()
-    conn.close()
     return redirect(url_for('admin.keywords'))
 
 
@@ -387,7 +447,6 @@ def bulk_delete():
         cursor.execute(f"DELETE FROM keywords WHERE id IN ({placeholders})", ids)
         conn.commit()
         cursor.close()
-        conn.close()
     return redirect(url_for('admin.keywords'))
 
 
@@ -429,6 +488,5 @@ def retag():
                       'from': from_date, 'to': to_date}
 
     cursor.close()
-    conn.close()
     return render_template('admin/retag.html',
                            earliest=earliest, today=today, result=result)

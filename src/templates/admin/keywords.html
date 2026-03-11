@@ -41,12 +41,24 @@ table.kw-table col.col-del      { width: 34px; }
 
 .paper-count { text-align: right; color: var(--c-muted, #666); font-size: 0.8rem; }
 
-.help-tip {
+.help-btn {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 1em; height: 1em; border-radius: 50%;
-  background: var(--c-muted, #999); color: #fff;
-  font-size: 0.65rem; font-weight: bold; line-height: 1;
-  cursor: help; vertical-align: middle; margin-left: 2px;
+  width: 1.3em; height: 1.3em; border-radius: 50%;
+  border: 1px solid var(--c-border, #ccc); background: var(--c-bg-alt, #f5f5f5);
+  color: var(--c-muted, #666); font-size: 0.75rem; font-weight: bold;
+  cursor: pointer; vertical-align: middle; margin-left: 0.4rem;
+  text-decoration: none; position: relative;
+}
+.help-popup {
+  display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  background: var(--c-bg, #fff); border: 1px solid var(--c-border, #ccc);
+  border-radius: 6px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  padding: 1.4rem 1.6rem; max-width: 420px; width: 90vw;
+  font-size: 0.88rem; line-height: 1.55; z-index: 1000;
+}
+.help-popup h3 { margin: 0 0 0.8rem; font-size: 1rem; }
+.help-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 999;
 }
 
 /* Inline editable inputs */
@@ -80,6 +92,13 @@ table.kw-table col.col-del      { width: 34px; }
   font-size: 0.75rem; color: var(--c-muted, #999);
 }
 .alias-add-btn:hover { border-color: var(--c-accent, #2a6); color: var(--c-accent, #2a6); }
+.merge-btn { border-color: #c9aaec; color: #7a3ab5; }
+.merge-btn:hover { border-color: #7a3ab5; color: #5a1a8a; }
+.alias-warn {
+  font-size: 0.72rem; color: #7a4700;
+  background: #fff3cd; border: 1px solid #ffc107;
+  border-radius: 3px; padding: 0.1rem 0.4rem; display: none;
+}
 .alias-add-input {
   display: none; font-size: 0.8rem; font-family: monospace;
   border: 1px solid var(--c-accent, #2a6); border-radius: 3px;
@@ -106,6 +125,32 @@ table.kw-table col.col-del      { width: 34px; }
   <a href="{{ url_for('admin.keywords') }}"><strong>Keywords ({{ keywords|length }})</strong></a>
   <a href="{{ url_for('admin.retag') }}">Retag</a>
   <a href="{{ url_for('admin.logout') }}" style="float:right; color: var(--c-muted,#666)">Log out</a>
+</div>
+
+<div class="help-overlay" id="help-overlay" onclick="closeHelp()"></div>
+
+<div class="help-popup" id="help-score">
+  <h3>Score</h3>
+  <p>Relevance weight from 1 to 10. A paper's relevance score sums the scores of all its matched keywords. Higher score = this keyword contributes more to ranking.</p>
+  <button onclick="closeHelp()" style="padding:0.35rem 0.9rem; border:1px solid var(--c-border,#ccc); border-radius:3px; cursor:pointer; background:var(--c-bg-alt,#f5f5f5);">Close</button>
+</div>
+
+<div class="help-popup" id="help-phrase">
+  <h3>Phrase</h3>
+  <p>The canonical display name for this keyword — shown on paper pages and used for filtering. Both the phrase and all its aliases are searched in title and abstract during tagging; all matches are stored under this phrase.</p>
+  <button onclick="closeHelp()" style="padding:0.35rem 0.9rem; border:1px solid var(--c-border,#ccc); border-radius:3px; cursor:pointer; background:var(--c-bg-alt,#f5f5f5);">Close</button>
+</div>
+
+<div class="help-popup" id="help-aliases">
+  <h3>Aliases</h3>
+  <p>Alternate strings that also trigger this keyword during tagging — e.g. plural forms, abbreviations, or spelling variants (<em>schur functions</em>, <em>schur fn</em>). All aliases map to the same canonical phrase. Add new aliases via the Candidates page or the <strong>+ alias</strong> button.</p>
+  <button onclick="closeHelp()" style="padding:0.35rem 0.9rem; border:1px solid var(--c-border,#ccc); border-radius:3px; cursor:pointer; background:var(--c-bg-alt,#f5f5f5);">Close</button>
+</div>
+
+<div class="help-popup" id="help-url">
+  <h3>URL</h3>
+  <p>Optional link to a reference page for this keyword (e.g. a page on symmetricfunctions.com). When set, the keyword tag on paper pages becomes a clickable link.</p>
+  <button onclick="closeHelp()" style="padding:0.35rem 0.9rem; border:1px solid var(--c-border,#ccc); border-radius:3px; cursor:pointer; background:var(--c-bg-alt,#f5f5f5);">Close</button>
 </div>
 
 <h2 style="margin-top: 0;">Keywords</h2>
@@ -141,10 +186,10 @@ table.kw-table col.col-del      { width: 34px; }
   <thead>
     <tr>
       <th><input type="checkbox" id="select-all" title="Select all"></th>
-      <th>Score <span class="help-tip" title="Relevance weight 1–10. Higher score = keyword contributes more to a paper's relevance ranking.">?</span></th>
-      <th>Phrase <span class="help-tip" title="The canonical display name shown on papers and used for filtering. Both phrase and aliases are searched in title/abstract during tagging.">?</span></th>
-      <th>Aliases <span style="font-weight:normal; color:var(--c-muted,#999); font-size:0.8rem">(synonyms)</span> <span class="help-tip" title="Alternate strings that also trigger this keyword during tagging (e.g. plural forms, abbreviations). All aliases map to the same canonical phrase.">?</span></th>
-      <th>URL <span class="help-tip" title="Optional link to a reference page (e.g. symmetricfunctions.com). Shown as a link on the keyword's tag.">?</span></th>
+      <th>Score <button class="help-btn" onclick="openHelp('help-score')" title="What is score?">?</button></th>
+      <th>Phrase <button class="help-btn" onclick="openHelp('help-phrase')" title="What is phrase?">?</button></th>
+      <th>Aliases <span style="font-weight:normal; color:var(--c-muted,#999); font-size:0.8rem">(synonyms)</span> <button class="help-btn" onclick="openHelp('help-aliases')" title="What are aliases?">?</button></th>
+      <th>URL <button class="help-btn" onclick="openHelp('help-url')" title="What is URL?">?</button></th>
       <th style="text-align:right">Count</th>
       <th></th>
     </tr>
@@ -175,10 +220,18 @@ table.kw-table col.col-del      { width: 34px; }
         {% endfor %}
         <button type="button" class="alias-add-btn" id="alias-btn-{{ kw.id }}"
                 onclick="showAliasInput({{ kw.id }})">+ alias</button>
+        <button type="button" class="alias-add-btn merge-btn" id="merge-btn-{{ kw.id }}"
+                onclick="showMergeInput({{ kw.id }})" title="Merge this keyword into another">⇒ merge into…</button>
         <input type="text" class="alias-add-input" id="alias-input-{{ kw.id }}"
                placeholder="synonym…" list="kw-list"
                onkeydown="aliasKeydown(event, {{ kw.id }})"
+               oninput="aliasWarn(this, {{ kw.id }})"
                onblur="scheduleHideAlias({{ kw.id }})">
+        <span class="alias-warn" id="alias-warn-{{ kw.id }}"></span>
+        <input type="text" class="alias-add-input" id="merge-input-{{ kw.id }}"
+               placeholder="merge into…" list="kw-list"
+               onkeydown="mergeKeydown(event, {{ kw.id }})"
+               onblur="scheduleHideMerge({{ kw.id }})">
       </div>
     </td>
     <td>
@@ -217,6 +270,20 @@ table.kw-table col.col-del      { width: 34px; }
 {% endif %}
 
 <script>
+// ── Help popups ───────────────────────────────────────────────────────────────
+let _openPopup = null;
+function openHelp(id) {
+  closeHelp();
+  _openPopup = document.getElementById(id);
+  if (_openPopup) _openPopup.style.display = 'block';
+  document.getElementById('help-overlay').style.display = 'block';
+}
+function closeHelp() {
+  if (_openPopup) { _openPopup.style.display = 'none'; _openPopup = null; }
+  document.getElementById('help-overlay').style.display = 'none';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHelp(); });
+
 // ── Select all ────────────────────────────────────────────────────────────────
 const selectAll = document.getElementById('select-all');
 const selCount  = document.getElementById('sel-count');
@@ -243,7 +310,7 @@ async function setScore(kid, input) {
   const prev = input.defaultValue;
   const fd = new FormData(); fd.append('score', input.value);
   try {
-    const res = await fetch(`/admin/keywords/${kid}/score`, { method: 'POST', body: fd });
+    const res = await csrfFetch(`/admin/keywords/${kid}/score`, fd);
     if (!res.ok) throw new Error();
     input.defaultValue = input.value;
     flash(input, true);
@@ -264,7 +331,7 @@ async function saveInline(input) {
   if (field === 'phrase' && !value) { input.value = input.defaultValue; return; }
   const fd = new FormData(); fd.append('field', field); fd.append('value', value);
   try {
-    const res = await fetch(`/admin/keywords/${kid}/inline`, { method: 'POST', body: fd });
+    const res = await csrfFetch(`/admin/keywords/${kid}/inline`, fd);
     if (!res.ok) throw new Error();
     input.defaultValue = value;
     flash(input, true);
@@ -302,11 +369,18 @@ async function addAlias(kid) {
   if (!alias) { hideAliasInput(kid); return; }
   const fd = new FormData(); fd.append('alias', alias);
   try {
-    const res  = await fetch(`/admin/keywords/${kid}/aliases/add`, { method: 'POST', body: fd });
+    const res  = await csrfFetch(`/admin/keywords/${kid}/aliases/add`, fd);
     const data = await res.json();
     if (!data.ok) {
       alert(data.error === 'duplicate' ? `«${alias}» is already an alias.` : 'Error adding alias.');
       inp.select(); return;
+    }
+    // If the alias phrase was a standalone keyword, remove its row from the table
+    if (data.absorbed) {
+      document.querySelectorAll('tr[data-kid]').forEach(row => {
+        const phraseInput = row.querySelector('.phrase-field');
+        if (phraseInput && phraseInput.value.trim().toLowerCase() === alias) row.remove();
+      });
     }
     const list = document.getElementById('aliases-' + kid);
     const btn  = document.getElementById('alias-btn-' + kid);
@@ -322,10 +396,73 @@ async function addAlias(kid) {
 async function deleteAlias(kid, aid) {
   const fd = new FormData();
   try {
-    const res  = await fetch(`/admin/keywords/${kid}/aliases/${aid}/delete`, { method: 'POST', body: fd });
+    const res  = await csrfFetch(`/admin/keywords/${kid}/aliases/${aid}/delete`, fd);
     const data = await res.json();
     if (data.ok) document.getElementById('alias-chip-' + aid).remove();
   } catch { alert('Error removing alias.'); }
+}
+
+// ── Absorption warning ────────────────────────────────────────────────────────
+// Map phrase → paper_count, built from the rendered table
+const _phraseCount = {};
+document.querySelectorAll('tr[data-kid]').forEach(row => {
+  const phrase = row.querySelector('.phrase-field')?.value.trim().toLowerCase();
+  const count  = parseInt(row.querySelector('.paper-count')?.textContent) || 0;
+  if (phrase) _phraseCount[phrase] = count;
+});
+
+function aliasWarn(inp, kid) {
+  const val  = inp.value.trim().toLowerCase();
+  const warn = document.getElementById('alias-warn-' + kid);
+  if (val && _phraseCount[val] !== undefined) {
+    warn.textContent = `⚠ will absorb «${val}» (${_phraseCount[val]} papers)`;
+    warn.style.display = 'inline';
+  } else {
+    warn.style.display = 'none';
+  }
+}
+
+// ── Merge into ────────────────────────────────────────────────────────────────
+const _mergeTimer = {};
+
+function showMergeInput(kid) {
+  document.getElementById('merge-btn-' + kid).style.display = 'none';
+  const inp = document.getElementById('merge-input-' + kid);
+  inp.style.display = 'inline-block';
+  inp.focus();
+}
+
+function hideMergeInput(kid) {
+  const inp = document.getElementById('merge-input-' + kid);
+  inp.style.display = 'none';
+  inp.value = '';
+  document.getElementById('merge-btn-' + kid).style.display = '';
+}
+
+function scheduleHideMerge(kid) {
+  _mergeTimer[kid] = setTimeout(() => hideMergeInput(kid), 200);
+}
+
+function mergeKeydown(e, kid) {
+  clearTimeout(_mergeTimer[kid]);
+  if (e.key === 'Enter')  { e.preventDefault(); doMerge(kid); }
+  if (e.key === 'Escape') { hideMergeInput(kid); }
+}
+
+async function doMerge(kid) {
+  const inp        = document.getElementById('merge-input-' + kid);
+  const into_phrase = inp.value.trim().toLowerCase();
+  if (!into_phrase) { hideMergeInput(kid); return; }
+  const srcPhrase = document.querySelector(`tr[data-kid="${kid}"] .phrase-field`)?.value.trim().toLowerCase();
+  if (!confirm(`Merge «${srcPhrase}» into «${into_phrase}»?\n«${srcPhrase}» will become an alias and its row will be removed.`)) return;
+  const fd = new FormData(); fd.append('into_phrase', into_phrase);
+  try {
+    const res  = await csrfFetch(`/admin/keywords/${kid}/merge`, fd);
+    const data = await res.json();
+    if (!data.ok) { alert('Merge failed: ' + (data.error || 'unknown')); inp.select(); return; }
+    // Remove the merged keyword's row
+    document.querySelector(`tr[data-kid="${kid}"]`)?.remove();
+  } catch { alert('Error during merge.'); }
 }
 
 // ── Visual feedback ───────────────────────────────────────────────────────────

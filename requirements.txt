@@ -22,6 +22,9 @@ gunicorn==21.2.0
 # Singularization for keyword normalization
 inflect
 
+# CSRF protection for admin forms
+Flask-WTF
+
 # ORCID / OAuth login
 Authlib
 cffi==2.0.0

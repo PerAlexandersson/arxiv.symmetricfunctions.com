@@ -307,6 +307,39 @@ function showTab(tabId) {
 }
 
 // ============================================================================
+// CSRF HELPERS
+// ============================================================================
+
+/**
+ * Get the CSRF token from the meta tag injected by Flask-WTF.
+ * @returns {string}
+ */
+function getCsrfToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : '';
+}
+
+/**
+ * POST helper that automatically includes the CSRF token.
+ * @param {string} url
+ * @param {FormData|object} data - FormData instance or plain object
+ * @returns {Promise<Response>}
+ */
+function csrfFetch(url, data) {
+    let body;
+    if (data instanceof FormData) {
+        data.append('csrf_token', getCsrfToken());
+        body = data;
+    } else {
+        const fd = new FormData();
+        fd.append('csrf_token', getCsrfToken());
+        for (const [k, v] of Object.entries(data || {})) fd.append(k, v);
+        body = fd;
+    }
+    return fetch(url, { method: 'POST', body });
+}
+
+// ============================================================================
 // INITIALIZATION
 // ============================================================================
 
@@ -317,4 +350,18 @@ document.addEventListener('DOMContentLoaded', function() {
     initDarkMode();
     initAbstractPersistence();
     initKeyboardShortcuts();
+
+    // Inject CSRF token into all POST forms automatically
+    const token = getCsrfToken();
+    if (token) {
+        document.querySelectorAll('form[method="post"], form[method="POST"]').forEach(form => {
+            if (!form.querySelector('input[name="csrf_token"]')) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'csrf_token';
+                input.value = token;
+                form.appendChild(input);
+            }
+        });
+    }
 });

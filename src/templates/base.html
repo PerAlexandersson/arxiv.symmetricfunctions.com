@@ -15,6 +15,7 @@
     <title>{% block title %}arXiv Combinatorics Browser{% endblock %}</title>
     <meta name="author" content="Per Alexandersson" />
     <meta name="description" content="Browse arXiv papers in combinatorics (math.CO category)" />
+    <meta name="csrf-token" content="{{ csrf_token() }}" />
 
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=4">
     <link rel="preconnect" href="https://fonts.googleapis.com">

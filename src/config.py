@@ -37,11 +37,25 @@ ORCID_CLIENT_SECRET = os.getenv('ORCID_CLIENT_SECRET', '')
 
 def validate_config():
     """Validate that required configuration is set."""
+    errors = []
     if not DB_CONFIG['password']:
+        errors.append("DB_PASSWORD not set")
+    if not ADMIN_PASSWORD:
+        errors.append("ADMIN_PASSWORD not set (admin UI will be inaccessible)")
+    if not FETCH_SECRET:
+        errors.append("FETCH_SECRET not set (paper fetch endpoint disabled)")
+    if FLASK_CONFIG['SECRET_KEY'] == 'dev-secret-key-change-in-production':
+        errors.append("FLASK_SECRET_KEY is using the insecure default — set it in .env")
+    critical = [e for e in errors if 'DB_PASSWORD' in e]
+    warnings = [e for e in errors if e not in critical]
+    if critical:
         raise ValueError(
-            "DB_PASSWORD not set! "
-            "Please create a .env file based on .env.example"
+            "Configuration error: " + "; ".join(critical) +
+            "\nPlease create a .env file based on .env.example"
         )
+    for w in warnings:
+        import sys
+        print(f"WARNING: {w}", file=sys.stderr)
 
 if __name__ == '__main__':
     # Test configuration

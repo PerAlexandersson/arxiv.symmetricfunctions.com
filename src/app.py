@@ -5,11 +5,12 @@ app.py - Flask web application for arXiv combinatorics frontend
 Main web interface for browsing arXiv papers.
 """
 
-from flask import Flask, render_template, request, jsonify, abort, redirect, url_for, session
+from flask import Flask, render_template, request, jsonify, abort, redirect, url_for, session, g
 from urllib.parse import unquote
 import io
 import contextlib
 import calendar
+import logging
 import re
 import pymysql
 import requests
@@ -17,12 +18,21 @@ from config import DB_CONFIG, FLASK_CONFIG, FETCH_SECRET, validate_config
 from datetime import datetime, date, timedelta
 from utils import strip_accents, slugify
 
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s %(name)s: %(message)s',
+)
+logger = logging.getLogger(__name__)
+
 # Validate configuration on startup
 validate_config()
 
 app = Flask(__name__)
 app.config.update(FLASK_CONFIG)
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
+
+from flask_wtf.csrf import CSRFProtect
+csrf = CSRFProtect(app)
 
 from admin import admin as admin_blueprint
 app.register_blueprint(admin_blueprint)
@@ -181,13 +191,22 @@ doi = {{{doi}}},
 
 
 def get_db_connection():
-    """Create and return a database connection."""
-    return pymysql.connect(**DB_CONFIG, cursorclass=pymysql.cursors.DictCursor)
+    """Return a per-request DB connection (cached on Flask g, closed on teardown)."""
+    if 'db' not in g:
+        g.db = pymysql.connect(**DB_CONFIG, cursorclass=pymysql.cursors.DictCursor)
+    return g.db
+
+
+@app.teardown_appcontext
+def close_db_connection(e=None):
+    db = g.pop('db', None)
+    if db is not None:
+        db.close()
 
 
 def ensure_author_slugs():
-    """Add slug column if missing and populate any NULL slugs."""
-    conn = get_db_connection()
+    """Add slug column if missing and populate any NULL slugs. Uses its own connection (runs at startup)."""
+    conn = pymysql.connect(**DB_CONFIG, cursorclass=pymysql.cursors.DictCursor)
     cursor = conn.cursor()
     try:
         # Add slug column if it doesn't exist
@@ -213,8 +232,8 @@ def ensure_author_slugs():
 # Populate slugs on startup
 try:
     ensure_author_slugs()
-except pymysql.Error:
-    pass  # DB may not be available during development
+except pymysql.Error as e:
+    logger.warning("ensure_author_slugs skipped (DB unavailable): %s", e)
 
 
 def get_paper_authors(cursor, paper_id):
@@ -305,7 +324,6 @@ def index():
     attach_keywords(cursor, papers)
 
     cursor.close()
-    conn.close()
 
     total_pages = (total + per_page - 1) // per_page
 
@@ -348,7 +366,6 @@ def paper_detail(arxiv_id):
     paper['keywords'] = cursor.fetchall()
 
     cursor.close()
-    conn.close()
 
     return render_template('paper.html', paper=paper)
 
@@ -372,7 +389,6 @@ def bibtex(arxiv_id):
 
     paper['authors'] = get_paper_authors(cursor, paper['id'])
     cursor.close()
-    conn.close()
 
     bibtex = arxiv2bib(paper)
     return bibtex, 200, {'Content-Type': 'text/plain; charset=utf-8'}
@@ -397,7 +413,6 @@ def doi_bibtex(arxiv_id):
 
     paper['authors'] = get_paper_authors(cursor, paper['id'])
     cursor.close()
-    conn.close()
 
     # Generate custom BibTeX with user's preferred format
     bibtex = doi2bib(paper['doi'], paper)
@@ -433,7 +448,6 @@ def prolific_authors():
     """)
     authors = cursor.fetchall()
     cursor.close()
-    conn.close()
     # Split into 3 roughly equal columns
     n = len(authors)
     col_size = (n + 2) // 3
@@ -489,7 +503,6 @@ def generate_bibtex_api():
         if paper:
             paper['authors'] = get_paper_authors(cursor, paper['id'])
             cursor.close()
-            conn.close()
 
             arxiv_bib = arxiv2bib(paper)
             result = {'arxiv': arxiv_bib}
@@ -502,7 +515,6 @@ def generate_bibtex_api():
             return jsonify(result)
         else:
             cursor.close()
-            conn.close()
             return jsonify({'error': 'arXiv paper not found in database'}), 404
 
     elif doi:
@@ -519,7 +531,7 @@ def generate_bibtex_api():
 @app.route('/search')
 def search():
     """Search papers by title or author."""
-    query = request.args.get('q', '').strip()
+    query = request.args.get('q', '').strip()[:500]  # cap at 500 chars
     sort  = request.args.get('sort', 'relevance')  # 'relevance' or 'date'
     page  = request.args.get('page', 1, type=int)
     per_page = 20
@@ -622,7 +634,6 @@ def search():
     attach_keywords(cursor, papers)
 
     cursor.close()
-    conn.close()
 
     total_pages = (total + per_page - 1) // per_page
 
@@ -673,7 +684,6 @@ def keyword_papers(phrase):
     attach_keywords(cursor, papers)
 
     cursor.close()
-    conn.close()
 
     total_pages = (total + per_page - 1) // per_page
     return render_template('keyword.html',
@@ -739,7 +749,6 @@ def author_papers(author_slug):
     attach_keywords(cursor, papers)
 
     cursor.close()
-    conn.close()
 
     total_pages = (total + per_page - 1) // per_page
 
@@ -780,7 +789,6 @@ def browse_by_date():
     available_years = [(row['year'], row['count']) for row in cursor.fetchall()]
 
     cursor.close()
-    conn.close()
 
     # Build calendar data for each month
     month_data = []
@@ -839,7 +847,6 @@ def papers_by_date(date_str):
     attach_keywords(cursor, papers)
 
     cursor.close()
-    conn.close()
 
     return render_template('date.html',
                          date=date,
@@ -854,7 +861,6 @@ def random_paper():
     cursor.execute("SELECT arxiv_id FROM papers ORDER BY RAND() LIMIT 1")
     paper = cursor.fetchone()
     cursor.close()
-    conn.close()
     if not paper:
         abort(404)
     return redirect(url_for('paper_detail', arxiv_id=paper['arxiv_id']))
@@ -896,7 +902,6 @@ def author_bibtex(author_slug):
                 entries.append(pub_bib)
 
     cursor.close()
-    conn.close()
 
     bibtex_all = '\n\n'.join(entries)
     return bibtex_all, 200, {'Content-Type': 'text/plain; charset=utf-8'}
@@ -909,10 +914,12 @@ def fetch_papers():
     days = request.args.get('days', 1, type=int)
 
     if not FETCH_SECRET or key != FETCH_SECRET:
+        logger.warning("Unauthorized /fetch attempt from %s", request.remote_addr)
         abort(403)
 
     # Cap days to prevent abuse
     days = min(days, 30)
+    logger.info("/fetch triggered: days=%d from %s", days, request.remote_addr)
 
     from fetch_arxiv import fetch_recent_papers
     output = io.StringIO()

@@ -111,6 +111,18 @@ falls through to localStorage depending on session state.
 
 ---
 
+## Admin — Keyword Management
+
+- **Warn on keyword delete if tagged papers exist** — the trash icon currently silently
+  cascade-deletes all `paper_keywords` for that keyword. Show the paper count in the
+  confirm dialog, e.g. *"Delete «schur polynomial»? It is tagged on 47 papers."*
+
+- **Retag a single keyword** — after adding or editing one keyword, retagging the entire
+  date range is slow. A per-keyword "retag this keyword" button on the keywords page would
+  call a new `/admin/keywords/<id>/retag` route that scans all papers for that phrase only.
+
+---
+
 ## Other Ideas
 
 - **Abstract keyword linking** — wrap matched keyword phrases in abstracts with

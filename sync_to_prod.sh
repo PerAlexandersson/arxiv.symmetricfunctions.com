@@ -52,10 +52,12 @@ echo "  Local DB:  $DB_NAME @ $DB_HOST (user: $DB_USER)"
 echo "  Remote:    $REMOTE_HOST:$REMOTE_PORT"
 echo ""
 
-# ── Step 1: upload migrate.sql, apply on prod ─────────────────────────────────
-echo -e "${YELLOW}Step 1: Uploading migrate.sql and applying on production...${NC}"
+# ── Step 1: upload migration files, apply on prod ────────────────────────────
+echo -e "${YELLOW}Step 1: Uploading migration files and applying on production...${NC}"
 scp -P "$REMOTE_PORT" "$SCRIPT_DIR/database/migrate.sql" \
     "$REMOTE_HOST:~/$REMOTE_PATH/database/migrate.sql"
+scp -P "$REMOTE_PORT" "$SCRIPT_DIR/database/migrate_users.sql" \
+    "$REMOTE_HOST:~/$REMOTE_PATH/database/migrate_users.sql"
 
 ssh -p "$REMOTE_PORT" "$REMOTE_HOST" 'bash -s' << 'ENDSSH'
 set -e
@@ -65,6 +67,8 @@ set +a
 cd ~/domains/arxiv.symmetricfunctions.com
 mysql -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/migrate.sql
 echo "  migrate.sql applied."
+mysql -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/migrate_users.sql
+echo "  migrate_users.sql applied."
 ENDSSH
 echo -e "${GREEN}  Schema OK${NC}"
 
