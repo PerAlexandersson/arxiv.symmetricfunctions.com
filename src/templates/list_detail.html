@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% from '_macros.html' import render_paper with context %}
+
+{% block title %}{{ category.name }} — My Lists — arXiv Combinatorics{% endblock %}
+
+{% block content %}
+<div class="lists-header">
+    <div class="lists-header-left">
+        <a href="{{ url_for('lists.my_lists') }}" class="lists-back">← My Lists</a>
+        <h2 class="lists-title">
+            {% if category.is_starred %}
+            <svg viewBox="0 0 20 20" fill="currentColor" class="lists-title-star" width="1.1rem" height="1.1rem" aria-hidden="true"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+            {% endif %}
+            <span id="list-page-title">{{ category.name }}</span>
+        </h2>
+    </div>
+    <div class="lists-header-right">
+        {% if papers %}
+        <button class="btn-secondary" onclick="showBibtexModal('/api/lists/{{ cat_id }}/bibtex', '{{ category.name | e }}')">BIB</button>
+        {% endif %}
+        <button class="btn-secondary" onclick="renameListPrompt({{ cat_id }}, '{{ category.name | e }}')">Rename</button>
+        {% if not category.is_starred %}
+        <button class="btn-danger" onclick="deleteListConfirm({{ cat_id }}, '{{ category.name | e }}')">Delete list</button>
+        {% endif %}
+    </div>
+</div>
+
+{% if papers %}
+<p class="lists-count">{{ papers|length }} paper{% if papers|length != 1 %}s{% endif %}</p>
+{% for paper in papers %}
+<div class="list-paper-row" id="list-row-{{ paper.arxiv_id }}">
+    {{ render_paper(paper, list_cat_id=cat_id) }}
+</div>
+{% endfor %}
+{% else %}
+<p class="lists-empty">This list is empty. Star papers or use the bookmark icon to save them here.</p>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function renameListPrompt(catId, currentName) {
+    const name = prompt('Rename list:', currentName);
+    if (!name || !name.trim() || name.trim() === currentName) return;
+    const resp = await csrfFetch(`/api/lists/categories/${catId}/rename`, { name: name.trim() });
+    if (resp.ok) {
+        document.getElementById('list-page-title').textContent = name.trim();
+        document.title = name.trim() + ' — My Lists — arXiv Combinatorics';
+    } else {
+        const data = await resp.json();
+        alert(data.error || 'Failed to rename list.');
+    }
+}
+
+async function deleteListConfirm(catId, name) {
+    if (!confirm(`Delete list "${name}" and all its saved papers?`)) return;
+    const resp = await csrfFetch(`/api/lists/categories/${catId}/delete`, {});
+    if (resp.ok) {
+        window.location.href = '{{ url_for("lists.my_lists") }}';
+    } else {
+        const data = await resp.json();
+        alert(data.error || 'Failed to delete list.');
+    }
+}
+</script>
+{% endblock %}

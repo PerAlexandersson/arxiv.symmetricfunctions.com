@@ -86,6 +86,9 @@
                     <svg class="icon-sun"  viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"/></svg>
                   </button>
                   {% if current_user %}
+                  <a href="{{ url_for('lists.my_lists') }}" class="nav-icon-btn" title="My Lists" aria-label="My Lists">
+                    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/></svg>
+                  </a>
                   <a href="{{ url_for('admin.candidates') }}" class="nav-icon-btn" title="Keyword tagging" aria-label="Keyword tagging">
                     <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M17.707 9.293l-7-7A1 1 0 0010 2H4a2 2 0 00-2 2v6a1 1 0 00.293.707l7 7a1 1 0 001.414 0l6-6a1 1 0 000-1.414zM6 7a1 1 0 110-2 1 1 0 010 2z" clip-rule="evenodd"/></svg>
                   </a>
@@ -122,6 +125,21 @@
             </p>
         </div>
     </footer>
+
+    <!-- BibTeX modal (shared across all pages) -->
+    <div id="bibtex-modal" class="bib-modal-backdrop" style="display:none" role="dialog" aria-modal="true" aria-labelledby="bib-modal-title">
+      <div class="bib-modal-box">
+        <div class="bib-modal-header">
+          <span id="bib-modal-title" class="bib-modal-title">BibTeX</span>
+          <button class="bib-modal-close" onclick="closeBibtexModal()" aria-label="Close">&times;</button>
+        </div>
+        <div class="bib-modal-actions">
+          <button class="btn-new-list" onclick="copyBibtexModal()">Copy all</button>
+          <span id="bib-modal-status" class="bib-modal-status"></span>
+        </div>
+        <textarea id="bib-modal-text" class="bib-modal-textarea" readonly spellcheck="false"></textarea>
+      </div>
+    </div>
 
     <!-- All JavaScript utilities moved to static/utils.js -->
 

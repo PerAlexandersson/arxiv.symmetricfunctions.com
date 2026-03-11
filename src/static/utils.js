@@ -74,23 +74,15 @@ async function fetchAndCopy(url, successMessage, errorPrefix = 'Failed to copy')
  * @param {string} arxivId - The arXiv paper ID
  */
 async function copyBibtex(arxivId) {
-    await fetchAndCopy(
-        `/api/bibtex/${arxivId}`,
-        'arXiv BibTeX copied to clipboard!',
-        'Failed to copy BibTeX'
-    );
+    showBibtexModal(`/api/bibtex/${arxivId}`, `arXiv:${arxivId}`);
 }
 
 /**
- * Fetch and copy DOI BibTeX citation
+ * Fetch and show DOI BibTeX citation in modal
  * @param {string} arxivId - The arXiv paper ID
  */
 async function copyDoiBibtex(arxivId) {
-    await fetchAndCopy(
-        `/api/doi-bibtex/${arxivId}`,
-        'DOI BibTeX copied to clipboard!',
-        'Failed to copy DOI BibTeX'
-    );
+    showBibtexModal(`/api/doi-bibtex/${arxivId}`, `DOI \u2014 arXiv:${arxivId}`);
 }
 
 /**
@@ -117,13 +109,68 @@ async function fetchBibtex(arxivId, elementId, apiPath = '/api/bibtex/') {
  * Fetch and copy all BibTeX entries for an author
  * @param {string} authorName - The author's name
  */
-async function copyAuthorBibtex(authorSlug) {
-    await fetchAndCopy(
-        `/api/author-bibtex/${authorSlug}`,
-        'All BibTeX entries copied to clipboard!',
-        'Failed to copy BibTeX'
-    );
+async function copyAuthorBibtex(authorSlug, authorName) {
+    showBibtexModal(`/api/author-bibtex/${authorSlug}`, authorName || authorSlug);
 }
+
+// ============================================================================
+// BIBTEX MODAL
+// ============================================================================
+
+/**
+ * Fetch plain-text BibTeX from url and display it in the shared modal.
+ * @param {string} url   - Endpoint returning plain-text BibTeX
+ * @param {string} title - Title shown in the modal header
+ */
+async function showBibtexModal(url, title) {
+    const modal    = document.getElementById('bibtex-modal');
+    const titleEl  = document.getElementById('bib-modal-title');
+    const textarea = document.getElementById('bib-modal-text');
+    const status   = document.getElementById('bib-modal-status');
+
+    titleEl.textContent  = title ? `BibTeX \u2014 ${title}` : 'BibTeX';
+    textarea.value       = 'Loading\u2026';
+    status.textContent   = '';
+    modal.style.display  = 'flex';
+    document.body.classList.add('modal-open');
+
+    try {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        textarea.value = await resp.text();
+    } catch (err) {
+        textarea.value = `Error loading BibTeX: ${err}`;
+    }
+}
+
+function closeBibtexModal() {
+    const modal = document.getElementById('bibtex-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.classList.remove('modal-open');
+    }
+}
+
+async function copyBibtexModal() {
+    const textarea = document.getElementById('bib-modal-text');
+    const status   = document.getElementById('bib-modal-status');
+    try {
+        await copyToClipboard(textarea.value);
+        status.textContent = 'Copied!';
+        setTimeout(() => { status.textContent = ''; }, 2000);
+    } catch (err) {
+        status.textContent = 'Copy failed';
+    }
+}
+
+// Close modal on backdrop click or Escape
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeBibtexModal();
+});
+document.addEventListener('click', (e) => {
+    const modal = document.getElementById('bibtex-modal');
+    if (modal && e.target === modal) closeBibtexModal();
+});
 
 // ============================================================================
 // SHARING FUNCTIONS
@@ -303,6 +350,133 @@ function showTab(tabId) {
         btn.style.borderBottomColor = 'var(--c-link)';
         btn.style.color = 'var(--c-link)';
         btn.style.fontWeight = '600';
+    }
+}
+
+// ============================================================================
+// MY LISTS — STAR / SAVE / REMOVE
+// ============================================================================
+
+/**
+ * Toggle the Starred status of a paper.
+ * @param {HTMLElement} btn
+ * @param {string} arxivId
+ */
+async function toggleStar(btn, arxivId) {
+    try {
+        const resp = await csrfFetch(`/api/lists/star/${arxivId}`, {});
+        if (!resp.ok) {
+            if (resp.status === 401) { window.location.href = '/login'; return; }
+            throw new Error(`HTTP ${resp.status}`);
+        }
+        const data = await resp.json();
+        btn.classList.toggle('starred', data.starred);
+        btn.title = data.starred ? 'Remove from Starred' : 'Star this paper';
+        btn.setAttribute('aria-label', btn.title);
+    } catch (err) {
+        console.error('toggleStar failed:', err);
+    }
+}
+
+/**
+ * Show a save-to-list dropdown near the clicked button.
+ * @param {HTMLElement} btn
+ * @param {string} arxivId
+ */
+async function showSaveMenu(btn, arxivId) {
+    document.querySelectorAll('.save-dropdown').forEach(d => d.remove());
+
+    let categories;
+    try {
+        const resp = await fetch('/api/lists/categories');
+        if (!resp.ok) {
+            if (resp.status === 401) { window.location.href = '/login'; return; }
+            throw new Error(`HTTP ${resp.status}`);
+        }
+        categories = await resp.json();
+    } catch (err) {
+        console.error('showSaveMenu failed:', err);
+        return;
+    }
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'save-dropdown';
+
+    if (categories.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'save-dropdown-item save-dropdown-empty';
+        empty.textContent = 'No lists yet';
+        dropdown.appendChild(empty);
+    } else {
+        categories.forEach(cat => {
+            const item = document.createElement('div');
+            item.className = 'save-dropdown-item';
+            item.textContent = cat.name;
+            item.addEventListener('click', async () => {
+                dropdown.remove();
+                const r = await csrfFetch('/api/lists/save', { arxiv_id: arxivId, category_id: cat.id });
+                if (r.ok) {
+                    btn.classList.add('saved');
+                    btn.title = `Saved to ${cat.name}`;
+                } else {
+                    const d = await r.json();
+                    alert(d.error || 'Failed to save.');
+                }
+            });
+            dropdown.appendChild(item);
+        });
+    }
+
+    const newItem = document.createElement('div');
+    newItem.className = 'save-dropdown-item save-dropdown-new';
+    newItem.textContent = '+ New list\u2026';
+    newItem.addEventListener('click', async () => {
+        dropdown.remove();
+        const name = prompt('New list name:');
+        if (!name || !name.trim()) return;
+        const r = await csrfFetch('/api/lists/save', { arxiv_id: arxivId, new_name: name.trim() });
+        if (r.ok) {
+            const d = await r.json();
+            btn.classList.add('saved');
+            btn.title = `Saved to ${d.category_name}`;
+        } else {
+            const d = await r.json();
+            alert(d.error || 'Failed to save.');
+        }
+    });
+    dropdown.appendChild(newItem);
+
+    document.body.appendChild(dropdown);
+    const rect = btn.getBoundingClientRect();
+    const ddW  = dropdown.offsetWidth;
+    let left   = rect.left + window.scrollX;
+    if (left + ddW > window.innerWidth - 8) left = window.innerWidth - ddW - 8;
+    dropdown.style.top  = (rect.bottom + window.scrollY + 4) + 'px';
+    dropdown.style.left = Math.max(4, left) + 'px';
+
+    const closeDropdown = (e) => {
+        if (!dropdown.contains(e.target) && e.target !== btn) {
+            dropdown.remove();
+            document.removeEventListener('click', closeDropdown, true);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closeDropdown, true), 0);
+}
+
+/**
+ * Remove a paper from the current list and hide its row.
+ * @param {HTMLElement} btn
+ * @param {string} arxivId
+ * @param {number} catId
+ */
+async function removePaperFromList(btn, arxivId, catId) {
+    try {
+        const resp = await csrfFetch('/api/lists/remove', { arxiv_id: arxivId, category_id: catId });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const row = document.getElementById(`list-row-${arxivId}`);
+        if (row) row.remove();
+    } catch (err) {
+        alert('Failed to remove paper: ' + err);
     }
 }
 

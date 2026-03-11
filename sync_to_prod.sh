@@ -58,6 +58,8 @@ scp -P "$REMOTE_PORT" "$SCRIPT_DIR/database/migrate.sql" \
     "$REMOTE_HOST:~/$REMOTE_PATH/database/migrate.sql"
 scp -P "$REMOTE_PORT" "$SCRIPT_DIR/database/migrate_users.sql" \
     "$REMOTE_HOST:~/$REMOTE_PATH/database/migrate_users.sql"
+scp -P "$REMOTE_PORT" "$SCRIPT_DIR/database/migrate_lists.sql" \
+    "$REMOTE_HOST:~/$REMOTE_PATH/database/migrate_lists.sql"
 
 ssh -p "$REMOTE_PORT" "$REMOTE_HOST" 'bash -s' << 'ENDSSH'
 set -e
@@ -69,6 +71,8 @@ mysql -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/migrate.sql
 echo "  migrate.sql applied."
 mysql -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/migrate_users.sql
 echo "  migrate_users.sql applied."
+mysql -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < database/migrate_lists.sql
+echo "  migrate_lists.sql applied."
 ENDSSH
 echo -e "${GREEN}  Schema OK${NC}"
 

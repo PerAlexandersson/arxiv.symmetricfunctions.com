@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import render_paper, render_pagination %}
+{% from '_macros.html' import render_paper, render_pagination with context %}
 
 {% block title %}{{ keyword.phrase }} — arXiv Combinatorics{% endblock %}
 

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import render_paper, render_pagination %}
+{% from '_macros.html' import render_paper, render_pagination with context %}
 
 {% block title %}{{ author.name }} - arXiv Combinatorics{% endblock %}
 
@@ -8,7 +8,7 @@
 
 <div class="stats">
     {{ total }} paper(s) by this author
-    · <a href="#" onclick="copyAuthorBibtex('{{ author.name | slugify }}'); return false;">Copy all BibTeX</a>
+    · <a href="#" onclick="copyAuthorBibtex('{{ author.name | slugify }}', '{{ author.name | e }}'); return false;">All BibTeX</a>
 </div>
 
 {% if papers %}

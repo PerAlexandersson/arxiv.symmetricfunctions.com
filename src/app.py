@@ -16,7 +16,7 @@ import pymysql
 import requests
 from config import DB_CONFIG, FLASK_CONFIG, FETCH_SECRET, validate_config
 from datetime import datetime, date, timedelta
-from utils import strip_accents, slugify
+from utils import strip_accents, slugify, protect_capitals_for_bibtex, generate_bibtex_key, arxiv2bib
 
 logging.basicConfig(
     level=logging.INFO,
@@ -41,6 +41,9 @@ from auth import auth as auth_blueprint, init_oauth
 app.register_blueprint(auth_blueprint)
 init_oauth(app)
 
+from lists import lists_bp
+app.register_blueprint(lists_bp)
+
 
 @app.context_processor
 def inject_current_user():
@@ -56,97 +59,6 @@ def inject_current_user():
 
 # Register slugify as a Jinja filter
 app.jinja_env.filters['slugify'] = lambda name: slugify(name) if name else ''
-
-
-def protect_capitals_for_bibtex(title):
-    """
-    Protect capital letters in a title for BibTeX by wrapping them in braces.
-    This ensures BibTeX won't lowercase them. The very first character of the
-    title is left unprotected (BibTeX preserves it regardless).
-
-    Example: "A new formula for Macdonald polynomials using LLT polynomials"
-          -> "A new formula for {M}acdonald polynomials using {LLT} polynomials"
-    """
-    if not title:
-        return title
-
-    def protect_match(match):
-        return f"{{{match.group(0)}}}"
-
-    # Protect the title after the first character (BibTeX keeps the first letter)
-    first_char = title[0]
-    rest = title[1:]
-
-    # Protect sequences of 2+ capitals (acronyms: LLT, RNA, DNA, etc.)
-    rest = re.sub(r'[A-Z]{2,}', protect_match, rest)
-
-    # Protect remaining single capitals
-    rest = re.sub(r'[A-Z]', protect_match, rest)
-
-    return first_char + rest
-
-
-
-def generate_bibtex_key(authors, year, published=False):
-    """
-    Generate BibTeX key from authors and year.
-
-    Args:
-        authors: List of author names
-        year: Publication year
-        published: If True, omit the 'x' suffix for published papers
-
-    Returns:
-        BibTeX key string (e.g., "SmithJones2024x" or "SmithJones2024")
-    """
-    suffix = '' if published else 'x'
-    if authors:
-        last_names = []
-        for author in authors:
-            last_name = author.split()[-1]
-            last_name = strip_accents(last_name)
-            last_name = ''.join(c for c in last_name if c.isalnum())
-            last_names.append(last_name)
-        return f"{''.join(last_names)}{year}{suffix}"
-    else:
-        return f"arxiv{year}{suffix}"
-
-
-def arxiv2bib(paper_data):
-    """
-    Generate arXiv BibTeX entry from paper data.
-
-    Args:
-        paper_data: Dict with keys: arxiv_id, title, authors, published_date, journal_ref, doi
-
-    Returns:
-        BibTeX string
-    """
-    year = paper_data['published_date'].year if hasattr(paper_data['published_date'], 'year') else paper_data['published_date']
-    bibtex_key = generate_bibtex_key(paper_data.get('authors', []), year, published=False)
-
-    author_str = ' and '.join(paper_data.get('authors', [])) if paper_data.get('authors') else 'Unknown'
-
-    clean_arxiv_id = re.sub(r'v\d+$', '', paper_data['arxiv_id'])
-
-    protected_title = protect_capitals_for_bibtex(paper_data['title'])
-
-    bibtex = f"""@article{{{bibtex_key},
-Author = {{{author_str}}},
-Title = {{{protected_title}}},
-Year = {{{year}}},
-Eprint = {{{clean_arxiv_id}}},
-  url = {{https://arxiv.org/abs/{clean_arxiv_id}}},
-journal = {{arXiv e-prints}}"""
-
-    if paper_data.get('journal_ref'):
-        bibtex += f",\njournalref = {{{paper_data['journal_ref']}}}"
-
-    if paper_data.get('doi'):
-        bibtex += f",\ndoi = {{{paper_data['doi']}}}"
-
-    bibtex += "\n}"
-    return bibtex
 
 
 def doi2bib(doi, paper_data=None):
