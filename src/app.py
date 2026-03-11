@@ -210,7 +210,7 @@ def attach_authors(cursor, papers):
 @app.route('/')
 def index():
     """Homepage - list recent papers."""
-    page = request.args.get('page', 1, type=int)
+    page = max(1, request.args.get('page', 1, type=int))
     per_page = 20
     offset = (page - 1) * per_page
 
@@ -458,7 +458,7 @@ def search():
     """Search papers by title or author."""
     query = request.args.get('q', '').strip()[:500]  # cap at 500 chars
     sort  = request.args.get('sort', 'relevance')  # 'relevance' or 'date'
-    page  = request.args.get('page', 1, type=int)
+    page  = max(1, request.args.get('page', 1, type=int))
     per_page = 20
     offset = (page - 1) * per_page
 
@@ -576,7 +576,7 @@ def search():
 def keyword_papers(phrase):
     """List papers tagged with a specific keyword, ordered by date."""
     phrase = unquote(phrase).replace('+', ' ')  # handle both %20 and + encodings
-    page = request.args.get('page', 1, type=int)
+    page = max(1, request.args.get('page', 1, type=int))
     per_page = 20
     offset = (page - 1) * per_page
 
@@ -622,7 +622,7 @@ def keyword_papers(phrase):
 @app.route('/category/<path:cat>')
 def category_papers(cat):
     """List papers with a given arXiv subject category."""
-    page = request.args.get('page', 1, type=int)
+    page = max(1, request.args.get('page', 1, type=int))
     per_page = 20
     offset = (page - 1) * per_page
 
@@ -665,7 +665,7 @@ def category_papers(cat):
 @app.route('/author/<author_slug>')
 def author_papers(author_slug):
     """List all papers by a specific author (looked up by slug)."""
-    page = request.args.get('page', 1, type=int)
+    page = max(1, request.args.get('page', 1, type=int))
     per_page = 20
     offset = (page - 1) * per_page
 

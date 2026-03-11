@@ -24,8 +24,10 @@ Routes:
 
 import os
 import csv
+import hmac
 import functools
 from datetime import date as date_type
+from urllib.parse import urlparse, urljoin
 
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, session, flash, abort, jsonify, g)
@@ -117,6 +119,13 @@ def _phrase_status(phrase, useful, aliases_map, math, ignored):
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
 
+def _is_safe_redirect(target):
+    """Return True only if target resolves to the same host (prevents open redirect)."""
+    ref = urlparse(request.host_url)
+    test = urlparse(urljoin(request.host_url, target))
+    return test.scheme in ('http', 'https') and test.netloc == ref.netloc
+
+
 @admin.route('/')
 @login_required
 def index():
@@ -126,12 +135,13 @@ def index():
 @admin.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        if ADMIN_PASSWORD and request.form.get('password') == ADMIN_PASSWORD:
+        password = request.form.get('password', '')
+        if ADMIN_PASSWORD and hmac.compare_digest(password, ADMIN_PASSWORD):
             session['admin_logged_in'] = True
             logger.info("Admin login successful from %s", request.remote_addr)
             next_url = request.args.get('next', '')
-            # Only allow redirects to local paths (prevent open redirect)
-            if next_url and next_url.startswith('/') and not next_url.startswith('//'):
+            # Only allow redirects to same-host paths (prevent open redirect)
+            if next_url and _is_safe_redirect(next_url):
                 return redirect(next_url)
             return redirect(url_for('admin.candidates'))
         logger.warning("Failed admin login attempt from %s", request.remote_addr)
@@ -328,14 +338,15 @@ def add_keyword():
 @login_required
 def inline_edit(kid):
     field = request.form.get('field')
-    if field not in ('url', 'phrase'):
+    col = {'url': 'url', 'phrase': 'phrase'}.get(field)
+    if not col:
         abort(400)
     value = request.form.get('value', '').strip() or None
-    if field == 'phrase' and not value:
+    if col == 'phrase' and not value:
         return jsonify({'ok': False, 'error': 'phrase cannot be empty'}), 400
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute(f"UPDATE keywords SET {field}=%s WHERE id=%s", (value, kid))
+    cursor.execute(f"UPDATE keywords SET {col}=%s WHERE id=%s", (value, kid))
     conn.commit()
     cursor.close()
     return jsonify({'ok': True, 'value': value})

@@ -35,7 +35,7 @@
 
     {% if paper.doi %}
     <div class="paper-meta">
-        <strong>DOI:</strong> <a href="https://doi.org/{{ paper.doi }}" target="_blank" rel="noopener">{{ paper.doi }}</a>
+        <strong>DOI:</strong> <a href="https://doi.org/{{ paper.doi }}" target="_blank" rel="noopener noreferrer">{{ paper.doi }}</a>
     </div>
     {% endif %}
 
@@ -56,9 +56,9 @@
     {% endif %}
 
     <div class="paper-links paper-detail-links" style="margin-top: 1.5rem;">
-        <a href="https://arxiv.org/abs/{{ paper.arxiv_id }}" target="_blank" rel="noopener">View on arXiv</a>
+        <a href="https://arxiv.org/abs/{{ paper.arxiv_id }}" target="_blank" rel="noopener noreferrer">View on arXiv</a>
         <span class="bullet">•</span>
-        <a href="https://arxiv.org/pdf/{{ paper.arxiv_id }}" target="_blank" rel="noopener">Download PDF</a>
+        <a href="https://arxiv.org/pdf/{{ paper.arxiv_id }}" target="_blank" rel="noopener noreferrer">Download PDF</a>
         <span class="bullet">•</span>
         <a href="#" onclick="copyBibtex('{{ paper.arxiv_id }}'); return false;">Copy BibTeX</a>
         {% if is_admin %}
