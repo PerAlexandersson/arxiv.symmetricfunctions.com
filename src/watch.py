@@ -136,7 +136,7 @@ def my_feed():
     watched_authors = cursor.fetchall()
 
     papers = []
-    total = 0
+    has_more = False
 
     if watched_keywords or watched_authors:
         # Subquery: union of paper IDs from watched keywords + watched authors
@@ -150,12 +150,6 @@ def my_feed():
             WHERE uwa.user_id = %s
         """
 
-        cursor.execute(
-            f"SELECT COUNT(DISTINCT p.id) as count FROM papers p WHERE p.id IN ({feed_subquery})",
-            (user_id, user_id)
-        )
-        total = cursor.fetchone()['count']
-
         cursor.execute(f"""
             SELECT DISTINCT p.id, p.arxiv_id, p.title, p.abstract,
                    p.published_date, p.updated_date, p.journal_ref, p.doi,
@@ -164,8 +158,10 @@ def my_feed():
             WHERE p.id IN ({feed_subquery})
             ORDER BY p.published_date DESC, p.id DESC
             LIMIT %s OFFSET %s
-        """, (user_id, user_id, per_page, offset))
-        papers = list(cursor.fetchall())
+        """, (user_id, user_id, per_page + 1, offset))
+        rows = cursor.fetchall()
+        has_more = len(rows) > per_page
+        papers = list(rows[:per_page])
 
         if papers:
             paper_ids = [p['id'] for p in papers]
@@ -201,12 +197,9 @@ def my_feed():
 
     cursor.close()
 
-    total_pages = (total + per_page - 1) // per_page
-
     return render_template('feed.html',
                            papers=papers,
                            watched_keywords=watched_keywords,
                            watched_authors=watched_authors,
                            page=page,
-                           total_pages=total_pages,
-                           total=total)
+                           has_more=has_more)

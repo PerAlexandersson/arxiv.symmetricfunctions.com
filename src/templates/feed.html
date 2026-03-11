@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_macros.html' import render_paper, render_pagination with context %}
+{% from '_macros.html' import render_paper with context %}
 
 {% block title %}My Feed — arXiv Combinatorics{% endblock %}
 
@@ -14,10 +14,6 @@
   building your personalised feed.
 </p>
 {% else %}
-
-<div class="stats" style="margin-bottom: 1rem;">
-  {{ total }} paper{% if total != 1 %}s{% endif %} from your watches
-</div>
 
 <div style="display: flex; gap: 2rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
   {% if watched_keywords %}
@@ -42,10 +38,25 @@
   {% for paper in papers %}
     {{ render_paper(paper, none) }}
   {% endfor %}
-  {{ render_pagination(page, total_pages, '/my-feed?page=') }}
+  {% if has_more %}
+  <div style="text-align: center; margin: 1.5rem 0;">
+    <a href="/my-feed?page={{ page + 1 }}" class="btn-load-more">Load more</a>
+  </div>
+  {% endif %}
 {% else %}
   <p>No papers yet — check back after the next fetch.</p>
 {% endif %}
 
 {% endif %}
+
+{% block extra_css %}
+<style>
+.btn-load-more {
+  display: inline-block; padding: 0.4rem 1.4rem;
+  border: 1px solid var(--c-border, #ccc); border-radius: 4px;
+  color: var(--c-link); text-decoration: none; font-size: 0.9rem;
+}
+.btn-load-more:hover { background: var(--c-bg-alt, #f5f5f5); }
+</style>
+{% endblock %}
 {% endblock %}
