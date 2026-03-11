@@ -1,5 +1,9 @@
 -- arXiv Combinatorics Frontend Database Schema
 -- MariaDB/MySQL compatible
+--
+-- !! WARNING: FOR FRESH INSTALLS ONLY — DROPS ALL TABLES !!
+-- !! Never run this on a live database. Use migrate_*.sql for changes. !!
+-- !! sync_to_prod.sh intentionally skips this file. !!
 
 -- Disable foreign key checks temporarily to allow dropping tables
 SET FOREIGN_KEY_CHECKS = 0;

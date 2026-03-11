@@ -92,24 +92,27 @@ fi
 
 # ── Step 2: upload and apply all database migrations ─────────────────────────
 echo -e "${YELLOW}Step 2: Uploading and applying database migrations...${NC}"
-for sql_file in "$SCRIPT_DIR/database/"*.sql; do
-    fname="$(basename "$sql_file")"
-    scp -P "$REMOTE_PORT" "$sql_file" "$REMOTE_HOST:~/$REMOTE_PATH/database/$fname"
-done
+# Only migration files — never schema.sql (that drops all tables, for fresh installs only)
+MIGRATIONS=(
+    migrate.sql
+    migrate_users.sql
+    migrate_lists.sql
+    drop_tag_name.sql
+    add_paper_categories.sql
+)
 
-ssh -p "$REMOTE_PORT" "$REMOTE_HOST" 'bash -s' << 'ENDSSH'
-set -e
-set -a
-source ~/domains/arxiv.symmetricfunctions.com/.env
-set +a
-cd ~/domains/arxiv.symmetricfunctions.com
-for sql_file in database/*.sql; do
-    fname="$(basename "$sql_file")"
-    mysql -u "$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < "$sql_file" 2>/dev/null \
-        && echo "  $fname: applied" \
-        || echo "  $fname: skipped (already applied or no-op)"
+for fname in "${MIGRATIONS[@]}"; do
+    scp -P "$REMOTE_PORT" "$SCRIPT_DIR/database/$fname" "$REMOTE_HOST:~/$REMOTE_PATH/database/$fname"
+    ssh -p "$REMOTE_PORT" "$REMOTE_HOST" "
+        set -a
+        source ~/domains/arxiv.symmetricfunctions.com/.env
+        set +a
+        cd ~/domains/arxiv.symmetricfunctions.com
+        mysql -u \"\$DB_USER\" -p\"\$DB_PASSWORD\" \"\$DB_NAME\" < database/$fname 2>/dev/null \
+            && echo '  $fname: applied' \
+            || echo '  $fname: skipped (already applied or no-op)'
+    "
 done
-ENDSSH
 echo -e "${GREEN}  Migrations OK${NC}"
 
 # ── Step 3: dump local keyword tables ────────────────────────────────────────
