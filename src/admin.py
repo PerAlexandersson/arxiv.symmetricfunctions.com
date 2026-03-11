@@ -19,6 +19,7 @@ Routes:
     /admin/keywords/<id>/aliases/<aid>/delete → AJAX: remove alias
     /admin/keywords/<id>/delete  → delete a keyword
     /admin/retag                 → re-tag papers by date range
+    /admin/paper/<arxiv_id>/refetch → AJAX: re-fetch a paper from arXiv
 """
 
 import os
@@ -451,6 +452,22 @@ def bulk_delete():
 
 
 # ── Retag ─────────────────────────────────────────────────────────────────────
+
+@admin.route('/paper/<path:arxiv_id>/refetch', methods=['POST'])
+@login_required
+def refetch_paper(arxiv_id):
+    """Re-fetch a single paper from arXiv and update the DB."""
+    try:
+        from fetch_arxiv import fetch_by_arxiv_id
+        import io, contextlib
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            fetch_by_arxiv_id(arxiv_id)
+        return jsonify({'ok': True, 'log': output.getvalue()})
+    except Exception as e:
+        logger.exception("refetch_paper failed for %s", arxiv_id)
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
 
 @admin.route('/retag', methods=['GET', 'POST'])
 @login_required
