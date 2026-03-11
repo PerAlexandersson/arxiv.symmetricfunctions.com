@@ -778,11 +778,21 @@ footer a {
   color: var(--c-brand) !important;
 }
 
-/* Disabled user icons: grayed out, not interactive */
-.nav-icon-btn.nav-icon-disabled {
+/* Disabled nav icons (spans): grayed out, not interactive */
+span.nav-icon-btn.nav-icon-disabled {
   opacity: 0.3;
   cursor: default;
   pointer-events: none;
+}
+
+/* Disabled paper icons (links to login): grayed out but still clickable */
+a.paper-icon-btn.nav-icon-disabled {
+  opacity: 0.3;
+  cursor: pointer;
+}
+a.paper-icon-btn.nav-icon-disabled:hover {
+  opacity: 0.55;
+  background: var(--c-bg-gray);
 }
 
 /* Separator between icon groups */
