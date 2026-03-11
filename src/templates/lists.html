@@ -3,7 +3,36 @@
 {% block title %}My Lists — arXiv Combinatorics{% endblock %}
 
 {% block content %}
-<div class="lists-header">
+
+{% if watched_keywords or watched_authors %}
+<div class="watch-section">
+  {% if watched_keywords %}
+  <h3 class="watch-section-title">Watched keywords</h3>
+  <div class="watch-pills" id="watched-keywords">
+    {% for kw in watched_keywords %}
+    <span class="watch-pill" id="wk-{{ kw.id }}">
+      <button class="watch-pill-remove" onclick="unwatch('keyword', {{ kw.id }}, 'wk-{{ kw.id }}')" title="Stop watching">×</button>
+      <a href="/keyword/{{ kw.phrase | replace(' ', '%20') }}">{{ kw.phrase }}</a>
+    </span>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if watched_authors %}
+  <h3 class="watch-section-title" style="margin-top: 1.2rem;">Watched authors</h3>
+  <div class="watch-pills" id="watched-authors">
+    {% for a in watched_authors %}
+    <span class="watch-pill" id="wa-{{ a.id }}">
+      <button class="watch-pill-remove" onclick="unwatch('author', {{ a.id }}, 'wa-{{ a.id }}')" title="Stop watching">×</button>
+      <a href="/author/{{ a.slug }}">{{ a.name }}</a>
+    </span>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="lists-header" style="margin-top: 1.8rem;">
     <h2 class="lists-title">My Lists</h2>
     <button class="btn-new-list" onclick="createListPrompt()">+ New list</button>
 </div>
@@ -39,8 +68,40 @@
 {% endif %}
 {% endblock %}
 
+{% block extra_css %}
+<style>
+.watch-section { margin-bottom: 0.5rem; }
+.watch-section-title { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--c-text-sub); margin: 0 0 0.5rem; }
+.watch-pills { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.watch-pill {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  background: var(--c-bg-alt, #f0f0f0); border-radius: 999px;
+  padding: 0.2rem 0.7rem 0.2rem 0.3rem; font-size: 0.85rem;
+}
+.watch-pill a { color: var(--c-link); text-decoration: none; }
+.watch-pill a:hover { text-decoration: underline; }
+.watch-pill-remove {
+  background: none; border: none; cursor: pointer; font-size: 1rem; line-height: 1;
+  color: var(--c-text-sub); padding: 0 0.1rem; border-radius: 50%;
+}
+.watch-pill-remove:hover { color: var(--c-danger, #c00); }
+</style>
+{% endblock %}
+
 {% block extra_js %}
 <script>
+async function unwatch(type, id, pillId) {
+  const csrf = document.querySelector('meta[name="csrf-token"]').content;
+  const resp = await fetch('/api/watch/' + type + '/' + id, {
+    method: 'POST', headers: {'X-CSRFToken': csrf}
+  });
+  const data = await resp.json();
+  if (!data.watching) {
+    const el = document.getElementById(pillId);
+    if (el) el.remove();
+  }
+}
+
 async function createListPrompt() {
     const name = prompt('New list name:');
     if (!name || !name.trim()) return;

@@ -154,7 +154,28 @@ def my_lists():
         session['login_next'] = url_for('lists.my_lists')
         return redirect(url_for('auth.login'))
     categories = _get_user_categories(user_id)
-    return render_template('lists.html', categories=categories)
+
+    conn = _get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        """SELECT k.id, k.phrase FROM user_watched_keywords uwk
+           JOIN keywords k ON k.id = uwk.keyword_id
+           WHERE uwk.user_id = %s ORDER BY k.phrase""",
+        (user_id,)
+    )
+    watched_keywords = cursor.fetchall()
+    cursor.execute(
+        """SELECT a.id, a.name, a.slug FROM user_watched_authors uwa
+           JOIN authors a ON a.id = uwa.author_id
+           WHERE uwa.user_id = %s ORDER BY a.name""",
+        (user_id,)
+    )
+    watched_authors = cursor.fetchall()
+    cursor.close()
+
+    return render_template('lists.html', categories=categories,
+                           watched_keywords=watched_keywords,
+                           watched_authors=watched_authors)
 
 
 @lists_bp.route('/my-papers')
