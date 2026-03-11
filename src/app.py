@@ -31,6 +31,10 @@ app = Flask(__name__)
 app.config.update(FLASK_CONFIG)
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
 
+# Trust reverse-proxy headers so url_for(_external=True) generates https:// URLs
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
 from flask_wtf.csrf import CSRFProtect
 csrf = CSRFProtect(app)
 

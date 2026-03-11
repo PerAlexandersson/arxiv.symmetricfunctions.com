@@ -19,10 +19,11 @@ DB_CONFIG = {
     'charset': os.getenv('DB_CHARSET', 'utf8mb4')
 }
 
-# Flask configuration (for later)
+# Flask configuration
 FLASK_CONFIG = {
     'SECRET_KEY': os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production'),
-    'DEBUG': os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
+    'DEBUG': os.getenv('FLASK_DEBUG', 'False').lower() == 'true',
+    'PREFERRED_URL_SCHEME': os.getenv('PREFERRED_URL_SCHEME', 'http'),
 }
 
 # Secret key for triggering paper fetches via URL

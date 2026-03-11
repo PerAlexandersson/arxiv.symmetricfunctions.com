@@ -123,6 +123,78 @@ falls through to localStorage depending on session state.
 
 ---
 
+## Favorite Authors & Keywords
+
+Logged-in users can follow specific authors and keywords. Papers matching either show up
+emphasized (highlighted or badged) when browsing.
+
+### Data model
+
+```sql
+CREATE TABLE user_favorites (
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    user_id    INT NOT NULL,
+    fav_type   ENUM('author', 'keyword') NOT NULL,
+    ref_id     INT NOT NULL,          -- author_id or keyword_id
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY idx_unique_fav (user_id, fav_type, ref_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+### UX
+
+- Follow/unfollow button (★) on author pages and keyword pages (requires login)
+- On browse/search results: papers matching a favorite author or keyword get a subtle
+  highlight or "★ Matches your interests" badge
+- A `/profile` or `/following` page listing all followed authors and keywords
+
+### Implementation notes
+
+- Backend: load user's favorite author_ids and keyword_ids into the browse query;
+  annotate each paper server-side or pass the sets to JS for client-side highlighting
+- Client-side highlight is simpler (no query changes): render favorite sets as JS arrays,
+  then tag matching paper cards via `data-author-ids` / `data-keyword-ids` attributes
+
+---
+
+## Comments on Preprints
+
+Logged-in users can leave short comments on individual papers (visible to all visitors).
+
+### Data model
+
+```sql
+CREATE TABLE paper_comments (
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    paper_id   INT NOT NULL,
+    user_id    INT NOT NULL,
+    body       TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (paper_id) REFERENCES papers(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id)  REFERENCES users(id)  ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+### UX
+
+- Comment section at the bottom of each paper detail page (`paper.html`)
+- Shows commenter's display name + date; no threading
+- Edit/delete own comments; no moderation UI needed initially
+- Comment count shown as a small badge on paper cards in browse view
+
+### Routes
+
+```
+GET  /paper/<arxiv_id>          → already exists; extend to include comments
+POST /api/comments/<arxiv_id>   → add comment (login required)
+POST /api/comments/<id>/delete  → delete own comment
+POST /api/comments/<id>/edit    → edit own comment body
+```
+
+---
+
 ## Other Ideas
 
 - **Abstract keyword linking** — wrap matched keyword phrases in abstracts with

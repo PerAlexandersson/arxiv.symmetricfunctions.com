@@ -12,6 +12,11 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(BASE_DIR, 'src'))
 sys.path.insert(0, BASE_DIR)
 
+# Activate the cPanel-managed virtualenv so all pip-installed packages are available
+_venv_site = '/home/symmetricf/virtualenv/domains/arxiv.symmetricfunctions.com/3.9/lib/python3.9/site-packages'
+if _venv_site not in sys.path:
+    sys.path.insert(0, _venv_site)
+
 # Load environment variables from .env file
 from dotenv import load_dotenv
 load_dotenv(os.path.join(BASE_DIR, '.env'))
