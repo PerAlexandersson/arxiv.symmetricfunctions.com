@@ -85,8 +85,8 @@ else
         "$SCRIPT_DIR/src/templates/admin/"*.html \
         "$REMOTE_HOST:~/$REMOTE_PATH/src/templates/admin/"
 
-    # Restart app
-    ssh -p "$REMOTE_PORT" "$REMOTE_HOST" "touch ~/$REMOTE_PATH/passenger_wsgi.py"
+    # Restart app (touch both passenger_wsgi.py and tmp/restart.txt for reliability)
+    ssh -p "$REMOTE_PORT" "$REMOTE_HOST" "touch ~/$REMOTE_PATH/passenger_wsgi.py ~/$REMOTE_PATH/tmp/restart.txt"
     echo -e "${GREEN}  Code deployed and app restarted${NC}"
 fi
 
