@@ -462,6 +462,47 @@ def bulk_delete():
     return redirect(url_for('admin.keywords'))
 
 
+@admin.route('/keywords/<int:kid>/retag', methods=['POST'])
+@login_required
+def retag_keyword(kid):
+    """Re-tag all papers for a single keyword (phrase + all its aliases)."""
+    from auto_tag import tokenize, extract_matching_keyword_ids
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT phrase FROM keywords WHERE id=%s AND active=1", (kid,))
+    kw = cursor.fetchone()
+    if not kw:
+        cursor.close()
+        return jsonify({'ok': False, 'error': 'not found'}), 404
+
+    phrase_to_id = {kw['phrase']: kid}
+    cursor.execute("SELECT alias FROM keyword_aliases WHERE keyword_id=%s", (kid,))
+    for row in cursor.fetchall():
+        phrase_to_id[row['alias']] = kid
+
+    max_ngram = max(len(p.split()) for p in phrase_to_id)
+
+    cursor.execute("SELECT id, title, abstract FROM papers")
+    papers = cursor.fetchall()
+
+    cursor.execute("DELETE FROM paper_keywords WHERE keyword_id=%s", (kid,))
+
+    rows = []
+    for paper in papers:
+        text = (paper['title'] or '') + ' ' + (paper['abstract'] or '')
+        if extract_matching_keyword_ids(text, phrase_to_id, max_ngram):
+            rows.append((paper['id'], kid))
+
+    if rows:
+        cursor.executemany(
+            "INSERT IGNORE INTO paper_keywords (paper_id, keyword_id) VALUES (%s, %s)", rows
+        )
+    conn.commit()
+    cursor.close()
+    return jsonify({'ok': True, 'count': len(rows)})
+
+
 # ── Retag ─────────────────────────────────────────────────────────────────────
 
 @admin.route('/paper/<path:arxiv_id>/refetch', methods=['POST'])

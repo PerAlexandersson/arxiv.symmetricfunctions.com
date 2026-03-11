@@ -107,6 +107,13 @@ table.kw-table col.col-del      { width: 34px; }
 }
 
 /* Trashcan delete button */
+.btn-retag {
+  background: none; border: none; cursor: pointer; font-size: 0.95rem;
+  color: var(--c-text-sub, #888); padding: 0 3px; vertical-align: middle;
+  transition: color 0.15s;
+}
+.btn-retag:hover { color: var(--c-link, #2a6); }
+.btn-retag:disabled { opacity: 0.4; cursor: default; }
 .btn-trash {
   background: none; border: none; cursor: pointer; padding: 0.1rem 0.2rem;
   color: var(--c-muted, #aaa); line-height: 1;
@@ -174,7 +181,7 @@ table.kw-table col.col-del      { width: 34px; }
 
 {# Hidden bulk-action form #}
 <form id="bulk-form" method="post" action="{{ url_for('admin.bulk_delete') }}"
-      onsubmit="return confirm('Delete ' + document.querySelectorAll('input[name=ids]:checked').length + ' keyword(s)?')"></form>
+      onsubmit="return confirmBulkDelete()"></form>
 
 {% if keywords %}
 <table class="kw-table">
@@ -196,7 +203,7 @@ table.kw-table col.col-del      { width: 34px; }
   </thead>
   <tbody>
   {% for kw in keywords %}
-  <tr data-kid="{{ kw.id }}">
+  <tr data-kid="{{ kw.id }}" data-papers="{{ kw.paper_count }}">
     <td><input type="checkbox" name="ids" value="{{ kw.id }}" form="bulk-form"></td>
     <td>
       <input type="number" value="{{ kw.score }}" min="1" max="10"
@@ -242,9 +249,11 @@ table.kw-table col.col-del      { width: 34px; }
     </td>
     <td class="paper-count">{{ kw.paper_count }}</td>
     <td>
+      <button type="button" class="btn-retag" title="Re-tag all papers for this keyword"
+              onclick="retagKeyword({{ kw.id }}, this)">↺</button>
       <form method="post" action="{{ url_for('admin.delete_keyword', kid=kw.id) }}"
             style="display:inline"
-            onsubmit="return confirm('Delete keyword «{{ kw.phrase }}»?')">
+            onsubmit="return confirmDelete('{{ kw.phrase|e }}', {{ kw.paper_count }})">
         <button type="submit" class="btn-trash" title="Delete keyword">
           <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
             <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>
@@ -463,6 +472,53 @@ async function doMerge(kid) {
     // Remove the merged keyword's row
     document.querySelector(`tr[data-kid="${kid}"]`)?.remove();
   } catch { alert('Error during merge.'); }
+}
+
+// ── Delete confirmation with paper count ─────────────────────────────────────
+function confirmDelete(phrase, count) {
+  const papers = count === 1 ? '1 paper' : `${count} papers`;
+  const msg = count > 0
+    ? `Delete «${phrase}»?\n\nThis keyword tags ${papers}. The papers won't be deleted, but this tag will be removed from them.`
+    : `Delete «${phrase}»? (no papers tagged)`;
+  return confirm(msg);
+}
+
+function confirmBulkDelete() {
+  const checked = Array.from(document.querySelectorAll('input[name=ids]:checked'));
+  if (!checked.length) return false;
+  const kwCount = checked.length;
+  const paperCount = checked.reduce((sum, cb) => {
+    const row = cb.closest('tr[data-kid]');
+    return sum + (parseInt(row?.dataset.papers) || 0);
+  }, 0);
+  const kws = kwCount === 1 ? '1 keyword' : `${kwCount} keywords`;
+  const papers = paperCount === 1 ? '1 paper' : `${paperCount} papers`;
+  return confirm(`Delete ${kws}?\n\nThese keywords tag ${papers}. The papers won't be deleted, but the tags will be removed.`);
+}
+
+// ── Retag single keyword ──────────────────────────────────────────────────────
+async function retagKeyword(kid, btn) {
+  if (!confirm('Re-tag all papers for this keyword?\nThis scans all 76k+ papers and may take ~10 seconds.')) return;
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const res  = await csrfFetch(`/admin/keywords/${kid}/retag`, new FormData());
+    const data = await res.json();
+    if (data.ok) {
+      // Update the paper count cell in this row
+      const row = btn.closest('tr[data-kid]');
+      row.dataset.papers = data.count;
+      row.querySelector('.paper-count').textContent = data.count;
+      btn.textContent = '✓';
+      setTimeout(() => { btn.textContent = '↺'; btn.disabled = false; }, 1500);
+    } else {
+      alert('Retag failed: ' + (data.error || 'unknown'));
+      btn.textContent = '↺'; btn.disabled = false;
+    }
+  } catch {
+    alert('Retag request failed.');
+    btn.textContent = '↺'; btn.disabled = false;
+  }
 }
 
 // ── Visual feedback ───────────────────────────────────────────────────────────
