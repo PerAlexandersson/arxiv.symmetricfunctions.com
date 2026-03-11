@@ -112,7 +112,15 @@ def insert_or_update_paper(cursor, paper):
             INSERT IGNORE INTO paper_authors (paper_id, author_id, author_order)
             VALUES (%s, %s, %s)
         """, (paper_id, author_id, order))
-    
+
+    # Store all arXiv subject categories (primary + secondary cross-listings)
+    cursor.execute("DELETE FROM paper_categories WHERE paper_id = %s", (paper_id,))
+    for cat in paper.categories:
+        cursor.execute(
+            "INSERT IGNORE INTO paper_categories (paper_id, category) VALUES (%s, %s)",
+            (paper_id, cat)
+        )
+
     return paper_id
 
 
@@ -181,12 +189,16 @@ def _fetch_papers(query, max_results):
 
 
 def fetch_recent_papers(days=2):
-    """Fetch papers from the last N days."""
+    """Fetch papers from the last N days (new submissions and recent updates)."""
     print(f"Fetching papers from the last {days} days...")
     end_date = datetime.now()
     start_date = end_date - timedelta(days=days)
-    query = f"cat:math.CO AND submittedDate:[{start_date.strftime('%Y%m%d')}0000 TO {end_date.strftime('%Y%m%d')}2359]"
-    _fetch_papers(query, MAX_RESULTS_RECENT)
+    date_range = f"[{start_date.strftime('%Y%m%d')}0000 TO {end_date.strftime('%Y%m%d')}2359]"
+    # New submissions
+    _fetch_papers(f"cat:math.CO AND submittedDate:{date_range}", MAX_RESULTS_RECENT)
+    # Updates to older papers (journal refs, new versions, etc.)
+    print("Checking for updates to older papers...")
+    _fetch_papers(f"cat:math.CO AND lastUpdatedDate:{date_range}", MAX_RESULTS_RECENT)
 
 
 def fetch_date_range(start_date_str, end_date_str):

@@ -146,7 +146,7 @@ def dev_login():
     Only works when DEV_ORCID_ID is set in .env (never set this in production).
     """
     if not DEV_ORCID_ID:
-        return 'Dev login not configured (DEV_ORCID_ID not set).', 403
+        return redirect(url_for('admin.login'))
     name = _fetch_orcid_name(DEV_ORCID_ID)
     user_id = _upsert_user('orcid', DEV_ORCID_ID, name)
     _set_session(user_id, name, DEV_ORCID_ID)

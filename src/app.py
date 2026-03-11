@@ -284,6 +284,12 @@ def paper_detail(arxiv_id):
     """, (paper['id'],))
     paper['keywords'] = cursor.fetchall()
 
+    cursor.execute(
+        "SELECT category FROM paper_categories WHERE paper_id = %s ORDER BY category",
+        (paper['id'],)
+    )
+    paper['categories'] = [row['category'] for row in cursor.fetchall()]
+
     cursor.close()
 
     return render_template('paper.html', paper=paper)
@@ -607,6 +613,49 @@ def keyword_papers(phrase):
     total_pages = (total + per_page - 1) // per_page
     return render_template('keyword.html',
                            keyword=keyword,
+                           papers=papers,
+                           page=page,
+                           total_pages=total_pages,
+                           total=total)
+
+
+@app.route('/category/<path:cat>')
+def category_papers(cat):
+    """List papers with a given arXiv subject category."""
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    offset = (page - 1) * per_page
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT COUNT(*) as count FROM paper_categories WHERE category = %s", (cat,)
+    )
+    total = cursor.fetchone()['count']
+    if not total:
+        abort(404)
+
+    cursor.execute("""
+        SELECT p.id, p.arxiv_id, p.title, p.abstract,
+               p.published_date, p.updated_date, p.journal_ref, p.doi,
+               p.comment, p.primary_category
+        FROM paper_categories pc
+        JOIN papers p ON pc.paper_id = p.id
+        WHERE pc.category = %s
+        ORDER BY p.published_date DESC, p.id DESC
+        LIMIT %s OFFSET %s
+    """, (cat, per_page, offset))
+    papers = cursor.fetchall()
+
+    attach_authors(cursor, papers)
+    attach_keywords(cursor, papers)
+
+    cursor.close()
+
+    total_pages = (total + per_page - 1) // per_page
+    return render_template('category.html',
+                           cat=cat,
                            papers=papers,
                            page=page,
                            total_pages=total_pages,

@@ -11,6 +11,7 @@ DROP TABLE IF EXISTS paper_keywords;
 DROP TABLE IF EXISTS keyword_aliases;
 DROP TABLE IF EXISTS paper_authors;
 DROP TABLE IF EXISTS paper_tags;
+DROP TABLE IF EXISTS paper_categories;
 DROP TABLE IF EXISTS authors;
 DROP TABLE IF EXISTS papers;
 DROP TABLE IF EXISTS tags;
@@ -93,6 +94,18 @@ CREATE TABLE paper_authors (
     INDEX idx_paper_id (paper_id),
     INDEX idx_author_order (paper_id, author_order)
 
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================================
+-- Paper Categories Table
+-- All arXiv subject categories for each paper (primary + cross-listings)
+-- Populated automatically during fetch; powers /category/<cat> browsing
+-- ============================================================================
+CREATE TABLE paper_categories (
+    paper_id INT NOT NULL,
+    category VARCHAR(20) NOT NULL,
+    PRIMARY KEY (paper_id, category),
+    FOREIGN KEY (paper_id) REFERENCES papers(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================

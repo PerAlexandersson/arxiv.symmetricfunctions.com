@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% from '_macros.html' import render_paper, render_pagination with context %}
+
+{% block title %}{{ cat }} — arXiv Combinatorics{% endblock %}
+
+{% block content %}
+<h2 style="margin-top: 0;">
+  {{ cat }}
+  <a href="https://arxiv.org/list/{{ cat }}/recent" target="_blank" rel="noopener"
+     style="font-size: 0.6em; font-weight: 400; margin-left: 0.6rem; vertical-align: middle;">↗ arXiv</a>
+</h2>
+
+<div class="stats">{{ total }} paper{% if total != 1 %}s{% endif %} in this category</div>
+
+{% if papers %}
+  {% for paper in papers %}
+    {{ render_paper(paper, none) }}
+  {% endfor %}
+  {{ render_pagination(page, total_pages, '/category/' ~ cat ~ '?page=') }}
+{% else %}
+  <p>No papers in this category yet.</p>
+{% endif %}
+{% endblock %}

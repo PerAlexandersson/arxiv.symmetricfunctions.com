@@ -1112,6 +1112,18 @@ body.modal-open { overflow: hidden; }
   font-size: 0.68rem;
   padding: 0.1rem 0.35rem;
 }
+.kw-tag--cat {
+  font-family: monospace;
+  font-size: 0.78rem;
+  background: var(--c-bg-alt, #f0f4f8);
+  border-color: #9cb0c8;
+  color: #3a6080;
+}
+.kw-tag--cat:hover {
+  background: #3a6080;
+  border-color: #3a6080;
+  color: #fff;
+}
 .paper-kw-tags--list {
   margin-top: 0.5rem;
   line-height: 1.8;
