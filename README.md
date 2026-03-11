@@ -179,7 +179,10 @@ arxiv.symmetricfunctions.com/
 ├── passenger_wsgi.py         # WSGI entry point (shared hosting)
 ├── database/
 │   ├── schema.sql            # Database schema
-│   └── setup_database.sh     # Database setup script
+│   ├── setup_database.sh     # Database setup script
+│   ├── pull_prod_db.sh       # Pull production DB to local
+│   ├── migrate.sql           # Migrations (run in order)
+│   └── drop_tag_name.sql     # Migration: remove tag_name column
 └── src/
     ├── app.py                # Flask web application
     ├── admin.py              # Admin blueprint (keyword management)
@@ -206,8 +209,7 @@ arxiv.symmetricfunctions.com/
         └── admin/
             ├── login.html        # Admin login
             ├── candidates.html   # Keyword candidate triage
-            ├── keywords.html     # Curated keyword list
-            ├── keyword_edit.html # Rename a keyword phrase
+            ├── keywords.html     # Curated keyword list (inline-edit, merge, aliases)
             └── retag.html        # Retag papers by date range
 ```
 
@@ -237,9 +239,9 @@ arxiv.symmetricfunctions.com/
 **"Port 5000 already in use"**
 - Stop other Flask apps or change port in `src/app.py`
 
-**Different paper counts on different machines**
-- Each machine has its own local database (not synced)
-- Run fetch scripts on each machine to sync data
+**Different paper counts / keyword changes not visible on other machine**
+- Pull the production database locally: `cd database && ./pull_prod_db.sh`
+- Then apply any pending migrations (e.g. `drop_tag_name.sql`)
 
 ---
 
@@ -252,7 +254,7 @@ Papers are auto-tagged with curated keywords managed via the admin UI at `/admin
 Password-protected (set `ADMIN_PASSWORD` in `.env`).
 
 - `/admin/candidates` — triage keyword candidates from `keywords.csv` (mark as *useful*, *math*, or *ignore*)
-- `/admin/keywords` — list/edit/delete curated keywords; inline-edit tag name, URL, score; manage aliases (synonyms); paper count per keyword
+- `/admin/keywords` — list/edit/delete curated keywords; inline-edit phrase, URL, score; manage aliases (synonyms); merge two keywords; paper count per keyword
 - `/admin/retag` — re-tag papers by date range directly from the browser
 
 ### Keyword pipeline
