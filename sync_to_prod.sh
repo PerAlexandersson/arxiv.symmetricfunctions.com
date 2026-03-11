@@ -99,6 +99,7 @@ MIGRATIONS=(
     migrate_lists.sql
     drop_tag_name.sql
     add_paper_categories.sql
+    migrate_watched.sql
 )
 
 for fname in "${MIGRATIONS[@]}"; do

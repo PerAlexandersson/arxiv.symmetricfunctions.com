@@ -9,6 +9,8 @@
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- Drop tables if they exist (for clean reinstall)
+DROP TABLE IF EXISTS user_watched_keywords;
+DROP TABLE IF EXISTS user_watched_authors;
 DROP TABLE IF EXISTS user_lists;
 DROP TABLE IF EXISTS user_categories;
 DROP TABLE IF EXISTS users;
@@ -281,6 +283,36 @@ CREATE TABLE user_categories (
 
     UNIQUE KEY idx_user_cat_name (user_id, name),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================================
+-- Watched Keywords Table
+-- Users can watch keywords to get a personalised feed
+-- ============================================================================
+CREATE TABLE user_watched_keywords (
+    user_id    INT NOT NULL,
+    keyword_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (user_id, keyword_id),
+    FOREIGN KEY (user_id)    REFERENCES users(id)    ON DELETE CASCADE,
+    FOREIGN KEY (keyword_id) REFERENCES keywords(id) ON DELETE CASCADE
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================================
+-- Watched Authors Table
+-- Users can watch authors to get a personalised feed
+-- ============================================================================
+CREATE TABLE user_watched_authors (
+    user_id   INT NOT NULL,
+    author_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (user_id, author_id),
+    FOREIGN KEY (user_id)   REFERENCES users(id)    ON DELETE CASCADE,
+    FOREIGN KEY (author_id) REFERENCES authors(id)  ON DELETE CASCADE
 
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

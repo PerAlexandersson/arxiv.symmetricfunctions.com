@@ -12,7 +12,15 @@
   {% endif %}
 </h2>
 
-<div class="stats">{{ total }} paper{% if total != 1 %}s{% endif %} tagged with this keyword</div>
+<div class="stats">
+  {{ total }} paper{% if total != 1 %}s{% endif %} tagged with this keyword
+  {% if current_user %}
+  · <button id="watch-btn" class="watch-btn {% if watching %}watching{% endif %}"
+            onclick="toggleWatch('keyword', {{ keyword.id }}, this)">
+      {% if watching %}Watching{% else %}Watch{% endif %}
+    </button>
+  {% endif %}
+</div>
 
 {% if papers %}
   {% for paper in papers %}
@@ -22,4 +30,38 @@
 {% else %}
   <p>No papers tagged with this keyword yet.</p>
 {% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.watch-btn {
+  background: none; border: 1px solid var(--c-border); border-radius: 4px;
+  color: var(--c-text-sub); cursor: pointer; font-size: 0.85em;
+  padding: 2px 10px; vertical-align: middle;
+}
+.watch-btn:hover { color: var(--c-link); border-color: var(--c-link); }
+.watch-btn.watching { background: var(--c-link); color: #fff; border-color: var(--c-link); }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleWatch(type, id, btn) {
+  const csrf = document.querySelector('meta[name="csrf-token"]').content;
+  fetch('/api/watch/' + type + '/' + id, {
+    method: 'POST',
+    headers: {'X-CSRFToken': csrf}
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.watching) {
+      btn.textContent = 'Watching';
+      btn.classList.add('watching');
+    } else {
+      btn.textContent = 'Watch';
+      btn.classList.remove('watching');
+    }
+  });
+}
+</script>
 {% endblock %}

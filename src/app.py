@@ -48,6 +48,9 @@ init_oauth(app)
 from lists import lists_bp
 app.register_blueprint(lists_bp)
 
+from watch import watch_bp
+app.register_blueprint(watch_bp)
+
 
 @app.context_processor
 def inject_current_user():
@@ -608,6 +611,18 @@ def keyword_papers(phrase):
     attach_authors(cursor, papers)
     attach_keywords(cursor, papers)
 
+    # Watch state
+    watching = False
+    user_id = session.get('user_id')
+    if user_id:
+        cursor2 = conn.cursor()
+        cursor2.execute(
+            "SELECT 1 FROM user_watched_keywords WHERE user_id=%s AND keyword_id=%s",
+            (user_id, keyword['id'])
+        )
+        watching = cursor2.fetchone() is not None
+        cursor2.close()
+
     cursor.close()
 
     total_pages = (total + per_page - 1) // per_page
@@ -616,7 +631,8 @@ def keyword_papers(phrase):
                            papers=papers,
                            page=page,
                            total_pages=total_pages,
-                           total=total)
+                           total=total,
+                           watching=watching)
 
 
 @app.route('/category/<path:cat>')
@@ -716,6 +732,16 @@ def author_papers(author_slug):
     attach_authors(cursor, papers)
     attach_keywords(cursor, papers)
 
+    # Watch state
+    watching = False
+    user_id = session.get('user_id')
+    if user_id:
+        cursor.execute(
+            "SELECT 1 FROM user_watched_authors WHERE user_id=%s AND author_id=%s",
+            (user_id, author['id'])
+        )
+        watching = cursor.fetchone() is not None
+
     cursor.close()
 
     total_pages = (total + per_page - 1) // per_page
@@ -726,7 +752,8 @@ def author_papers(author_slug):
                          page=page,
                          total_pages=total_pages,
                          total=total,
-                         latest_date=latest_date)
+                         latest_date=latest_date,
+                         watching=watching)
 
 
 @app.route('/browse')

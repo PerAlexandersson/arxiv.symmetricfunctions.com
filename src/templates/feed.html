@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% from '_macros.html' import render_paper, render_pagination with context %}
+
+{% block title %}My Feed — arXiv Combinatorics{% endblock %}
+
+{% block content %}
+<h2 style="margin-top: 0;">My Feed</h2>
+
+{% if not watched_keywords and not watched_authors %}
+<p>You are not watching anything yet.</p>
+<p>
+  Visit an <a href="/authors">author page</a> or a
+  <a href="/">keyword tag</a> and click <strong>Watch</strong> to start
+  building your personalised feed.
+</p>
+{% else %}
+
+<div class="stats" style="margin-bottom: 1rem;">
+  {{ total }} paper{% if total != 1 %}s{% endif %} from your watches
+</div>
+
+<div style="display: flex; gap: 2rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
+  {% if watched_keywords %}
+  <div>
+    <strong>Watched keywords</strong><br>
+    {% for kw in watched_keywords %}
+      <a href="/keyword/{{ kw.phrase | replace(' ', '%20') }}" class="kw-tag" style="margin-top: 0.3rem; display: inline-block;">{{ kw.phrase }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if watched_authors %}
+  <div>
+    <strong>Watched authors</strong><br>
+    {% for a in watched_authors %}
+      <a href="/author/{{ a.slug }}">{{ a.name }}</a>{% if not loop.last %}, {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+{% if papers %}
+  {% for paper in papers %}
+    {{ render_paper(paper, none) }}
+  {% endfor %}
+  {{ render_pagination(page, total_pages, '/my-feed?page=') }}
+{% else %}
+  <p>No papers yet — check back after the next fetch.</p>
+{% endif %}
+
+{% endif %}
+{% endblock %}
