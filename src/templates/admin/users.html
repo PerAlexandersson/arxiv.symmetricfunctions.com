@@ -23,6 +23,11 @@ table.users-table tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
   background: var(--c-bg-alt, #eee); color: var(--c-muted, #555);
 }
 .muted { color: var(--c-muted, #888); font-style: italic; }
+.btn-del-user {
+  background: none; border: none; cursor: pointer; padding: 0.1rem 0.3rem;
+  color: var(--c-muted, #aaa); font-size: 1rem; line-height: 1;
+}
+.btn-del-user:hover { color: #c00; }
 </style>
 {% endblock %}
 
@@ -43,6 +48,7 @@ table.users-table tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
       <th class="num" title="Watched keywords">Keywords</th>
       <th class="num" title="Watched authors">Authors</th>
       <th class="num" title="Papers saved to lists">List papers</th>
+      <th></th>
     </tr>
   </thead>
   <tbody>
@@ -62,6 +68,8 @@ table.users-table tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
       <td class="num {% if not u.watched_keywords %}stat-zero{% endif %}">{{ u.watched_keywords }}</td>
       <td class="num {% if not u.watched_authors  %}stat-zero{% endif %}">{{ u.watched_authors }}</td>
       <td class="num {% if not u.list_papers      %}stat-zero{% endif %}">{{ u.list_papers }}</td>
+      <td><button class="btn-del-user" title="Delete user"
+                  onclick="deleteUser({{ u.id }}, {{ u.display_name | tojson }}, this)">✕</button></td>
     </tr>
     {% endfor %}
   </tbody>
@@ -69,4 +77,26 @@ table.users-table tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
 {% else %}
 <p class="muted">No users have registered yet.</p>
 {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function deleteUser(uid, name, btn) {
+  const label = name || ('user #' + uid);
+  if (!confirm(`Delete ${label}?\n\nThis will permanently remove the account and all their watched keywords, watched authors, and saved lists. This cannot be undone.`)) return;
+  const csrf = document.querySelector('meta[name="csrf-token"]').content;
+  try {
+    const res  = await fetch(`/admin/users/${uid}/delete`, {
+      method: 'POST',
+      headers: {'X-CSRFToken': csrf}
+    });
+    const data = await res.json();
+    if (data.ok) {
+      btn.closest('tr').remove();
+    } else {
+      alert('Delete failed.');
+    }
+  } catch { alert('Delete request failed.'); }
+}
+</script>
 {% endblock %}

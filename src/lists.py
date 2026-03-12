@@ -20,9 +20,9 @@ Routes (API — JSON, CSRF-protected POST):
 import pymysql
 import logging
 from flask import (Blueprint, render_template, request, jsonify,
-                   redirect, url_for, session, abort, g)
-from config import DB_CONFIG
+                   redirect, url_for, session, abort)
 from utils import arxiv2bib, slugify
+from db import get_db_connection
 
 logger = logging.getLogger(__name__)
 lists_bp = Blueprint('lists', __name__)
@@ -31,12 +31,6 @@ STARRED_NAME = 'Starred'
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
-
-def _get_db():
-    """Return a per-request DB connection (shared with app.py via g)."""
-    if 'db' not in g:
-        g.db = pymysql.connect(**DB_CONFIG, cursorclass=pymysql.cursors.DictCursor)
-    return g.db
 
 
 def _require_user():
@@ -49,7 +43,7 @@ def _require_user():
 
 def _ensure_starred(user_id):
     """Return the id of the Starred category, creating it if needed."""
-    conn = _get_db()
+    conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute(
@@ -71,7 +65,7 @@ def _ensure_starred(user_id):
 
 def _get_user_categories(user_id):
     """Return all categories for a user, Starred first, with paper counts."""
-    conn = _get_db()
+    conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute(
@@ -92,7 +86,7 @@ def _get_user_categories(user_id):
 
 def _get_papers_in_category(user_id, cat_id):
     """Return (category_row, [paper_rows]) or (None, None) if not found."""
-    conn = _get_db()
+    conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute(
@@ -155,7 +149,7 @@ def my_lists():
         return redirect(url_for('auth.login'))
     categories = _get_user_categories(user_id)
 
-    conn = _get_db()
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
         """SELECT k.id, k.phrase FROM user_watched_keywords uwk
@@ -214,7 +208,7 @@ def toggle_star(arxiv_id):
     user_id = _require_user()
     starred_cat_id = _ensure_starred(user_id)
 
-    conn = _get_db()
+    conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute(
@@ -255,7 +249,7 @@ def save_paper():
     if not arxiv_id:
         return jsonify({'error': 'arxiv_id required'}), 400
 
-    conn = _get_db()
+    conn = get_db_connection()
     cursor = conn.cursor()
     try:
         if new_name:
@@ -300,7 +294,7 @@ def remove_paper():
     if not arxiv_id or not cat_id:
         return jsonify({'error': 'arxiv_id and category_id required'}), 400
 
-    conn = _get_db()
+    conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute(
@@ -335,7 +329,7 @@ def new_category():
     if not name:
         return jsonify({'error': 'name required'}), 400
 
-    conn = _get_db()
+    conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute(
@@ -359,7 +353,7 @@ def rename_category(cat_id):
     if not new_name:
         return jsonify({'error': 'name required'}), 400
 
-    conn = _get_db()
+    conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute(
@@ -392,7 +386,7 @@ def rename_category(cat_id):
 def delete_category(cat_id):
     user_id = _require_user()
 
-    conn = _get_db()
+    conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute(

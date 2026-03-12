@@ -10,11 +10,11 @@ Routes:
 
 import os
 import requests as http_requests
-import pymysql
 from flask import (Blueprint, render_template, redirect, url_for,
                    session, request, flash, current_app)
 from authlib.integrations.flask_client import OAuth
-from config import DB_CONFIG, ORCID_CLIENT_ID, ORCID_CLIENT_SECRET
+from config import ORCID_CLIENT_ID, ORCID_CLIENT_SECRET
+from db import get_db_connection
 
 DEV_ORCID_ID = os.getenv('DEV_ORCID_ID', '')
 
@@ -39,9 +39,6 @@ def init_oauth(app):
             },
         )
 
-
-def _get_db():
-    return pymysql.connect(**DB_CONFIG, cursorclass=pymysql.cursors.DictCursor)
 
 
 def _fetch_orcid_name(orcid_id):
@@ -73,7 +70,7 @@ def _set_session(user_id, name, orcid_id):
 
 def _upsert_user(provider, provider_id, display_name):
     """Insert or update a user row and return the internal user id."""
-    conn = _get_db()
+    conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute(
@@ -91,7 +88,6 @@ def _upsert_user(provider, provider_id, display_name):
         return row['id']
     finally:
         cursor.close()
-        conn.close()
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────

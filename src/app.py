@@ -15,6 +15,7 @@ import re
 import pymysql
 import requests
 from config import DB_CONFIG, FLASK_CONFIG, FETCH_SECRET, validate_config
+from db import get_db_connection, close_db_connection, get_paper_authors, attach_authors, attach_keywords
 from datetime import datetime, date, timedelta
 from utils import strip_accents, slugify, protect_capitals_for_bibtex, generate_bibtex_key, arxiv2bib
 
@@ -135,18 +136,7 @@ doi = {{{doi}}},
             return None
 
 
-def get_db_connection():
-    """Return a per-request DB connection (cached on Flask g, closed on teardown)."""
-    if 'db' not in g:
-        g.db = pymysql.connect(**DB_CONFIG, cursorclass=pymysql.cursors.DictCursor)
-    return g.db
-
-
-@app.teardown_appcontext
-def close_db_connection(e=None):
-    db = g.pop('db', None)
-    if db is not None:
-        db.close()
+app.teardown_appcontext(close_db_connection)
 
 
 def ensure_author_slugs():
@@ -181,56 +171,6 @@ except pymysql.Error as e:
     logger.warning("ensure_author_slugs skipped (DB unavailable): %s", e)
 
 
-def get_paper_authors(cursor, paper_id):
-    """Get ordered list of authors for a paper."""
-    cursor.execute("""
-        SELECT a.name
-        FROM authors a
-        JOIN paper_authors pa ON a.id = pa.author_id
-        WHERE pa.paper_id = %s
-        ORDER BY pa.author_order
-    """, (paper_id,))
-    return [row['name'] for row in cursor.fetchall()]
-
-
-def attach_keywords(cursor, papers):
-    """Attach keywords to a list of papers in a single query (avoids N+1)."""
-    if not papers:
-        return
-    paper_ids = [p['id'] for p in papers]
-    placeholders = ','.join(['%s'] * len(paper_ids))
-    cursor.execute(f"""
-        SELECT pk.paper_id, k.phrase, k.url
-        FROM paper_keywords pk
-        JOIN keywords k ON pk.keyword_id = k.id
-        WHERE pk.paper_id IN ({placeholders})
-        ORDER BY pk.paper_id, k.score DESC, k.phrase ASC
-    """, paper_ids)
-    kw_by_paper = {}
-    for row in cursor.fetchall():
-        kw_by_paper.setdefault(row['paper_id'], []).append({'phrase': row['phrase'], 'url': row['url']})
-    for paper in papers:
-        paper['keywords'] = kw_by_paper.get(paper['id'], [])
-
-
-def attach_authors(cursor, papers):
-    """Attach authors to a list of papers in a single query (avoids N+1)."""
-    if not papers:
-        return
-    paper_ids = [p['id'] for p in papers]
-    placeholders = ','.join(['%s'] * len(paper_ids))
-    cursor.execute(f"""
-        SELECT pa.paper_id, a.name
-        FROM authors a
-        JOIN paper_authors pa ON a.id = pa.author_id
-        WHERE pa.paper_id IN ({placeholders})
-        ORDER BY pa.paper_id, pa.author_order
-    """, paper_ids)
-    authors_by_paper = {}
-    for row in cursor.fetchall():
-        authors_by_paper.setdefault(row['paper_id'], []).append(row['name'])
-    for paper in papers:
-        paper['authors'] = authors_by_paper.get(paper['id'], [])
 
 
 @app.route('/')
@@ -384,7 +324,7 @@ def prolific_authors():
     """List authors with 50 or more papers."""
     sort = request.args.get('sort', 'count')
     conn = get_db_connection()
-    cursor = conn.cursor(pymysql.cursors.DictCursor)
+    cursor = conn.cursor()
     if sort == 'name':
         order = "SUBSTRING_INDEX(a.name, ' ', -1) ASC, a.name ASC"
     else:
@@ -638,13 +578,11 @@ def keyword_papers(phrase):
     watching = False
     user_id = session.get('user_id')
     if user_id:
-        cursor2 = conn.cursor()
-        cursor2.execute(
+        cursor.execute(
             "SELECT 1 FROM user_watched_keywords WHERE user_id=%s AND keyword_id=%s",
             (user_id, keyword['id'])
         )
-        watching = cursor2.fetchone() is not None
-        cursor2.close()
+        watching = cursor.fetchone() is not None
 
     cursor.close()
 

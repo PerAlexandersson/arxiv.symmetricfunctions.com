@@ -9,23 +9,13 @@ Routes (API — JSON, CSRF-protected POST):
     POST /api/watch/author/<int:aid>     → toggle watching an author
 """
 
-import pymysql
 import logging
 from flask import (Blueprint, render_template, request, jsonify,
-                   redirect, url_for, session, abort, g)
-from config import DB_CONFIG
+                   redirect, url_for, session, abort)
+from db import get_db_connection, attach_authors, attach_keywords
 
 logger = logging.getLogger(__name__)
 watch_bp = Blueprint('watch', __name__)
-
-
-# ── Helpers ────────────────────────────────────────────────────────────────────
-
-def _get_db():
-    """Return a per-request DB connection (shared with app.py via g)."""
-    if 'db' not in g:
-        g.db = pymysql.connect(**DB_CONFIG, cursorclass=pymysql.cursors.DictCursor)
-    return g.db
 
 
 def _require_user():
@@ -41,7 +31,7 @@ def _require_user():
 @watch_bp.route('/api/watch/keyword/<int:kid>', methods=['POST'])
 def toggle_watch_keyword(kid):
     user_id = _require_user()
-    conn = _get_db()
+    conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute("SELECT 1 FROM keywords WHERE id=%s AND active=1", (kid,))
@@ -73,7 +63,7 @@ def toggle_watch_keyword(kid):
 @watch_bp.route('/api/watch/author/<int:aid>', methods=['POST'])
 def toggle_watch_author(aid):
     user_id = _require_user()
-    conn = _get_db()
+    conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute("SELECT 1 FROM authors WHERE id=%s", (aid,))
@@ -115,10 +105,9 @@ def my_feed():
     per_page = 20
     offset = (page - 1) * per_page
 
-    conn = _get_db()
+    conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Load the user's watch lists
     cursor.execute(
         """SELECT k.id, k.phrase FROM user_watched_keywords uwk
            JOIN keywords k ON k.id = uwk.keyword_id
@@ -139,7 +128,6 @@ def my_feed():
     has_more = False
 
     if watched_keywords or watched_authors:
-        # Subquery: union of paper IDs from watched keywords + watched authors
         feed_subquery = """
             SELECT pk.paper_id FROM paper_keywords pk
             JOIN user_watched_keywords uwk ON pk.keyword_id = uwk.keyword_id
@@ -149,7 +137,6 @@ def my_feed():
             JOIN user_watched_authors uwa ON pa.author_id = uwa.author_id
             WHERE uwa.user_id = %s
         """
-
         cursor.execute(f"""
             SELECT DISTINCT p.id, p.arxiv_id, p.title, p.abstract,
                    p.published_date, p.updated_date, p.journal_ref, p.doi,
@@ -164,36 +151,8 @@ def my_feed():
         papers = list(rows[:per_page])
 
         if papers:
-            paper_ids = [p['id'] for p in papers]
-            placeholders = ','.join(['%s'] * len(paper_ids))
-
-            cursor.execute(f"""
-                SELECT pa.paper_id, a.name
-                FROM authors a
-                JOIN paper_authors pa ON a.id = pa.author_id
-                WHERE pa.paper_id IN ({placeholders})
-                ORDER BY pa.paper_id, pa.author_order
-            """, paper_ids)
-            authors_by_paper = {}
-            for row in cursor.fetchall():
-                authors_by_paper.setdefault(row['paper_id'], []).append(row['name'])
-            for paper in papers:
-                paper['authors'] = authors_by_paper.get(paper['id'], [])
-
-            cursor.execute(f"""
-                SELECT pk.paper_id, k.phrase, k.url
-                FROM paper_keywords pk
-                JOIN keywords k ON pk.keyword_id = k.id
-                WHERE pk.paper_id IN ({placeholders})
-                ORDER BY pk.paper_id, k.score DESC, k.phrase ASC
-            """, paper_ids)
-            kw_by_paper = {}
-            for row in cursor.fetchall():
-                kw_by_paper.setdefault(row['paper_id'], []).append(
-                    {'phrase': row['phrase'], 'url': row['url']}
-                )
-            for paper in papers:
-                paper['keywords'] = kw_by_paper.get(paper['id'], [])
+            attach_authors(cursor, papers)
+            attach_keywords(cursor, papers)
 
     cursor.close()
 

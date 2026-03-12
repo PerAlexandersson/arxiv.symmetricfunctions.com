@@ -33,7 +33,8 @@ from flask import (Blueprint, render_template, request, redirect,
                    url_for, session, flash, abort, jsonify, g)
 import logging
 import pymysql
-from config import DB_CONFIG, ADMIN_PASSWORD
+from config import ADMIN_PASSWORD
+from db import get_db_connection
 
 logger = logging.getLogger(__name__)
 
@@ -68,12 +69,6 @@ def load_candidates():
         _candidates_cache = []
     return _candidates_cache
 
-
-def get_db_connection():
-    """Return a per-request DB connection (cached on Flask g, closed on teardown)."""
-    if 'db' not in g:
-        g.db = pymysql.connect(**DB_CONFIG, cursorclass=pymysql.cursors.DictCursor)
-    return g.db
 
 
 def login_required(f):
@@ -587,6 +582,17 @@ def users():
     all_users = cursor.fetchall()
     cursor.close()
     return render_template('admin/users.html', users=all_users)
+
+
+@admin.route('/users/<int:uid>/delete', methods=['POST'])
+@login_required
+def delete_user(uid):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM users WHERE id = %s", (uid,))
+    conn.commit()
+    cursor.close()
+    return jsonify({'ok': True})
 
 
 @admin.route('/retag', methods=['GET', 'POST'])
