@@ -245,8 +245,11 @@ main {
 }
 
 .paper-date.latest-date {
+  background: #ff6b35;
+  color: #fff;
   font-weight: 700;
-  color: var(--c-text);
+  padding: 0.1em 0.5em;
+  border-radius: 999px;
 }
 
 
