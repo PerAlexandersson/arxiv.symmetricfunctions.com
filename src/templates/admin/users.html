@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Users — Admin{% endblock %}
+
+{% block extra_css %}
+<style>
+
+table.users-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+table.users-table th {
+  text-align: left; padding: 0.4rem 0.6rem;
+  border-bottom: 2px solid var(--c-border, #ccc); white-space: nowrap;
+}
+table.users-table td {
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid var(--c-border-light, #eee);
+}
+table.users-table tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
+.provider-badge {
+  font-size: 0.75rem; padding: 0.1rem 0.4rem; border-radius: 3px;
+  background: var(--c-bg-alt, #eee); color: var(--c-muted, #555);
+}
+.muted { color: var(--c-muted, #888); font-style: italic; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'admin/_nav.html' %}
+
+<h2>Users <small style="font-weight:normal; font-size:0.7em; color:var(--c-muted,#888)">{{ users|length }} registered</small></h2>
+
+{% if users %}
+<table class="users-table">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Name</th>
+      <th>Provider</th>
+      <th>ORCID / ID</th>
+      <th>Registered</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for u in users %}
+    <tr>
+      <td style="color:var(--c-muted,#888)">{{ u.id }}</td>
+      <td>{{ u.display_name or '<span class="muted">—</span>'|safe }}</td>
+      <td><span class="provider-badge">{{ u.provider }}</span></td>
+      <td style="font-family:monospace; font-size:0.85rem">
+        {% if u.provider == 'orcid' %}
+          <a href="https://orcid.org/{{ u.provider_id }}" target="_blank" rel="noopener">{{ u.provider_id }}</a>
+        {% else %}
+          {{ u.provider_id }}
+        {% endif %}
+      </td>
+      <td style="white-space:nowrap">{{ u.created_at.strftime('%Y-%m-%d') }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No users have registered yet.</p>
+{% endif %}
+{% endblock %}

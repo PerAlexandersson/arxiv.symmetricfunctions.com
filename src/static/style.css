@@ -805,6 +805,10 @@ a.paper-icon-btn.nav-icon-disabled:hover {
   vertical-align: middle;
 }
 
+/* Ko-fi support button */
+.nav-kofi { color: #f48525 !important; }
+.nav-kofi:hover { color: #d4711a !important; background: var(--c-bg-gray); }
+
 /* "Logged in as" line below site title */
 .site-logged-in {
   font-size: 0.78rem;

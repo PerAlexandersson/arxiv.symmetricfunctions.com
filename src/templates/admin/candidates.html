@@ -3,8 +3,6 @@
 
 {% block extra_css %}
 <style>
-.admin-nav { margin-bottom: 1.5rem; font-size: 0.9rem; }
-.admin-nav a { margin-right: 1rem; }
 
 .filters {
   display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: flex-end;
@@ -105,13 +103,7 @@ table.candidates tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
 {% endblock %}
 
 {% block content %}
-<div class="admin-nav">
-  <strong>Admin:</strong>
-  <a href="{{ url_for('admin.candidates') }}">Candidates</a>
-  <a href="{{ url_for('admin.keywords') }}">Keywords ({{ useful_count }})</a>
-  <a href="{{ url_for('admin.retag') }}">Retag</a>
-  <a href="{{ url_for('admin.logout') }}" style="float:right; color: var(--c-muted,#666)">Log out</a>
-</div>
+{% include 'admin/_nav.html' %}
 
 <div class="help-overlay" id="help-overlay" onclick="closeHelp()"></div>
 <div class="help-popup" id="help-popup">

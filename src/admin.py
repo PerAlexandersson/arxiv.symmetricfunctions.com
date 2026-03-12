@@ -360,6 +360,11 @@ def add_alias(kid):
         return jsonify({'ok': False, 'error': 'empty'}), 400
     conn = get_db_connection()
     cursor = conn.cursor()
+    cursor.execute("SELECT phrase FROM keywords WHERE id = %s", (kid,))
+    kw = cursor.fetchone()
+    if kw and kw['phrase'] == alias:
+        cursor.close()
+        return jsonify({'ok': False, 'error': 'self'}), 400
     try:
         # If the alias phrase already exists as a standalone keyword, absorb it:
         # reassign its paper_keywords and aliases to kid, then delete it.
@@ -367,8 +372,16 @@ def add_alias(kid):
         dup = cursor.fetchone()
         if dup:
             dup_id = dup['id']
-            cursor.execute("UPDATE paper_keywords   SET keyword_id = %s WHERE keyword_id = %s", (kid, dup_id))
-            cursor.execute("UPDATE keyword_aliases   SET keyword_id = %s WHERE keyword_id = %s", (kid, dup_id))
+            cursor.execute("""
+                INSERT IGNORE INTO paper_keywords (paper_id, keyword_id)
+                SELECT paper_id, %s FROM paper_keywords WHERE keyword_id = %s
+            """, (kid, dup_id))
+            cursor.execute("DELETE FROM paper_keywords WHERE keyword_id = %s", (dup_id,))
+            cursor.execute("""
+                INSERT IGNORE INTO keyword_aliases (keyword_id, alias)
+                SELECT %s, alias FROM keyword_aliases WHERE keyword_id = %s
+            """, (kid, dup_id))
+            cursor.execute("DELETE FROM keyword_aliases WHERE keyword_id = %s", (dup_id,))
             cursor.execute("DELETE FROM keywords WHERE id = %s", (dup_id,))
 
         cursor.execute(
@@ -407,15 +420,26 @@ def merge_keyword(kid):
     cursor.execute("SELECT id, phrase FROM keywords WHERE id = %s", (kid,))
     src = cursor.fetchone()
     if not src:
-        cursor.close();        return jsonify({'ok': False, 'error': 'not found'}), 404
+        cursor.close(); return jsonify({'ok': False, 'error': 'not found'}), 404
+    if into_phrase == src['phrase']:
+        cursor.close(); return jsonify({'ok': False, 'error': 'cannot merge into itself'}), 400
     cursor.execute("SELECT id FROM keywords WHERE phrase = %s AND id != %s", (into_phrase, kid))
     dst = cursor.fetchone()
     if not dst:
         cursor.close();        return jsonify({'ok': False, 'error': 'target not found'}), 404
     dst_id = dst['id']
-    # Reassign paper_keywords and sub-aliases, then delete src keyword
-    cursor.execute("UPDATE paper_keywords SET keyword_id = %s WHERE keyword_id = %s", (dst_id, kid))
-    cursor.execute("UPDATE keyword_aliases SET keyword_id = %s WHERE keyword_id = %s", (dst_id, kid))
+    # Merge paper_keywords: copy papers src has that dst doesn't, then drop src's rows
+    cursor.execute("""
+        INSERT IGNORE INTO paper_keywords (paper_id, keyword_id)
+        SELECT paper_id, %s FROM paper_keywords WHERE keyword_id = %s
+    """, (dst_id, kid))
+    cursor.execute("DELETE FROM paper_keywords WHERE keyword_id = %s", (kid,))
+    # Merge sub-aliases similarly
+    cursor.execute("""
+        INSERT IGNORE INTO keyword_aliases (keyword_id, alias)
+        SELECT %s, alias FROM keyword_aliases WHERE keyword_id = %s
+    """, (dst_id, kid))
+    cursor.execute("DELETE FROM keyword_aliases WHERE keyword_id = %s", (kid,))
     cursor.execute("DELETE FROM keywords WHERE id = %s", (kid,))
     # Add src phrase as alias of dst (ignore if already exists)
     cursor.execute("INSERT IGNORE INTO keyword_aliases (keyword_id, alias) VALUES (%s, %s)",
@@ -519,6 +543,17 @@ def refetch_paper(arxiv_id):
     except Exception as e:
         logger.exception("refetch_paper failed for %s", arxiv_id)
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@admin.route('/users')
+@login_required
+def users():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, provider, provider_id, display_name, created_at FROM users ORDER BY created_at DESC")
+    all_users = cursor.fetchall()
+    cursor.close()
+    return render_template('admin/users.html', users=all_users)
 
 
 @admin.route('/retag', methods=['GET', 'POST'])
