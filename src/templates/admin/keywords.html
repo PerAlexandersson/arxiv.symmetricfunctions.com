@@ -152,7 +152,7 @@ table.kw-table col.col-del      { width: 58px; }
 
 <h2 style="margin-top: 0;">Keywords</h2>
 
-<form method="post" action="{{ url_for('admin.add_keyword') }}"
+<form id="add-kw-form" method="post" action="{{ url_for('admin.add_keyword') }}"
       style="display:flex; gap:0.5rem; margin-bottom:1.2rem; max-width:420px;">
   <input type="text" name="phrase" placeholder="Add keyword…" required
          style="flex:1; padding:0.4rem 0.6rem; font-size:0.9rem;
@@ -169,9 +169,8 @@ table.kw-table col.col-del      { width: 58px; }
   {% for phrase in keyword_phrases %}<option value="{{ phrase }}">{% endfor %}
 </datalist>
 
-{# Hidden bulk-action form #}
-<form id="bulk-form" method="post" action="{{ url_for('admin.bulk_delete') }}"
-      onsubmit="return confirmBulkDelete()"></form>
+{# Hidden bulk-action form (checkboxes reference this via form="bulk-form") #}
+<form id="bulk-form"></form>
 
 {% if keywords %}
 <table class="kw-table">
@@ -241,15 +240,12 @@ table.kw-table col.col-del      { width: 58px; }
     <td>
       <button type="button" class="btn-retag" title="Re-tag all papers for this keyword"
               onclick="retagKeyword({{ kw.id }}, this)">↺</button>
-      <form method="post" action="{{ url_for('admin.delete_keyword', kid=kw.id) }}"
-            style="display:inline"
-            onsubmit="return confirmDelete('{{ kw.phrase|e }}', {{ kw.paper_count }})">
-        <button type="submit" class="btn-trash" title="Delete keyword">
-          <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-            <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>
-          </svg>
-        </button>
-      </form>
+      <button type="button" class="btn-trash" title="Delete keyword"
+              onclick="deleteKeyword({{ kw.id }}, this)">
+        <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>
+        </svg>
+      </button>
     </td>
   </tr>
   {% endfor %}
@@ -257,7 +253,7 @@ table.kw-table col.col-del      { width: 58px; }
 </table>
 
 <div class="bulk-bar">
-  <button type="submit" form="bulk-form"
+  <button type="button" onclick="doBulkDelete()"
           style="padding:0.3rem 0.8rem; background:#f8d7da; color:#721c24; border:1px solid #f5c6cb; border-radius:3px; cursor:pointer;">
     Delete selected
   </button>
@@ -330,8 +326,29 @@ async function saveInline(input) {
   if (field === 'phrase' && !value) { input.value = input.defaultValue; return; }
   const fd = new FormData(); fd.append('field', field); fd.append('value', value);
   try {
-    const res = await csrfFetch(`/admin/keywords/${kid}/inline`, fd);
-    if (!res.ok) throw new Error();
+    const res  = await csrfFetch(`/admin/keywords/${kid}/inline`, fd);
+    const data = await res.json();
+    if (!data.ok) {
+      if (data.error === 'duplicate') {
+        const own = input.defaultValue;
+        if (confirm(`«${value}» already exists as a keyword.\n\nMerge «${own}» into «${value}»?\n«${own}» will become an alias and its row will be removed.`)) {
+          const mfd = new FormData(); mfd.append('into_phrase', value);
+          const mres  = await csrfFetch(`/admin/keywords/${kid}/merge`, mfd);
+          const mdata = await mres.json();
+          if (mdata.ok) {
+            document.querySelector(`tr[data-kid="${kid}"]`)?.remove();
+          } else {
+            alert('Merge failed: ' + (mdata.error || 'unknown'));
+            flash(input, false); input.value = input.defaultValue;
+          }
+        } else {
+          flash(input, false); input.value = input.defaultValue;
+        }
+      } else {
+        flash(input, false); input.value = input.defaultValue;
+      }
+      return;
+    }
     input.defaultValue = value;
     flash(input, true);
   } catch { flash(input, false); input.value = input.defaultValue; }
@@ -373,8 +390,11 @@ async function addAlias(kid) {
     const res  = await csrfFetch(`/admin/keywords/${kid}/aliases/add`, fd);
     const data = await res.json();
     if (!data.ok) {
-      alert(data.error === 'duplicate' ? `«${alias}» is already an alias.` : 'Error adding alias.');
-      inp.select(); return;
+      const msg = {
+        duplicate: `«${alias}» is already an alias of another keyword.`,
+        self:      'An alias cannot be the same as the keyword itself.',
+      }[data.error] || 'Error adding alias.';
+      alert(msg); inp.select(); return;
     }
     // If the alias phrase was a standalone keyword, remove its row from the table
     if (data.absorbed) {
@@ -489,9 +509,148 @@ function confirmBulkDelete() {
   return confirm(`Delete ${kws}?\n\nThese keywords tag ${papers}. The papers won't be deleted, but the tags will be removed.`);
 }
 
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Trash SVG (same as template, avoids duplication in buildKwRow)
+const _TRASH_SVG = `<svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>`;
+
+// ── AJAX delete keyword ───────────────────────────────────────────────────────
+async function deleteKeyword(kid, btn) {
+  const row    = btn.closest('tr[data-kid]');
+  const phrase = row?.querySelector('.phrase-field')?.value || '';
+  const count  = parseInt(row?.dataset.papers) || 0;
+  if (!confirmDelete(phrase, count)) return;
+  try {
+    const res  = await csrfFetch(`/admin/keywords/${kid}/delete`, new FormData());
+    const data = await res.json();
+    if (data.ok) {
+      row.remove();
+      // Keep datalist and _phraseCount in sync
+      document.querySelector(`#kw-list option[value="${escHtml(phrase)}"]`)?.remove();
+      delete _phraseCount[phrase];
+    } else {
+      alert('Delete failed.');
+    }
+  } catch { alert('Delete request failed.'); }
+}
+
+// ── AJAX bulk delete ──────────────────────────────────────────────────────────
+async function doBulkDelete() {
+  const checked = Array.from(document.querySelectorAll('input[name=ids]:checked'));
+  if (!checked.length) return;
+  if (!confirmBulkDelete()) return;
+  const fd = new FormData();
+  checked.forEach(cb => fd.append('ids', cb.value));
+  try {
+    const res  = await csrfFetch('/admin/keywords/bulk_delete', fd);
+    const data = await res.json();
+    if (data.ok) {
+      checked.forEach(cb => {
+        const row = cb.closest('tr[data-kid]');
+        const phrase = row?.querySelector('.phrase-field')?.value || '';
+        document.querySelector(`#kw-list option[value="${escHtml(phrase)}"]`)?.remove();
+        delete _phraseCount[phrase];
+        row?.remove();
+      });
+      updateCount();
+    } else {
+      alert('Bulk delete failed.');
+    }
+  } catch { alert('Bulk delete request failed.'); }
+}
+
+// ── AJAX add keyword ──────────────────────────────────────────────────────────
+function buildKwRow(kid, phrase) {
+  const tr = document.createElement('tr');
+  tr.dataset.kid    = kid;
+  tr.dataset.papers = '0';
+  tr.innerHTML = `
+    <td><input type="checkbox" name="ids" value="${kid}" form="bulk-form"></td>
+    <td>
+      <input type="number" value="5" min="1" max="10"
+             style="width:3em;text-align:center;padding:0.1rem;border:1px solid var(--c-border,#ccc);border-radius:3px;background:var(--c-bg,#fff);color:var(--c-text,#000);font-size:0.85rem;"
+             onchange="setScore(${kid}, this)">
+    </td>
+    <td>
+      <input type="text" class="inline-edit phrase-field" data-kid="${kid}" data-field="phrase"
+             value="${escHtml(phrase)}" title="Click to rename"
+             onblur="saveInline(this)" onkeydown="inlineKeydown(event, this)">
+    </td>
+    <td>
+      <div class="alias-list" id="aliases-${kid}">
+        <button type="button" class="alias-add-btn" id="alias-btn-${kid}"
+                onclick="showAliasInput(${kid})">+ alias</button>
+        <button type="button" class="alias-add-btn merge-btn" id="merge-btn-${kid}"
+                onclick="showMergeInput(${kid})" title="Merge this keyword into another">⇒ merge into…</button>
+        <input type="text" class="alias-add-input" id="alias-input-${kid}"
+               placeholder="synonym…" list="kw-list"
+               onkeydown="aliasKeydown(event, ${kid})"
+               oninput="aliasWarn(this, ${kid})"
+               onblur="scheduleHideAlias(${kid})">
+        <span class="alias-warn" id="alias-warn-${kid}"></span>
+        <input type="text" class="alias-add-input" id="merge-input-${kid}"
+               placeholder="merge into…" list="kw-list"
+               onkeydown="mergeKeydown(event, ${kid})"
+               onblur="scheduleHideMerge(${kid})">
+      </div>
+    </td>
+    <td>
+      <input type="text" class="inline-edit" data-kid="${kid}" data-field="url"
+             value="" placeholder="https://…" title="Definition URL (optional)"
+             onblur="saveInline(this)" onkeydown="inlineKeydown(event, this)">
+    </td>
+    <td class="paper-count">0</td>
+    <td>
+      <button type="button" class="btn-retag" title="Re-tag all papers for this keyword"
+              onclick="retagKeyword(${kid}, this)">↺</button>
+      <button type="button" class="btn-trash" title="Delete keyword"
+              onclick="deleteKeyword(${kid}, this)">${_TRASH_SVG}</button>
+    </td>`;
+  // Wire up the new checkbox so the selection counter works
+  tr.querySelector('input[name=ids]').addEventListener('change', updateCount);
+  return tr;
+}
+
+function insertRowSorted(tr, phrase) {
+  const tbody = document.querySelector('table.kw-table tbody');
+  if (!tbody) return;
+  const rows = Array.from(tbody.querySelectorAll('tr[data-kid]'));
+  const after = rows.find(r => (r.querySelector('.phrase-field')?.value || '').localeCompare(phrase) > 0);
+  if (after) tbody.insertBefore(tr, after);
+  else        tbody.appendChild(tr);
+}
+
+document.getElementById('add-kw-form')?.addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const inp   = this.querySelector('input[name=phrase]');
+  const phrase = inp.value.trim().toLowerCase();
+  if (!phrase) return;
+  try {
+    const fd = new FormData(this);
+    const res  = await csrfFetch(this.action, fd);
+    const data = await res.json();
+    if (!data.ok) {
+      alert(data.error === 'duplicate' ? `«${phrase}» already exists.` : 'Could not add keyword.');
+      return;
+    }
+    const row = buildKwRow(data.id, data.phrase);
+    insertRowSorted(row, data.phrase);
+    // Add to datalist and phrase-count map
+    const opt = document.createElement('option');
+    opt.value = data.phrase;
+    document.getElementById('kw-list')?.appendChild(opt);
+    _phraseCount[data.phrase] = 0;
+    inp.value = '';
+    inp.focus();
+  } catch { alert('Failed to add keyword.'); }
+});
+
 // ── Retag single keyword ──────────────────────────────────────────────────────
 async function retagKeyword(kid, btn) {
-  if (!confirm('Re-tag all papers for this keyword?\nThis scans all 76k+ papers and may take ~10 seconds.')) return;
+  if (!confirm('Re-tag all papers for this keyword?\nThis scans all papers and may take ~10 seconds.')) return;
   btn.disabled = true;
   btn.textContent = '…';
   try {

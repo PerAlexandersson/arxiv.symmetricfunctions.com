@@ -9,6 +9,10 @@ table.users-table th {
   text-align: left; padding: 0.4rem 0.6rem;
   border-bottom: 2px solid var(--c-border, #ccc); white-space: nowrap;
 }
+table.users-table th.num, table.users-table td.num {
+  text-align: right;
+}
+.stat-zero { color: var(--c-muted, #bbb); }
 table.users-table td {
   padding: 0.35rem 0.6rem;
   border-bottom: 1px solid var(--c-border-light, #eee);
@@ -36,6 +40,9 @@ table.users-table tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
       <th>Provider</th>
       <th>ORCID / ID</th>
       <th>Registered</th>
+      <th class="num" title="Watched keywords">Keywords</th>
+      <th class="num" title="Watched authors">Authors</th>
+      <th class="num" title="Papers saved to lists">List papers</th>
     </tr>
   </thead>
   <tbody>
@@ -52,6 +59,9 @@ table.users-table tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
         {% endif %}
       </td>
       <td style="white-space:nowrap">{{ u.created_at.strftime('%Y-%m-%d') }}</td>
+      <td class="num {% if not u.watched_keywords %}stat-zero{% endif %}">{{ u.watched_keywords }}</td>
+      <td class="num {% if not u.watched_authors  %}stat-zero{% endif %}">{{ u.watched_authors }}</td>
+      <td class="num {% if not u.list_papers      %}stat-zero{% endif %}">{{ u.list_papers }}</td>
     </tr>
     {% endfor %}
   </tbody>

@@ -241,15 +241,19 @@ def mark_candidate():
     cursor.execute("DELETE FROM keyword_aliases    WHERE alias  = %s", (phrase,))
 
     if status == 'useful':
-        if existing_kw_id:
-            # Already a keyword — update phrase in place, keep paper_keywords intact
-            cursor.execute("UPDATE keywords SET phrase = %s WHERE id = %s",
-                           (keyword_phrase, existing_kw_id))
-        else:
-            cursor.execute(
-                "INSERT INTO keywords (phrase, score) VALUES (%s, 5)",
-                (keyword_phrase,)
-            )
+        try:
+            if existing_kw_id:
+                cursor.execute("UPDATE keywords SET phrase = %s WHERE id = %s",
+                               (keyword_phrase, existing_kw_id))
+            else:
+                cursor.execute(
+                    "INSERT IGNORE INTO keywords (phrase, score) VALUES (%s, 5)",
+                    (keyword_phrase,)
+                )
+        except pymysql.IntegrityError:
+            flash(f'Could not save «{keyword_phrase}»: a keyword with that phrase already exists.')
+            cursor.close()
+            return redirect(request.referrer or url_for('admin.candidates'))
     elif status == 'alias' and alias_of:
         # Look up the canonical keyword
         cursor.execute("SELECT id FROM keywords WHERE phrase = %s", (alias_of,))
@@ -257,11 +261,17 @@ def mark_candidate():
         if row:
             canonical_id = row['id']
             if existing_kw_id:
-                # Reassign paper_keywords and sub-aliases before deleting
-                cursor.execute("UPDATE paper_keywords SET keyword_id = %s WHERE keyword_id = %s",
-                               (canonical_id, existing_kw_id))
-                cursor.execute("UPDATE keyword_aliases SET keyword_id = %s WHERE keyword_id = %s",
-                               (canonical_id, existing_kw_id))
+                # Move paper_keywords and sub-aliases to canonical; avoid duplicate key errors
+                cursor.execute("""
+                    INSERT IGNORE INTO paper_keywords (paper_id, keyword_id)
+                    SELECT paper_id, %s FROM paper_keywords WHERE keyword_id = %s
+                """, (canonical_id, existing_kw_id))
+                cursor.execute("DELETE FROM paper_keywords WHERE keyword_id = %s", (existing_kw_id,))
+                cursor.execute("""
+                    INSERT IGNORE INTO keyword_aliases (keyword_id, alias)
+                    SELECT %s, alias FROM keyword_aliases WHERE keyword_id = %s
+                """, (canonical_id, existing_kw_id))
+                cursor.execute("DELETE FROM keyword_aliases WHERE keyword_id = %s", (existing_kw_id,))
                 cursor.execute("DELETE FROM keywords WHERE id = %s", (existing_kw_id,))
             cursor.execute(
                 "INSERT IGNORE INTO keyword_aliases (keyword_id, alias) VALUES (%s, %s)",
@@ -274,7 +284,7 @@ def mark_candidate():
                                (keyword_phrase, existing_kw_id))
             else:
                 cursor.execute(
-                    "INSERT INTO keywords (phrase, score) VALUES (%s, 5)",
+                    "INSERT IGNORE INTO keywords (phrase, score) VALUES (%s, 5)",
                     (keyword_phrase,)
                 )
     else:
@@ -322,32 +332,44 @@ def keywords():
 @login_required
 def add_keyword():
     phrase = request.form.get('phrase', '').strip().lower()
-    if phrase:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT IGNORE INTO keywords (phrase, score) VALUES (%s, 5)",
-            (phrase,)
-        )
-        conn.commit()
-        cursor.close()
-    return redirect(url_for('admin.keywords'))
+    if not phrase:
+        return jsonify({'ok': False, 'error': 'empty'}), 400
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT IGNORE INTO keywords (phrase, score) VALUES (%s, 5)",
+        (phrase,)
+    )
+    conn.commit()
+    kid = cursor.lastrowid
+    cursor.close()
+    if not kid:
+        return jsonify({'ok': False, 'error': 'duplicate'}), 409
+    return jsonify({'ok': True, 'id': kid, 'phrase': phrase})
 
 
 @admin.route('/keywords/<int:kid>/inline', methods=['POST'])
 @login_required
 def inline_edit(kid):
     field = request.form.get('field')
-    col = {'url': 'url', 'phrase': 'phrase'}.get(field)
-    if not col:
+    _COL_SQL = {
+        'phrase': 'UPDATE keywords SET phrase=%s WHERE id=%s',
+        'url':    'UPDATE keywords SET url=%s    WHERE id=%s',
+    }
+    sql = _COL_SQL.get(field)
+    if not sql:
         abort(400)
     value = request.form.get('value', '').strip() or None
-    if col == 'phrase' and not value:
+    if field == 'phrase' and not value:
         return jsonify({'ok': False, 'error': 'phrase cannot be empty'}), 400
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute(f"UPDATE keywords SET {col}=%s WHERE id=%s", (value, kid))
-    conn.commit()
+    try:
+        cursor.execute(sql, (value, kid))
+        conn.commit()
+    except pymysql.IntegrityError:
+        cursor.close()
+        return jsonify({'ok': False, 'error': 'duplicate'}), 409
     cursor.close()
     return jsonify({'ok': True, 'value': value})
 
@@ -469,7 +491,7 @@ def delete_keyword(kid):
     cursor.execute("DELETE FROM keywords WHERE id = %s", (kid,))
     conn.commit()
     cursor.close()
-    return redirect(url_for('admin.keywords'))
+    return jsonify({'ok': True})
 
 
 @admin.route('/keywords/bulk_delete', methods=['POST'])
@@ -483,7 +505,7 @@ def bulk_delete():
         cursor.execute(f"DELETE FROM keywords WHERE id IN ({placeholders})", ids)
         conn.commit()
         cursor.close()
-    return redirect(url_for('admin.keywords'))
+    return jsonify({'ok': True, 'deleted': ids})
 
 
 @admin.route('/keywords/<int:kid>/retag', methods=['POST'])
@@ -550,7 +572,18 @@ def refetch_paper(arxiv_id):
 def users():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, provider, provider_id, display_name, created_at FROM users ORDER BY created_at DESC")
+    cursor.execute("""
+        SELECT u.id, u.provider, u.provider_id, u.display_name, u.created_at,
+               COUNT(DISTINCT wk.keyword_id) AS watched_keywords,
+               COUNT(DISTINCT wa.author_id)  AS watched_authors,
+               COUNT(DISTINCT ul.id)         AS list_papers
+        FROM users u
+        LEFT JOIN user_watched_keywords wk ON wk.user_id = u.id
+        LEFT JOIN user_watched_authors  wa ON wa.user_id = u.id
+        LEFT JOIN user_lists            ul ON ul.user_id = u.id
+        GROUP BY u.id, u.provider, u.provider_id, u.display_name, u.created_at
+        ORDER BY u.created_at DESC
+    """)
     all_users = cursor.fetchall()
     cursor.close()
     return render_template('admin/users.html', users=all_users)
