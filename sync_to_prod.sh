@@ -79,6 +79,11 @@ else
         "$REMOTE_HOST:~/$REMOTE_PATH/src/static/"
 
     scp -P "$REMOTE_PORT" \
+        "$SCRIPT_DIR/src/static/style.css" \
+        "$SCRIPT_DIR/src/static/utils.js" \
+        "$REMOTE_HOST:~/$REMOTE_PATH/public_html/static/"
+
+    scp -P "$REMOTE_PORT" \
         "$SCRIPT_DIR/src/templates/"*.html \
         "$REMOTE_HOST:~/$REMOTE_PATH/src/templates/"
     scp -P "$REMOTE_PORT" \
