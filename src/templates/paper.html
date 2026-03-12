@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from '_macros.html' import kw_tag_link %}
 
 {% block title %}{{ paper.title }} - arXiv Combinatorics{% endblock %}
 
@@ -50,7 +51,7 @@
     {% if paper.keywords %}
     <div class="paper-kw-tags" style="margin-top: 0.4rem; line-height: 2;">
       {% for kw in paper.keywords %}
-        <a href="/keyword/{{ kw.phrase | replace(' ', '%20') }}" class="kw-tag">{{ kw.phrase }}</a>
+        {{ kw_tag_link(kw) }}
       {% endfor %}
     </div>
     {% endif %}

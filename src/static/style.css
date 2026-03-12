@@ -1128,6 +1128,57 @@ body.modal-open { overflow: hidden; }
   border-color: #3a6080;
   color: #fff;
 }
+/* kw-tag with info button (keyword has an associated URL) */
+.kw-tag--has-info {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+}
+.kw-tag--has-info .kw-tag__link {
+  padding: 0.15rem 0.2rem 0.15rem 0.5rem;
+  color: inherit;
+  text-decoration: none;
+}
+.kw-tag--has-info.kw-tag--small .kw-tag__link {
+  padding: 0.1rem 0.15rem 0.1rem 0.35rem;
+}
+.kw-tag__info {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.4rem 0 0.1rem;
+  color: inherit;
+  text-decoration: none;
+  opacity: 0.5;
+  line-height: 1;
+  transition: opacity 0.1s;
+}
+.kw-tag--has-info:hover .kw-tag__info { opacity: 1; }
+
+/* Watched keyword highlight */
+.kw-tag--watched {
+  border-color: var(--c-brand);
+  color: var(--c-brand);
+  font-weight: 500;
+}
+.kw-tag--watched:hover {
+  background: var(--c-brand);
+  border-color: var(--c-brand);
+  color: #fff;
+}
+
+/* Watched paper: left accent border */
+.paper--watched {
+  border-left: 3px solid var(--c-brand);
+  padding-left: 0.6rem;
+}
+
+/* Watched author: bold + brand colour */
+.paper-authors a.watched-author {
+  font-weight: 600;
+  color: var(--c-brand);
+}
+.paper-authors a.watched-author:hover { color: var(--c-brand); }
+
 .paper-kw-tags--list {
   margin-top: 0.5rem;
   line-height: 1.8;

@@ -23,9 +23,22 @@
 {% endmacro %}
 
 
+{% macro kw_tag_link(kw, small=False, watched=False) %}
+{% set cls = 'kw-tag' + (' kw-tag--small' if small else '') + (' kw-tag--watched' if watched else '') %}
+{% if kw.url %}<span class="{{ cls }} kw-tag--has-info"><a href="/keyword/{{ kw.phrase | replace(' ', '%20') }}" class="kw-tag__link">{{ kw.phrase }}</a><a href="{{ kw.url }}" target="_blank" rel="noopener" class="kw-tag__info" title="Reference page for «{{ kw.phrase }}»"><svg viewBox="0 0 12 12" width="10" height="10" fill="currentColor" aria-hidden="true"><circle cx="6" cy="6" r="5.5" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="5.3" y="5" width="1.4" height="4.5" rx="0.7"/><circle cx="6" cy="3.2" r="0.8"/></svg></a></span>{% else %}<a href="/keyword/{{ kw.phrase | replace(' ', '%20') }}" class="{{ cls }}">{{ kw.phrase }}</a>{% endif %}
+{% endmacro %}
+
+
 {% macro render_paper(paper, latest_date=None, list_cat_id=None) %}
 {% set is_latest = latest_date and paper.published_date == latest_date %}
-<div class="paper{% if is_latest %} paper--new{% endif %}" id="paper-{{ paper.arxiv_id }}">
+{% set ns = namespace(is_watched=false) %}
+{% if watched_kw_phrases %}
+  {% for kw in paper.keywords %}{% if kw.phrase in watched_kw_phrases %}{% set ns.is_watched = true %}{% endif %}{% endfor %}
+{% endif %}
+{% if watched_author_names %}
+  {% for author in paper.authors %}{% if author in watched_author_names %}{% set ns.is_watched = true %}{% endif %}{% endfor %}
+{% endif %}
+<div class="paper{% if is_latest %} paper--new{% endif %}{% if ns.is_watched %} paper--watched{% endif %}" id="paper-{{ paper.arxiv_id }}">
     <div class="paper-authors-row">
         <div class="paper-date{% if is_latest %} latest-date{% endif %}">
             {{ paper.published_date }}
@@ -38,7 +51,7 @@
         </div>
         <div class="paper-authors">
             {% for author in paper.authors %}
-                <a href="/author/{{ author | slugify }}">{{ author }}</a>{% if not loop.last %}, {% endif %}
+                <a href="/author/{{ author | slugify }}"{% if watched_author_names and author in watched_author_names %} class="watched-author"{% endif %}>{{ author }}</a>{% if not loop.last %}, {% endif %}
             {% endfor %}
         </div>
         <div class="paper-links">
@@ -106,7 +119,7 @@
         {% if paper.keywords %}
         <div class="paper-kw-tags paper-kw-tags--list">
           {% for kw in paper.keywords %}
-            <a href="/keyword/{{ kw.phrase | replace(' ', '%20') }}" class="kw-tag kw-tag--small">{{ kw.phrase }}</a>
+            {{ kw_tag_link(kw, small=True, watched=(watched_kw_phrases and kw.phrase in watched_kw_phrases)) }}
           {% endfor %}
         </div>
         {% endif %}

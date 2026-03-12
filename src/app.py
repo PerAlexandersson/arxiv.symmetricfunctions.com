@@ -62,8 +62,31 @@ def inject_current_user():
             'name':     session.get('user_name', ''),
             'orcid_id': session.get('orcid_id', ''),
         }
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT k.phrase
+                FROM user_watched_keywords uwk
+                JOIN keywords k ON k.id = uwk.keyword_id
+                WHERE uwk.user_id = %s
+            """, (user_id,))
+            ctx['watched_kw_phrases'] = frozenset(row['phrase'] for row in cursor.fetchall())
+            cursor.execute("""
+                SELECT a.name
+                FROM user_watched_authors uwa
+                JOIN authors a ON a.id = uwa.author_id
+                WHERE uwa.user_id = %s
+            """, (user_id,))
+            ctx['watched_author_names'] = frozenset(row['name'] for row in cursor.fetchall())
+            cursor.close()
+        except Exception:
+            ctx['watched_kw_phrases']   = frozenset()
+            ctx['watched_author_names'] = frozenset()
     else:
-        ctx['current_user'] = None
+        ctx['current_user']          = None
+        ctx['watched_kw_phrases']    = frozenset()
+        ctx['watched_author_names']  = frozenset()
     return ctx
 
 
