@@ -70,6 +70,10 @@ else
         "$REMOTE_HOST:~/$REMOTE_PATH/"
 
     scp -P "$REMOTE_PORT" \
+        "$SCRIPT_DIR/.env.production" \
+        "$REMOTE_HOST:~/$REMOTE_PATH/.env"
+
+    scp -P "$REMOTE_PORT" \
         "$SCRIPT_DIR/src/"*.py \
         "$REMOTE_HOST:~/$REMOTE_PATH/src/"
 

@@ -40,12 +40,6 @@ POST /api/comments/<id>/edit    → edit own comment body
 
 ## Other Ideas
 
-- **Abstract keyword linking** — wrap matched keyword phrases in abstracts with
-  `<a href="keyword.url">` links at render time (for keywords that have a URL set).
-  Would make abstracts navigable to the symmetricfunctions.com reference pages.
-
 - **"Similar papers" section** — on the paper detail page, list papers sharing the
   most keyword tags (easy to query from `paper_keywords`).
 
-- **Keyword cloud** — a `/keywords` page listing all active keywords sized by paper
-  count, linking to their `/keyword/<phrase>` pages.

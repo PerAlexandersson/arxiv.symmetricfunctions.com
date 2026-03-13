@@ -13,7 +13,7 @@ import requests as http_requests
 from flask import (Blueprint, render_template, redirect, url_for,
                    session, request, flash, current_app)
 from authlib.integrations.flask_client import OAuth
-from config import ORCID_CLIENT_ID, ORCID_CLIENT_SECRET
+from config import ORCID_CLIENT_ID, ORCID_CLIENT_SECRET, ADMIN_ORCID
 from db import get_db_connection
 
 DEV_ORCID_ID = os.getenv('DEV_ORCID_ID', '')
@@ -66,6 +66,8 @@ def _set_session(user_id, name, orcid_id):
     session['user_id']   = user_id
     session['user_name'] = name
     session['orcid_id']  = orcid_id
+    if ADMIN_ORCID and orcid_id == ADMIN_ORCID:
+        session['admin_logged_in'] = True
 
 
 def _upsert_user(provider, provider_id, display_name):
@@ -151,7 +153,8 @@ def dev_login():
 
 @auth.route('/logout')
 def logout():
-    session.pop('user_id',   None)
-    session.pop('user_name', None)
-    session.pop('orcid_id',  None)
+    session.pop('user_id',        None)
+    session.pop('user_name',      None)
+    session.pop('orcid_id',       None)
+    session.pop('admin_logged_in', None)
     return redirect(url_for('index'))

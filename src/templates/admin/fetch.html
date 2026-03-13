@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Fetch Papers — Admin{% endblock %}
+
+{% block extra_css %}
+<style>
+.fetch-form { max-width: 480px; margin-top: 1rem; }
+.fetch-form .row { display: flex; gap: 1rem; margin-bottom: 1rem; align-items: flex-end; }
+.fetch-form label { display: block; font-size: 0.9rem; margin-bottom: 0.3rem; }
+.fetch-form input[type=date], .fetch-form input[type=number] {
+  width: 100%; padding: 0.4rem 0.6rem; font-size: 0.9rem;
+  border: 1px solid var(--c-border, #ccc); border-radius: 4px;
+  background: var(--c-bg, #fff); color: var(--c-text, #000);
+}
+.fetch-form .sep {
+  font-size: 0.85rem; color: var(--c-text-muted, #888);
+  margin: 1rem 0 0.6rem; border-top: 1px solid var(--c-border, #ddd); padding-top: 1rem;
+}
+.result-box {
+  margin-top: 1.5rem; padding: 1rem 1.2rem;
+  border: 1px solid var(--c-border, #ccc); border-radius: 4px;
+  font-size: 0.88rem;
+}
+.result-box.ok  { background: #f0f8f0; border-color: #b2d9b2; }
+.result-box.err { background: #fdf0f0; border-color: #e0b2b2; }
+.result-box pre { margin: 0.5rem 0 0; white-space: pre-wrap; font-size: 0.82rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'admin/_nav.html' %}
+
+<h2 style="margin-top: 0;">Fetch Papers</h2>
+<p style="font-size: 0.9rem; color: var(--c-muted, #666);">
+  Fetch new papers from arXiv. Use <em>Recent</em> for routine top-ups,
+  or <em>Date range</em> to backfill a specific period.
+</p>
+
+<form class="fetch-form" method="post">
+  <p class="sep">Recent papers</p>
+  <div class="row">
+    <div style="flex:1">
+      <label for="days">Days back</label>
+      <input type="number" id="days" name="days" value="3" min="1" max="30" style="width:6rem">
+    </div>
+    <div>
+      <button type="submit" name="mode" value="recent"
+              style="padding: 0.45rem 1.2rem; font-size: 0.9rem; cursor: pointer;
+                     background: var(--c-accent, #2a6); color: #fff;
+                     border: none; border-radius: 4px;"
+              onclick="this.disabled=true; this.textContent='Fetching…'; this.form.submit()">
+        Fetch recent
+      </button>
+    </div>
+  </div>
+
+  <p class="sep">Date range</p>
+  <div class="row">
+    <div style="flex:1">
+      <label for="from_date">From</label>
+      <input type="date" id="from_date" name="from_date"
+             value="{{ request.form.get('from_date', '') }}" max="{{ today }}">
+    </div>
+    <div style="flex:1">
+      <label for="to_date">To</label>
+      <input type="date" id="to_date" name="to_date"
+             value="{{ request.form.get('to_date', today) }}" max="{{ today }}">
+    </div>
+    <div>
+      <button type="submit" name="mode" value="range"
+              style="padding: 0.45rem 1.2rem; font-size: 0.9rem; cursor: pointer;
+                     background: var(--c-brand, #357); color: #fff;
+                     border: none; border-radius: 4px;"
+              onclick="this.disabled=true; this.textContent='Fetching…'; this.form.submit()">
+        Fetch range
+      </button>
+    </div>
+  </div>
+</form>
+
+{% if result %}
+<div class="result-box {{ 'ok' if result.ok else 'err' }}">
+  <strong>{{ 'Done' if result.ok else 'Error' }}</strong>
+  <pre>{{ result.log }}</pre>
+</div>
+{% endif %}
+{% endblock %}

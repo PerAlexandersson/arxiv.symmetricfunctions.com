@@ -40,6 +40,9 @@ use_local.sh
 # Claude Code
 .claude/
 
+# Local-only docs (server-specific, not repo state)
+CRONJOBS.md
+
 # OS
 .DS_Store
 Thumbs.db

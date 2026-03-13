@@ -805,6 +805,7 @@ a.paper-icon-btn.nav-icon-disabled:hover {
 /* Ko-fi support button */
 .nav-kofi { color: #f48525 !important; }
 .nav-kofi:hover { color: #d4711a !important; background: var(--c-bg-gray); }
+.nav-kofi svg { width: 1.375rem; height: 1.375rem; }
 
 /* "Logged in as" line below site title */
 .site-logged-in {

@@ -633,3 +633,31 @@ def retag():
     cursor.close()
     return render_template('admin/retag.html',
                            earliest=earliest, today=today, result=result)
+
+
+@admin.route('/fetch', methods=['GET', 'POST'])
+@login_required
+def fetch():
+    today = str(date_type.today())
+    result = None
+
+    if request.method == 'POST':
+        import io, contextlib
+        mode      = request.form.get('mode', 'recent')
+        from_date = request.form.get('from_date', '')
+        to_date   = request.form.get('to_date',   today)
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf):
+                if mode == 'range' and from_date:
+                    from fetch_arxiv import fetch_date_range
+                    fetch_date_range(from_date, to_date)
+                else:
+                    days = int(request.form.get('days', 1))
+                    from fetch_arxiv import fetch_recent_papers
+                    fetch_recent_papers(days)
+            result = {'log': buf.getvalue(), 'ok': True}
+        except Exception as e:
+            result = {'log': buf.getvalue() + f'\nERROR: {e}', 'ok': False}
+
+    return render_template('admin/fetch.html', today=today, result=result)

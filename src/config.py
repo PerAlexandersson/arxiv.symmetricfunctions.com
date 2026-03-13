@@ -32,6 +32,9 @@ FETCH_SECRET = os.getenv('FETCH_SECRET', '')
 # Admin UI password
 ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', '')
 
+# ORCID iD that is automatically granted admin on login
+ADMIN_ORCID = os.getenv('ADMIN_ORCID', '')
+
 # ORCID OAuth credentials (register at https://orcid.org/developer-tools)
 ORCID_CLIENT_ID     = os.getenv('ORCID_CLIENT_ID', '')
 ORCID_CLIENT_SECRET = os.getenv('ORCID_CLIENT_SECRET', '')
