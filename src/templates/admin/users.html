@@ -69,7 +69,7 @@ table.users-table tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
       <td class="num {% if not u.watched_authors  %}stat-zero{% endif %}">{{ u.watched_authors }}</td>
       <td class="num {% if not u.list_papers      %}stat-zero{% endif %}">{{ u.list_papers }}</td>
       <td><button class="btn-del-user" title="Delete user"
-                  onclick="deleteUser({{ u.id }}, {{ u.display_name | tojson }}, this)">✕</button></td>
+                  onclick='deleteUser({{ u.id }}, {{ u.display_name | tojson }}, this)'>✕</button></td>
     </tr>
     {% endfor %}
   </tbody>

@@ -22,6 +22,66 @@
   {% endif %}
 </div>
 
+{% if is_admin %}
+{% if all_kw_phrases %}
+<datalist id="akw-phrases">
+  {% for p in all_kw_phrases %}<option value="{{ p }}">{% endfor %}
+</datalist>
+{% endif %}
+<div class="admin-kw-strip">
+  <div class="admin-kw-strip__label">Admin</div>
+  <div class="admin-kw-strip__fields">
+
+    <label>Score
+      <input type="number" value="{{ keyword.score }}" min="1" max="10" id="akw-score"
+             class="akw-score-input" onchange="akwSetScore(this)">
+    </label>
+
+    <label>Aliases
+      <div class="alias-list" id="akw-alias-list">
+        {% for a in aliases %}
+        <span class="alias-chip" id="alias-chip-{{ a.id }}">
+          <span>{{ a.alias }}</span>
+          <button type="button" onclick="akwDelAlias({{ a.id }})" title="Remove">×</button>
+        </span>
+        {% endfor %}
+        <button type="button" class="alias-add-btn" id="akw-alias-btn"
+                onclick="akwShowAliasInput()">+ alias</button>
+        <button type="button" class="alias-add-btn merge-btn" id="akw-merge-btn"
+                onclick="akwShowMergeInput()">⇒ merge into…</button>
+        <input type="text" class="alias-add-input" id="akw-alias-input"
+               placeholder="synonym…" list="akw-phrases"
+               onkeydown="akwAliasKeydown(event)"
+               onblur="akwScheduleHideAlias()">
+        <input type="text" class="alias-add-input" id="akw-merge-input"
+               placeholder="merge into…" list="akw-phrases"
+               onkeydown="akwMergeKeydown(event)"
+               onblur="akwScheduleHideMerge()">
+      </div>
+    </label>
+
+    <label>URL
+      <input type="text" class="inline-edit akw-url-field" id="akw-url"
+             value="{{ keyword.url or '' }}" placeholder="https://…"
+             onblur="akwSaveUrl(this)"
+             onkeydown="if(event.key==='Enter')this.blur(); if(event.key==='Escape'){this.value=this.defaultValue;this.blur();}">
+    </label>
+
+    <div style="display:flex; align-items:flex-end; gap:0.3rem; padding-bottom:0.05rem;">
+      <button type="button" class="btn-retag" id="akw-retag-btn"
+              onclick="akwRetag(this)" title="Re-tag all papers for this keyword">↺</button>
+      <button type="button" class="btn-trash" title="Delete this keyword"
+              onclick="akwDelete()">
+        <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>
+        </svg>
+      </button>
+    </div>
+
+  </div>
+</div>
+{% endif %}
+
 {% if papers %}
   {% for paper in papers %}
     {{ render_paper(paper, none) }}
@@ -41,6 +101,82 @@
 }
 .watch-btn:hover { color: var(--c-link); border-color: var(--c-link); }
 .watch-btn.watching { background: var(--c-link); color: #fff; border-color: var(--c-link); }
+
+/* Admin strip */
+.admin-kw-strip {
+  margin: 1rem 0 1.5rem;
+  padding: 0.7rem 1rem;
+  border: 1px solid var(--c-border);
+  border-radius: 5px;
+  background: var(--c-bg-header);
+  font-size: 0.88rem;
+}
+.admin-kw-strip__label {
+  font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--c-text-muted); margin-bottom: 0.6rem;
+}
+.admin-kw-strip__fields {
+  display: flex; flex-wrap: wrap; gap: 0.6rem 1.4rem; align-items: flex-end;
+}
+.admin-kw-strip__fields label {
+  display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem;
+  color: var(--c-text-muted);
+}
+.akw-score-input {
+  width: 3.2em; text-align: center; padding: 0.15rem 0.2rem;
+  border: 1px solid var(--c-border); border-radius: 3px;
+  background: var(--c-bg-surface, #fff); color: var(--c-text-main);
+  font-size: 0.85rem;
+}
+.inline-edit {
+  border: none; background: transparent;
+  font-size: 0.85rem; font-family: inherit; color: inherit;
+  padding: 0.15rem 0.3rem; border-radius: 3px; outline: none;
+}
+.inline-edit:hover { background: var(--c-bg-alt, #f0f0f0); }
+.inline-edit:focus { background: var(--c-bg, #fff); outline: 1px solid var(--c-accent, #2a6); }
+.inline-edit.saved  { outline: 2px solid #4a4 !important; }
+.inline-edit.error  { outline: 2px solid #c44 !important; }
+.akw-url-field { min-width: 14rem; }
+.alias-list { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; }
+.alias-chip {
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  padding: 0.1rem 0.45rem; border-radius: 99px;
+  background: var(--c-bg-alt, #eee); font-size: 0.78rem;
+  border: 1px solid var(--c-border); font-family: monospace;
+}
+.alias-chip button {
+  background: none; border: none; cursor: pointer; padding: 0;
+  color: var(--c-text-muted); font-size: 0.9rem; line-height: 1;
+}
+.alias-chip button:hover { color: #c00; }
+.alias-add-btn {
+  background: none; border: 1px dashed var(--c-border);
+  border-radius: 99px; padding: 0.1rem 0.5rem; cursor: pointer;
+  font-size: 0.75rem; color: var(--c-text-muted);
+}
+.alias-add-btn:hover { border-color: var(--c-accent, #2a6); color: var(--c-accent, #2a6); }
+.merge-btn { border-color: #c9aaec; color: #7a3ab5; }
+.merge-btn:hover { border-color: #7a3ab5; color: #5a1a8a; }
+.alias-add-input {
+  display: none; font-size: 0.8rem; font-family: monospace;
+  border: 1px solid var(--c-accent, #2a6); border-radius: 3px;
+  padding: 0.1rem 0.35rem; width: 130px;
+  background: var(--c-bg, #fff); color: var(--c-text, #000);
+}
+.btn-retag {
+  background: none; border: none; cursor: pointer; font-size: 0.95rem;
+  color: var(--c-text-sub, #888); padding: 0 3px; vertical-align: middle;
+  transition: color 0.15s;
+}
+.btn-retag:hover { color: var(--c-link, #2a6); }
+.btn-retag:disabled { opacity: 0.4; cursor: default; }
+.btn-trash {
+  background: none; border: none; cursor: pointer; padding: 0.1rem 0.2rem;
+  color: var(--c-muted, #aaa); line-height: 1;
+}
+.btn-trash:hover { color: #c00; }
+.btn-trash svg { width: 1rem; height: 1rem; vertical-align: middle; }
 </style>
 {% endblock %}
 
@@ -63,5 +199,151 @@ function toggleWatch(type, id, btn) {
     }
   });
 }
+
+{% if is_admin %}
+const _kid = {{ keyword.id }};
+
+async function akwSetScore(input) {
+  const prev = input.defaultValue;
+  const fd = new FormData(); fd.append('score', input.value);
+  try {
+    const res = await csrfFetch(`/admin/keywords/${_kid}/score`, fd);
+    if (!res.ok) throw new Error();
+    input.defaultValue = input.value;
+    akwFlash(input, true);
+  } catch { alert('Failed to save score'); input.value = prev; }
+}
+
+async function akwSaveUrl(inp) {
+  const value = inp.value.trim();
+  if (value === (inp.defaultValue || '')) return;
+  const fd = new FormData(); fd.append('field', 'url'); fd.append('value', value);
+  try {
+    const res  = await csrfFetch(`/admin/keywords/${_kid}/inline`, fd);
+    const data = await res.json();
+    if (data.ok) { inp.defaultValue = value; akwFlash(inp, true); location.reload(); }
+    else { akwFlash(inp, false); inp.value = inp.defaultValue; }
+  } catch { akwFlash(inp, false); inp.value = inp.defaultValue; }
+}
+
+let _aliasHideTimer, _mergeHideTimer;
+
+function akwShowAliasInput() {
+  document.getElementById('akw-alias-btn').style.display = 'none';
+  const inp = document.getElementById('akw-alias-input');
+  inp.style.display = 'inline-block'; inp.focus();
+}
+function akwHideAliasInput() {
+  document.getElementById('akw-alias-input').style.display = 'none';
+  document.getElementById('akw-alias-input').value = '';
+  document.getElementById('akw-alias-btn').style.display = '';
+}
+function akwScheduleHideAlias() { _aliasHideTimer = setTimeout(akwHideAliasInput, 150); }
+function akwAliasKeydown(e) {
+  clearTimeout(_aliasHideTimer);
+  if (e.key === 'Enter')  { e.preventDefault(); akwAddAlias(); }
+  if (e.key === 'Escape') { akwHideAliasInput(); }
+}
+
+async function akwAddAlias() {
+  const inp   = document.getElementById('akw-alias-input');
+  const alias = inp.value.trim().toLowerCase();
+  if (!alias) { akwHideAliasInput(); return; }
+  const fd = new FormData(); fd.append('alias', alias);
+  try {
+    const res  = await csrfFetch(`/admin/keywords/${_kid}/aliases/add`, fd);
+    const data = await res.json();
+    if (!data.ok) {
+      alert({ duplicate: `«${alias}» is already an alias of another keyword.`,
+              self: 'An alias cannot be the same as the keyword itself.' }[data.error]
+            || 'Error adding alias.');
+      inp.select(); return;
+    }
+    const list = document.getElementById('akw-alias-list');
+    const btn  = document.getElementById('akw-alias-btn');
+    const chip = document.createElement('span');
+    chip.className = 'alias-chip'; chip.id = 'alias-chip-' + data.id;
+    chip.innerHTML = `<span>${data.alias}</span>`
+      + `<button type="button" onclick="akwDelAlias(${data.id})" title="Remove">×</button>`;
+    list.insertBefore(chip, btn);
+    akwHideAliasInput();
+  } catch { alert('Error adding alias.'); }
+}
+
+async function akwDelAlias(aid) {
+  try {
+    const res  = await csrfFetch(`/admin/keywords/${_kid}/aliases/${aid}/delete`, new FormData());
+    const data = await res.json();
+    if (data.ok) document.getElementById('alias-chip-' + aid).remove();
+    else alert('Failed to remove alias.');
+  } catch { alert('Error removing alias.'); }
+}
+
+function akwShowMergeInput() {
+  document.getElementById('akw-merge-btn').style.display = 'none';
+  const inp = document.getElementById('akw-merge-input');
+  inp.style.display = 'inline-block'; inp.focus();
+}
+function akwHideMergeInput() {
+  document.getElementById('akw-merge-input').style.display = 'none';
+  document.getElementById('akw-merge-input').value = '';
+  document.getElementById('akw-merge-btn').style.display = '';
+}
+function akwScheduleHideMerge() { _mergeHideTimer = setTimeout(akwHideMergeInput, 200); }
+function akwMergeKeydown(e) {
+  clearTimeout(_mergeHideTimer);
+  if (e.key === 'Enter')  { e.preventDefault(); akwDoMerge(); }
+  if (e.key === 'Escape') { akwHideMergeInput(); }
+}
+
+async function akwDoMerge() {
+  const inp         = document.getElementById('akw-merge-input');
+  const into_phrase = inp.value.trim().toLowerCase();
+  if (!into_phrase) { akwHideMergeInput(); return; }
+  const srcPhrase   = {{ keyword.phrase | tojson }};
+  if (into_phrase === srcPhrase) { alert('Cannot merge a keyword into itself.'); inp.select(); return; }
+  if (!confirm(`Merge «${srcPhrase}» into «${into_phrase}»?\n«${srcPhrase}» will become an alias and you will be redirected to «${into_phrase}».`)) return;
+  const fd = new FormData(); fd.append('into_phrase', into_phrase);
+  try {
+    const res  = await csrfFetch(`/admin/keywords/${_kid}/merge`, fd);
+    const data = await res.json();
+    if (data.ok) location.href = '/keyword/' + encodeURIComponent(into_phrase);
+    else alert('Merge failed: ' + (data.error || 'unknown'));
+  } catch { alert('Error during merge.'); }
+}
+
+async function akwRetag(btn) {
+  if (!confirm('Re-tag all papers for this keyword?\nThis may take ~10 seconds.')) return;
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const res  = await csrfFetch(`/admin/keywords/${_kid}/retag`, new FormData());
+    const data = await res.json();
+    btn.disabled = false;
+    if (data.ok) { btn.textContent = '✓'; setTimeout(() => { btn.textContent = '↺'; }, 1500); }
+    else { btn.textContent = '↺'; alert('Retag failed: ' + (data.error || 'unknown')); }
+  } catch { btn.disabled = false; btn.textContent = '↺'; alert('Retag request failed.'); }
+}
+
+async function akwDelete() {
+  const phrase = {{ keyword.phrase | tojson }};
+  const count  = {{ total }};
+  const papers = count === 1 ? '1 paper' : `${count} papers`;
+  const msg = count > 0
+    ? `Delete «${phrase}»?\n\nThis keyword tags ${papers}. The papers won't be deleted, but this tag will be removed from them.`
+    : `Delete «${phrase}»? (no papers tagged)`;
+  if (!confirm(msg)) return;
+  try {
+    const res  = await csrfFetch(`/admin/keywords/${_kid}/delete`, new FormData());
+    const data = await res.json();
+    if (data.ok) location.href = '/keywords';
+    else alert('Delete failed.');
+  } catch { alert('Delete request failed.'); }
+}
+
+function akwFlash(el, ok) {
+  el.classList.add(ok ? 'saved' : 'error');
+  setTimeout(() => el.classList.remove('saved', 'error'), 800);
+}
+{% endif %}
 </script>
 {% endblock %}

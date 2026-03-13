@@ -11,6 +11,7 @@ import io
 import contextlib
 import calendar
 import logging
+import random
 import re
 import pymysql
 import requests
@@ -171,6 +172,41 @@ except pymysql.Error as e:
     logger.warning("ensure_author_slugs skipped (DB unavailable): %s", e)
 
 
+def ensure_site_stats():
+    """Create site_stats table and seed it if empty. Uses its own connection (runs at startup)."""
+    conn = pymysql.connect(**DB_CONFIG, cursorclass=pymysql.cursors.DictCursor)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS site_stats (
+                id           TINYINT  NOT NULL DEFAULT 1,
+                paper_count  INT      NOT NULL DEFAULT 0,
+                author_count INT      NOT NULL DEFAULT 0,
+                latest_date  DATE,
+                updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """)
+        conn.commit()
+        cursor.execute("SELECT id FROM site_stats WHERE id = 1")
+        if not cursor.fetchone():
+            cursor.execute("""
+                INSERT INTO site_stats (id, paper_count, author_count, latest_date)
+                SELECT 1, COUNT(*), (SELECT COUNT(*) FROM authors), MAX(published_date)
+                FROM papers
+            """)
+            conn.commit()
+    finally:
+        cursor.close()
+        conn.close()
+
+
+try:
+    ensure_site_stats()
+except pymysql.Error as e:
+    logger.warning("ensure_site_stats skipped (DB unavailable): %s", e)
+
+
 
 
 @app.route('/')
@@ -183,16 +219,19 @@ def index():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Get total count and author count
-    cursor.execute("SELECT COUNT(*) as count FROM papers")
-    total = cursor.fetchone()['count']
-
-    cursor.execute("SELECT COUNT(*) as count FROM authors")
-    total_authors = cursor.fetchone()['count']
-
-    # Get latest published date
-    cursor.execute("SELECT MAX(published_date) as latest FROM papers")
-    latest_date = cursor.fetchone()['latest']
+    cursor.execute("SELECT paper_count, author_count, latest_date FROM site_stats WHERE id = 1")
+    stats = cursor.fetchone()
+    if stats:
+        total        = stats['paper_count']
+        total_authors = stats['author_count']
+        latest_date  = stats['latest_date']
+    else:
+        cursor.execute("SELECT COUNT(*) as count FROM papers")
+        total = cursor.fetchone()['count']
+        cursor.execute("SELECT COUNT(*) as count FROM authors")
+        total_authors = cursor.fetchone()['count']
+        cursor.execute("SELECT MAX(published_date) as latest FROM papers")
+        latest_date = cursor.fetchone()['latest']
 
     # Get papers for current page
     cursor.execute("""
@@ -346,6 +385,33 @@ def prolific_authors():
     return render_template('authors.html', columns=columns, total=n, sort=sort)
 
 
+@app.route('/keywords')
+def keyword_cloud():
+    """Keyword cloud — all active keywords sized by paper count."""
+    import math
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT k.id, k.phrase, k.url, COUNT(pk.paper_id) AS paper_count
+        FROM keywords k
+        LEFT JOIN paper_keywords pk ON pk.keyword_id = k.id
+        WHERE k.active = 1
+        GROUP BY k.id, k.phrase, k.url
+        HAVING paper_count > 0
+        ORDER BY k.phrase
+    """)
+    keywords = cursor.fetchall()
+    cursor.close()
+    if keywords:
+        hi = max(k['paper_count'] for k in keywords)
+        lo = min(k['paper_count'] for k in keywords)
+        lo_log = math.log(lo + 1)
+        span = math.log(hi + 1) - lo_log or 1
+        for k in keywords:
+            k['weight'] = (math.log(k['paper_count'] + 1) - lo_log) / span
+    return render_template('keywords.html', keywords=keywords)
+
+
 @app.route('/api/generate-bibtex', methods=['POST'])
 def generate_bibtex_api():
     """API endpoint to generate BibTeX from arXiv ID or DOI."""
@@ -421,7 +487,7 @@ def generate_bibtex_api():
 
 @app.route('/search')
 def search():
-    """Search papers by title or author."""
+    """Search papers by title, abstract, or author."""
     query = request.args.get('q', '').strip()[:500]  # cap at 500 chars
     sort  = request.args.get('sort', 'relevance')  # 'relevance' or 'date'
     page  = max(1, request.args.get('page', 1, type=int))
@@ -434,13 +500,31 @@ def search():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    author_term = f"%{query}%"
+    # 1. Exact author name match → redirect to their page
+    cursor.execute(
+        "SELECT slug FROM authors WHERE LOWER(name) = LOWER(%s) LIMIT 1",
+        (query,)
+    )
+    author = cursor.fetchone()
+    if author:
+        cursor.close()
+        return redirect(url_for('author_papers', author_slug=author['slug']))
 
-    # Get latest published date
-    cursor.execute("SELECT MAX(published_date) as latest FROM papers")
-    latest_date = cursor.fetchone()['latest']
+    # 2. Exact keyword phrase match → redirect to keyword page
+    cursor.execute(
+        "SELECT phrase FROM keywords WHERE phrase = %s AND active = 1",
+        (query.lower(),)
+    )
+    keyword = cursor.fetchone()
+    if keyword:
+        cursor.close()
+        return redirect(url_for('keyword_papers', phrase=keyword['phrase']))
 
-    # Keyword score subquery — aggregated per paper, independent of author join
+    # 3. Full-text / LIKE search on titles and abstracts
+    cursor.execute("SELECT latest_date FROM site_stats WHERE id = 1")
+    row = cursor.fetchone()
+    latest_date = row['latest_date'] if row else None
+
     kw_subquery = """
         (SELECT pk.paper_id, COALESCE(SUM(k.score), 0) AS kw_score
          FROM paper_keywords pk
@@ -452,21 +536,26 @@ def search():
                     if sort == 'relevance'
                     else "p.published_date DESC, p.id DESC")
 
-    # Use FULLTEXT for title/abstract when words are long enough (min 3 chars),
-    # fall back to LIKE for very short queries
     words = query.split()
     use_fulltext = all(len(w) >= 3 for w in words) and len(words) > 0
 
+    author_subquery = """
+        p.id IN (
+            SELECT pa.paper_id FROM paper_authors pa
+            JOIN authors a ON pa.author_id = a.id
+            WHERE a.name LIKE %s
+        )
+    """
+
     if use_fulltext:
         ft_query = '+' + ' +'.join(words)  # boolean mode: require all words
+        author_term = f"%{query}%"
 
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT COUNT(DISTINCT p.id) as count
             FROM papers p
-            LEFT JOIN paper_authors pa ON p.id = pa.paper_id
-            LEFT JOIN authors a ON pa.author_id = a.id
             WHERE MATCH(p.title, p.abstract) AGAINST(%s IN BOOLEAN MODE)
-               OR a.name LIKE %s
+               OR {author_subquery}
         """, (ft_query, author_term))
         total = cursor.fetchone()['count']
 
@@ -476,28 +565,19 @@ def search():
                    p.comment, p.primary_category,
                    COALESCE(kw.kw_score, 0) AS kw_score
             FROM papers p
-            LEFT JOIN paper_authors pa ON p.id = pa.paper_id
-            LEFT JOIN authors a ON pa.author_id = a.id
             LEFT JOIN {kw_subquery} ON p.id = kw.paper_id
             WHERE MATCH(p.title, p.abstract) AGAINST(%s IN BOOLEAN MODE)
-               OR a.name LIKE %s
-            GROUP BY p.id, p.arxiv_id, p.title, p.abstract,
-                     p.published_date, p.updated_date, p.journal_ref, p.doi,
-                     p.comment, p.primary_category, kw.kw_score
+               OR {author_subquery}
             ORDER BY {order_clause}
             LIMIT %s OFFSET %s
-        """, (ft_query, author_term, per_page, offset))
+        """, (ft_query, author_term, ft_query, author_term, per_page, offset))
     else:
         like_term = f"%{query}%"
 
-        cursor.execute("""
-            SELECT COUNT(DISTINCT p.id) as count
-            FROM papers p
-            LEFT JOIN paper_authors pa ON p.id = pa.paper_id
-            LEFT JOIN authors a ON pa.author_id = a.id
-            WHERE p.title LIKE %s
-               OR p.abstract LIKE %s
-               OR a.name LIKE %s
+        cursor.execute(f"""
+            SELECT COUNT(DISTINCT p.id) as count FROM papers p
+            WHERE p.title LIKE %s OR p.abstract LIKE %s
+               OR {author_subquery}
         """, (like_term, like_term, like_term))
         total = cursor.fetchone()['count']
 
@@ -507,15 +587,9 @@ def search():
                    p.comment, p.primary_category,
                    COALESCE(kw.kw_score, 0) AS kw_score
             FROM papers p
-            LEFT JOIN paper_authors pa ON p.id = pa.paper_id
-            LEFT JOIN authors a ON pa.author_id = a.id
             LEFT JOIN {kw_subquery} ON p.id = kw.paper_id
-            WHERE p.title LIKE %s
-               OR p.abstract LIKE %s
-               OR a.name LIKE %s
-            GROUP BY p.id, p.arxiv_id, p.title, p.abstract,
-                     p.published_date, p.updated_date, p.journal_ref, p.doi,
-                     p.comment, p.primary_category, kw.kw_score
+            WHERE p.title LIKE %s OR p.abstract LIKE %s
+               OR {author_subquery}
             ORDER BY {order_clause}
             LIMIT %s OFFSET %s
         """, (like_term, like_term, like_term, per_page, offset))
@@ -584,6 +658,20 @@ def keyword_papers(phrase):
         )
         watching = cursor.fetchone() is not None
 
+    # Admin: fetch aliases and all keyword phrases for autocomplete
+    cursor.execute(
+        "SELECT id, alias FROM keyword_aliases WHERE keyword_id=%s ORDER BY alias",
+        (keyword['id'],)
+    )
+    aliases = cursor.fetchall()
+
+    all_kw_phrases = []
+    if session.get('admin_logged_in'):
+        cursor.execute(
+            "SELECT phrase FROM keywords WHERE active = 1 ORDER BY phrase"
+        )
+        all_kw_phrases = [row['phrase'] for row in cursor.fetchall()]
+
     cursor.close()
 
     total_pages = (total + per_page - 1) // per_page
@@ -593,7 +681,9 @@ def keyword_papers(phrase):
                            page=page,
                            total_pages=total_pages,
                            total=total,
-                           watching=watching)
+                           watching=watching,
+                           aliases=aliases,
+                           all_kw_phrases=all_kw_phrases)
 
 
 @app.route('/category/<path:cat>')
@@ -814,7 +904,12 @@ def random_paper():
     """Redirect to a random paper."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT arxiv_id FROM papers ORDER BY RAND() LIMIT 1")
+    cursor.execute("SELECT MIN(id) as lo, MAX(id) as hi FROM papers")
+    bounds = cursor.fetchone()
+    if not bounds or not bounds['lo']:
+        abort(404)
+    rand_id = random.randint(bounds['lo'], bounds['hi'])
+    cursor.execute("SELECT arxiv_id FROM papers WHERE id >= %s LIMIT 1", (rand_id,))
     paper = cursor.fetchone()
     cursor.close()
     if not paper:
@@ -881,6 +976,21 @@ def fetch_papers():
     output = io.StringIO()
     with contextlib.redirect_stdout(output):
         fetch_recent_papers(days=days)
+
+    # Refresh cached stats
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO site_stats (id, paper_count, author_count, latest_date)
+        SELECT 1, COUNT(*), (SELECT COUNT(*) FROM authors), MAX(published_date)
+        FROM papers
+        ON DUPLICATE KEY UPDATE
+            paper_count  = VALUES(paper_count),
+            author_count = VALUES(author_count),
+            latest_date  = VALUES(latest_date)
+    """)
+    conn.commit()
+    cursor.close()
 
     return output.getvalue(), 200, {'Content-Type': 'text/plain; charset=utf-8'}
 

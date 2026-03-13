@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Keywords — arXiv Combinatorics{% endblock %}
+
+{% block extra_css %}
+<style>
+.kw-cloud {
+  line-height: 2.4;
+  word-spacing: 0.1rem;
+  margin-top: 1rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<h2 style="margin-top:0">Keywords <span style="font-weight:300; font-size:0.8em">({{ keywords|length }})</span></h2>
+
+{% if keywords %}
+<div class="kw-cloud">
+  {% for kw in keywords %}
+  {% set watched = watched_kw_phrases and kw.phrase in watched_kw_phrases %}
+  {% set cls = 'kw-tag' + (' kw-tag--watched' if watched else '') %}
+  {% set fsize = 'font-size: calc(0.72rem + ' ~ ((kw.weight * 0.6) | round(3)) ~ 'rem)' %}
+  {% if kw.url %}
+  <span class="{{ cls }} kw-tag--has-info" style="{{ fsize }}">
+    <a href="/keyword/{{ kw.phrase | replace(' ', '%20') }}" class="kw-tag__link">{{ kw.phrase }}</a>
+    <a href="{{ kw.url }}" target="_blank" rel="noopener" class="kw-tag__info"
+       title="{{ kw.paper_count }} paper{% if kw.paper_count != 1 %}s{% endif %} · Reference page for «{{ kw.phrase }}»">
+      <svg viewBox="0 0 12 12" width="10" height="10" fill="currentColor" aria-hidden="true"><circle cx="6" cy="6" r="5.5" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="5.3" y="5" width="1.4" height="4.5" rx="0.7"/><circle cx="6" cy="3.2" r="0.8"/></svg>
+    </a>
+  </span>
+  {% else %}
+  <a href="/keyword/{{ kw.phrase | replace(' ', '%20') }}" class="{{ cls }}" style="{{ fsize }}"
+     title="{{ kw.paper_count }} paper{% if kw.paper_count != 1 %}s{% endif %}">{{ kw.phrase }}</a>
+  {% endif %}
+  {% endfor %}
+</div>
+{% else %}
+<p style="color:var(--c-text-muted)">No keywords yet.</p>
+{% endif %}
+{% endblock %}
