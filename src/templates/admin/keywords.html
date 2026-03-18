@@ -47,7 +47,7 @@ table.kw-table col.col-del      { width: 58px; }
 }
 .help-popup {
   display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  background: var(--c-bg, #fff); border: 1px solid var(--c-border, #ccc);
+  background: var(--c-bg-surface, #fff); border: 1px solid var(--c-border, #ccc);
   border-radius: 6px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
   padding: 1.4rem 1.6rem; max-width: 420px; width: 90vw;
   font-size: 0.88rem; line-height: 1.55; z-index: 1000;
@@ -64,7 +64,7 @@ table.kw-table col.col-del      { width: 58px; }
   padding: 0.15rem 0.3rem; border-radius: 3px; outline: none;
 }
 .inline-edit:hover { background: var(--c-bg-alt, #f0f0f0); }
-.inline-edit:focus { background: var(--c-bg, #fff); outline: 1px solid var(--c-accent, #2a6); }
+.inline-edit:focus { background: var(--c-bg-surface, #fff); outline: 1px solid var(--c-accent, #2a6); }
 .inline-edit.saved { outline: 2px solid #4a4 !important; }
 .inline-edit.error  { outline: 2px solid #c44 !important; }
 .inline-edit.phrase-field { font-family: monospace; }
@@ -99,7 +99,7 @@ table.kw-table col.col-del      { width: 58px; }
   display: none; font-size: 0.8rem; font-family: monospace;
   border: 1px solid var(--c-accent, #2a6); border-radius: 3px;
   padding: 0.1rem 0.35rem; width: 130px;
-  background: var(--c-bg, #fff); color: var(--c-text, #000);
+  background: var(--c-bg-surface, #fff); color: var(--c-text-main, #000);
 }
 
 /* Trashcan delete button */
@@ -194,7 +194,7 @@ table.kw-table col.col-del      { width: 58px; }
   <input type="text" name="phrase" placeholder="Add keyword…" required
          style="flex:1; padding:0.4rem 0.6rem; font-size:0.9rem;
                 border:1px solid var(--c-border,#ccc); border-radius:4px;
-                background:var(--c-bg,#fff); color:var(--c-text,#000);">
+                background:var(--c-bg-surface,#fff); color:var(--c-text-main,#000);">
   <button type="submit"
           style="padding:0.4rem 0.9rem; font-size:0.9rem; cursor:pointer;
                  background:var(--c-accent,#2a6); color:#fff;
@@ -235,7 +235,7 @@ table.kw-table col.col-del      { width: 58px; }
       <input type="number" value="{{ kw.score }}" min="1" max="10"
              style="width:3em; text-align:center; padding:0.1rem;
                     border:1px solid var(--c-border,#ccc); border-radius:3px;
-                    background:var(--c-bg,#fff); color:var(--c-text,#000); font-size:0.85rem;"
+                    background:var(--c-bg-surface,#fff); color:var(--c-text-main,#000); font-size:0.85rem;"
              onchange="setScore({{ kw.id }}, this)">
     </td>
     <td>
@@ -608,7 +608,7 @@ function buildKwRow(kid, phrase) {
     <td><input type="checkbox" name="ids" value="${kid}" form="bulk-form"></td>
     <td>
       <input type="number" value="5" min="1" max="10"
-             style="width:3em;text-align:center;padding:0.1rem;border:1px solid var(--c-border,#ccc);border-radius:3px;background:var(--c-bg,#fff);color:var(--c-text,#000);font-size:0.85rem;"
+             style="width:3em;text-align:center;padding:0.1rem;border:1px solid var(--c-border,#ccc);border-radius:3px;background:var(--c-bg-surface,#fff);color:var(--c-text-main,#000);font-size:0.85rem;"
              onchange="setScore(${kid}, this)">
     </td>
     <td>

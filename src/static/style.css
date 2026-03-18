@@ -644,6 +644,19 @@ footer a {
     padding: 0.5rem 0.85rem;
   }
 
+  /* Nav icons: wrap on mobile */
+  .nav-icons {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-left: 0;
+    vertical-align: middle;
+  }
+
+  .nav-sep {
+    display: none;
+  }
+
   /* Browse header stacking */
   .browse-header {
     flex-direction: column;
