@@ -95,6 +95,39 @@ def inject_current_user():
 # Register slugify as a Jinja filter
 app.jinja_env.filters['slugify'] = lambda name: slugify(name) if name else ''
 
+# Keyword URL filter: bare anchor → full symmetricfunctions.com URL
+# Fetch site-labels.json to resolve anchors to direct page URLs
+SF_BASE = 'https://www.symmetricfunctions.com/'
+sf_labels = {}
+
+def refresh_sf_labels():
+    """Fetch site-labels.json and update the global cache. Returns (count, error)."""
+    global sf_labels
+    try:
+        resp = requests.get(SF_BASE + 'site-labels.json', timeout=5)
+        if resp.ok:
+            sf_labels = resp.json()
+            logger.info("Loaded %d site-labels from symmetricfunctions.com", len(sf_labels))
+            return len(sf_labels), None
+        return 0, f'HTTP {resp.status_code}'
+    except Exception as e:
+        logger.warning("Could not fetch site-labels.json: %s", e)
+        return 0, str(e)
+
+refresh_sf_labels()
+
+def _sf_url(value):
+    if not value:
+        return ''
+    if value.startswith(('http://', 'https://')):
+        return value
+    label = sf_labels.get(value)
+    if label:
+        return SF_BASE + label['href']
+    return f'{SF_BASE}#{value}'
+
+app.jinja_env.filters['sf_url'] = _sf_url
+
 
 def doi2bib(doi, paper_data=None):
     """
@@ -570,7 +603,7 @@ def search():
                OR {author_subquery}
             ORDER BY {order_clause}
             LIMIT %s OFFSET %s
-        """, (ft_query, author_term, ft_query, author_term, per_page, offset))
+        """, (ft_query, author_term, per_page, offset))
     else:
         like_term = f"%{query}%"
 

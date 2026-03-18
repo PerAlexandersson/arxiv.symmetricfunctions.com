@@ -17,6 +17,9 @@
     <meta name="description" content="Browse arXiv papers in combinatorics (math.CO category)" />
     <meta name="csrf-token" content="{{ csrf_token() }}" />
 
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32.png') }}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='favicon-192.png') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='favicon-180.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=8">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

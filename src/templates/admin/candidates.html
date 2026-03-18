@@ -99,6 +99,40 @@ table.candidates tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
 .help-overlay {
   display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 999;
 }
+
+@media (max-width: 700px) {
+  .filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .filters label { flex-direction: row; align-items: center; gap: 0.5rem; }
+  .filters input[type=text] { width: 100%; }
+
+  table.candidates thead { display: none; }
+  table.candidates tbody tr {
+    display: flex; flex-wrap: wrap; gap: 0.2rem 0.6rem;
+    align-items: center;
+    padding: 0.6rem 0; border-bottom: 1px solid var(--c-border-light, #eee);
+  }
+  table.candidates td {
+    display: inline-flex; align-items: center;
+    border: none; padding: 0.15rem 0;
+  }
+  /* Phrase — full width */
+  table.candidates td:nth-child(1) { flex-basis: 100%; order: 0; }
+  table.candidates td:nth-child(1) .phrase-edit { font-size: 1rem; }
+  /* Papers count */
+  table.candidates td:nth-child(2) { order: 1; font-size: 0.82rem; color: var(--c-text-muted, #888); }
+  table.candidates td:nth-child(2)::before { content: 'Papers: '; font-weight: 500; }
+  /* Word count */
+  table.candidates td:nth-child(3) { order: 2; font-size: 0.82rem; color: var(--c-text-muted, #888); }
+  table.candidates td:nth-child(3)::before { content: 'Words: '; font-weight: 500; }
+  /* Status badge */
+  table.candidates td:nth-child(4) { order: 3; }
+  /* Action buttons — full width */
+  table.candidates td:nth-child(5) { order: 4; flex-basis: 100%; }
+  table.candidates td:nth-child(5) .action-btns { flex-wrap: wrap; }
+}
 </style>
 {% endblock %}
 

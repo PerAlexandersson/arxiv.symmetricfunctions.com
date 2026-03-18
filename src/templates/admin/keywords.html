@@ -118,6 +118,43 @@ table.kw-table col.col-del      { width: 58px; }
 .btn-trash svg { width: 1rem; height: 1rem; vertical-align: middle; }
 
 .bulk-bar { margin-top: 0.8rem; display: flex; gap: 0.6rem; align-items: center; font-size: 0.85rem; }
+
+@media (max-width: 700px) {
+  table.kw-table { table-layout: auto; }
+  table.kw-table colgroup { display: none; }
+  table.kw-table thead { display: none; }
+  table.kw-table tbody tr {
+    display: flex; flex-wrap: wrap; gap: 0.3rem 0.6rem;
+    align-items: center;
+    padding: 0.6rem 0; border-bottom: 1px solid var(--c-border-light, #eee);
+  }
+  table.kw-table tbody td {
+    display: inline-flex; align-items: center;
+    border: none; padding: 0.1rem 0;
+  }
+  /* Checkbox */
+  table.kw-table td:nth-child(1) { order: 0; }
+  /* Score */
+  table.kw-table td:nth-child(2) { order: 2; }
+  table.kw-table td:nth-child(2) input { width: 2.5em; }
+  /* Phrase — full width */
+  table.kw-table td:nth-child(3) { order: 1; flex: 1; min-width: 60%; }
+  table.kw-table td:nth-child(3) .inline-edit { font-size: 0.95rem; font-weight: 600; }
+  /* Aliases — full width on own line */
+  table.kw-table td:nth-child(4) { order: 4; flex-basis: 100%; }
+  /* URL — full width */
+  table.kw-table td:nth-child(5) { order: 5; flex-basis: 100%; }
+  table.kw-table td:nth-child(5) .inline-edit { font-size: 0.8rem; }
+  /* Paper count */
+  table.kw-table td:nth-child(6) { order: 3; font-size: 0.8rem; }
+  table.kw-table td:nth-child(6)::before { content: '('; }
+  table.kw-table td:nth-child(6)::after { content: ')'; }
+  /* Actions */
+  table.kw-table td:nth-child(7) { order: 3; margin-left: auto; }
+
+  /* Add keyword form */
+  #add-kw-form { max-width: 100% !important; }
+}
 </style>
 {% endblock %}
 
@@ -232,7 +269,7 @@ table.kw-table col.col-del      { width: 58px; }
     </td>
     <td>
       <input type="text" class="inline-edit" data-kid="{{ kw.id }}" data-field="url"
-             value="{{ kw.url or '' }}" placeholder="https://…"
+             value="{{ kw.url or '' }}" placeholder="anchor or https://…"
              title="Definition URL (optional)"
              onblur="saveInline(this)" onkeydown="inlineKeydown(event, this)">
     </td>

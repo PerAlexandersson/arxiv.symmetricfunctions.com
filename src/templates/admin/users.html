@@ -28,6 +28,37 @@ table.users-table tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
   color: var(--c-muted, #aaa); font-size: 1rem; line-height: 1;
 }
 .btn-del-user:hover { color: #c00; }
+
+@media (max-width: 700px) {
+  table.users-table thead { display: none; }
+  table.users-table tbody tr {
+    display: flex; flex-wrap: wrap; gap: 0.15rem 0.6rem;
+    align-items: baseline;
+    padding: 0.6rem 0; border-bottom: 1px solid var(--c-border-light, #eee);
+  }
+  table.users-table td {
+    display: inline; border: none; padding: 0.1rem 0;
+  }
+  /* ID: hide */
+  table.users-table td:nth-child(1) { display: none; }
+  /* Name — prominent */
+  table.users-table td:nth-child(2) { flex-basis: 100%; font-weight: 600; font-size: 0.95rem; }
+  /* Provider */
+  table.users-table td:nth-child(3) { order: 2; }
+  /* ORCID */
+  table.users-table td:nth-child(4) { order: 3; font-size: 0.8rem !important; }
+  /* Registered */
+  table.users-table td:nth-child(5) { order: 4; font-size: 0.8rem; color: var(--c-muted, #888); }
+  /* Stats */
+  table.users-table td:nth-child(6),
+  table.users-table td:nth-child(7),
+  table.users-table td:nth-child(8) { font-size: 0.8rem; }
+  table.users-table td:nth-child(6)::before { content: 'KW: '; }
+  table.users-table td:nth-child(7)::before { content: 'Auth: '; }
+  table.users-table td:nth-child(8)::before { content: 'Lists: '; }
+  /* Delete button */
+  table.users-table td:nth-child(9) { margin-left: auto; }
+}
 </style>
 {% endblock %}
 

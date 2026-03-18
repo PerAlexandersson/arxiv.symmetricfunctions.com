@@ -25,6 +25,7 @@ Routes:
 import os
 import csv
 import hmac
+import re
 import functools
 from datetime import date as date_type
 from urllib.parse import urlparse, urljoin
@@ -42,6 +43,16 @@ admin = Blueprint('admin', __name__, url_prefix='/admin')
 
 # Path to keywords.csv (one level up from src/)
 CANDIDATES_CSV = os.path.join(os.path.dirname(__file__), '..', 'keywords.csv')
+
+_SF_URL_RE = re.compile(
+    r'(?:https?://)?(?:www\.)?symmetricfunctions\.com/[^#]*#(.+)', re.I)
+
+def _normalize_kw_url(url):
+    """Strip symmetricfunctions.com URLs down to just the anchor ID."""
+    if not url:
+        return url
+    m = _SF_URL_RE.match(url.strip())
+    return m.group(1) if m else url
 
 # Simple module-level cache for the CSV
 _candidates_cache = None
@@ -357,6 +368,8 @@ def inline_edit(kid):
     value = request.form.get('value', '').strip() or None
     if field == 'phrase' and not value:
         return jsonify({'ok': False, 'error': 'phrase cannot be empty'}), 400
+    if field == 'url' and value:
+        value = _normalize_kw_url(value)
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -661,3 +674,63 @@ def fetch():
             result = {'log': buf.getvalue() + f'\nERROR: {e}', 'ok': False}
 
     return render_template('admin/fetch.html', today=today, result=result)
+
+
+@admin.route('/symcat')
+@login_required
+def symcat():
+    """Show SymCat (symmetricfunctions.com) label mappings for keywords."""
+    from app import sf_labels, SF_BASE
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, phrase, url FROM keywords WHERE active = 1 ORDER BY phrase"
+    )
+    keywords = cursor.fetchall()
+    cursor.close()
+    # Annotate each keyword with resolved info + suggestions
+    for kw in keywords:
+        anchor = kw['url']
+        kw['suggestions'] = []
+        if anchor and not anchor.startswith(('http://', 'https://')):
+            label = sf_labels.get(anchor)
+            kw['sf_label'] = label
+            kw['sf_resolved'] = SF_BASE + label['href'] if label else None
+        else:
+            kw['sf_label'] = None
+            kw['sf_resolved'] = anchor  # full external URL or None
+            # Suggest labels for keywords without a symcat anchor
+            if not anchor and sf_labels:
+                phrase_lower = kw['phrase'].lower()
+                words = phrase_lower.split()
+                for key, label in sf_labels.items():
+                    title_lower = label['title'].lower()
+                    key_lower = key.lower()
+                    # Exact title match
+                    if phrase_lower == title_lower:
+                        kw['suggestions'].insert(0, (key, label, 'exact title'))
+                    # Phrase appears in title
+                    elif phrase_lower in title_lower:
+                        kw['suggestions'].append((key, label, 'in title'))
+                    # Title appears in phrase
+                    elif title_lower in phrase_lower:
+                        kw['suggestions'].append((key, label, 'title in phrase'))
+                    # Key matches phrase with spaces/hyphens removed
+                    elif key_lower == phrase_lower.replace(' ', '').replace('-', ''):
+                        kw['suggestions'].insert(0, (key, label, 'key match'))
+                    # All keyword words appear in key
+                    elif len(words) > 1 and all(w in key_lower for w in words):
+                        kw['suggestions'].append((key, label, 'words in key'))
+                kw['suggestions'] = kw['suggestions'][:5]  # cap at 5
+
+    return render_template('admin/symcat.html',
+                           keywords=keywords,
+                           label_count=len(sf_labels))
+
+
+@admin.route('/symcat/refresh', methods=['POST'])
+@login_required
+def symcat_refresh():
+    from app import refresh_sf_labels
+    count, error = refresh_sf_labels()
+    return jsonify({'ok': error is None, 'count': count, 'error': error})

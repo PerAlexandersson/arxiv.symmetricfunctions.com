@@ -23,6 +23,11 @@
 .result-box.ok  { background: #f0f8f0; border-color: #b2d9b2; }
 .result-box.err { background: #fdf0f0; border-color: #e0b2b2; }
 .result-box pre { margin: 0.5rem 0 0; white-space: pre-wrap; font-size: 0.82rem; }
+
+@media (max-width: 500px) {
+  .fetch-form { max-width: 100%; }
+  .fetch-form .row { flex-direction: column; gap: 0.6rem; }
+}
 </style>
 {% endblock %}
 

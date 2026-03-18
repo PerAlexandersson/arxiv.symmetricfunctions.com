@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+{% block title %}SymCat URLs — Admin{% endblock %}
+
+{% block extra_css %}
+<style>
+.sc-header {
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.sc-header h2 { margin: 0; }
+.sc-badge {
+  font-size: 0.82rem; padding: 0.2rem 0.7rem; border-radius: 99px;
+  background: var(--c-bg-alt, #eee); color: var(--c-text-sub, #555);
+}
+.sc-refresh {
+  padding: 0.35rem 0.9rem; font-size: 0.85rem; cursor: pointer;
+  background: var(--c-accent, #2a6); color: #fff;
+  border: none; border-radius: 4px;
+}
+.sc-refresh:disabled { opacity: 0.5; cursor: default; }
+.sc-tabs {
+  display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 2px solid var(--c-border, #ccc);
+}
+.sc-tabs button {
+  padding: 0.4rem 1rem; font-size: 0.85rem; cursor: pointer;
+  background: transparent; border: 1px solid transparent; border-bottom: none;
+  border-radius: 4px 4px 0 0; margin-bottom: -2px;
+  color: var(--c-text-sub, #555);
+}
+.sc-tabs button:hover { background: var(--c-bg-gray, #eee); }
+.sc-tabs button.active {
+  background: var(--c-bg-surface, #fff); font-weight: 600;
+  color: var(--c-text-main, #222); border-color: var(--c-border, #ccc);
+}
+.sc-table {
+  width: 100%; border-collapse: collapse; font-size: 0.88rem;
+  margin-top: 0.5rem;
+}
+.sc-table th {
+  text-align: left; font-size: 0.78rem; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--c-text-muted, #888);
+  border-bottom: 2px solid var(--c-border, #ccc); padding: 0.4rem 0.6rem;
+}
+.sc-table td {
+  padding: 0.35rem 0.6rem; border-bottom: 1px solid var(--c-border, #eee);
+  vertical-align: top;
+}
+.sc-table tr:hover td { background: var(--c-bg-alt, #f8f8f8); }
+.sc-anchor { font-family: monospace; font-size: 0.82rem; }
+.sc-resolved { font-size: 0.8rem; color: var(--c-text-sub, #666); word-break: break-all; }
+.sc-resolved a { color: inherit; text-decoration: underline; }
+.sc-page { font-size: 0.8rem; color: var(--c-text-muted, #888); }
+.sc-miss { color: #c44; font-size: 0.8rem; }
+.sc-none { color: var(--c-text-muted, #aaa); font-size: 0.8rem; }
+.sc-filter {
+  padding: 0.35rem 0.6rem; font-size: 0.88rem; border: 1px solid var(--c-border, #ccc);
+  border-radius: 4px; background: var(--c-bg, #fff); color: var(--c-text, #000);
+  min-width: 14rem;
+}
+.sc-sug {
+  display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.15rem;
+}
+.sc-sug-btn {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  padding: 0.15rem 0.5rem; font-size: 0.78rem; cursor: pointer;
+  background: var(--c-bg-alt, #f0f0f0); border: 1px solid var(--c-border, #ccc);
+  border-radius: 3px; color: var(--c-text-sub, #555); font-family: inherit;
+}
+.sc-sug-btn:hover { border-color: var(--c-accent, #2a6); color: var(--c-accent, #2a6); }
+.sc-sug-btn .sc-sug-match { font-size: 0.7rem; color: var(--c-text-muted, #999); }
+.sc-sug-applied {
+  font-size: 0.78rem; color: #4a4; font-weight: 600;
+}
+
+@media (max-width: 700px) {
+  .sc-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+  .sc-header h2 { margin: 0; }
+  .sc-filter { min-width: 0; width: 100%; }
+  .sc-tabs { flex-wrap: wrap; gap: 2px; }
+  .sc-tabs button { padding: 0.35rem 0.6rem; font-size: 0.78rem; }
+
+  .sc-table thead { display: none; }
+  .sc-table tbody tr {
+    display: flex; flex-wrap: wrap; gap: 0.15rem 0.5rem;
+    padding: 0.6rem 0; border-bottom: 1px solid var(--c-border, #eee);
+  }
+  .sc-table td {
+    display: inline; border: none; padding: 0.1rem 0;
+  }
+  /* Keyword — full width */
+  .sc-table td:nth-child(1) { flex-basis: 100%; font-weight: 600; }
+  /* Anchor */
+  .sc-table td.sc-anchor { font-size: 0.78rem; }
+  /* Resolved URL — full width, break long URLs */
+  .sc-table td.sc-resolved { flex-basis: 100%; }
+  /* Suggestions — full width */
+  .sc-table td[colspan] { flex-basis: 100%; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'admin/_nav.html' %}
+
+<div class="sc-header">
+  <h2>SymCat URLs</h2>
+  <span class="sc-badge" id="sc-count">{{ label_count }} labels cached</span>
+  <button class="sc-refresh" id="sc-refresh-btn" onclick="scRefresh(this)">Refresh labels</button>
+  <input type="text" class="sc-filter" id="sc-filter" placeholder="Filter keywords..."
+         oninput="scFilter(this.value)">
+</div>
+
+<div class="sc-tabs">
+  <button class="active" onclick="scShowTab('all', this)">All ({{ keywords|length }})</button>
+  <button onclick="scShowTab('linked', this)">Linked ({{ keywords|selectattr('url')|list|length }})</button>
+  <button onclick="scShowTab('suggestions', this)">Suggestions ({{ keywords|selectattr('suggestions')|list|length }})</button>
+  <button onclick="scShowTab('unlinked', this)">Unlinked ({{ keywords|rejectattr('url')|rejectattr('suggestions')|list|length }})</button>
+</div>
+
+<table class="sc-table">
+  <thead>
+    <tr>
+      <th>Keyword</th>
+      <th>Anchor</th>
+      <th>Page</th>
+      <th>Resolved URL</th>
+    </tr>
+  </thead>
+  <tbody id="sc-tbody">
+    {% for kw in keywords %}
+    <tr data-phrase="{{ kw.phrase }}" data-kid="{{ kw.id }}"
+        data-tab="{% if kw.url %}linked{% elif kw.suggestions %}suggestions{% else %}unlinked{% endif %}">
+      <td><a href="/keyword/{{ kw.phrase | replace(' ', '%20') }}">{{ kw.phrase }}</a></td>
+      {% if kw.url and not kw.url.startswith('http') %}
+        <td class="sc-anchor">{{ kw.url }}</td>
+        {% if kw.sf_label %}
+          <td class="sc-page">{{ kw.sf_label.page }}</td>
+          <td class="sc-resolved"><a href="{{ kw.sf_resolved }}" target="_blank" rel="noopener">{{ kw.sf_resolved }}</a></td>
+        {% else %}
+          <td class="sc-miss" colspan="2">anchor not found in labels</td>
+        {% endif %}
+      {% elif kw.url %}
+        <td class="sc-anchor" colspan="2">&mdash;</td>
+        <td class="sc-resolved"><a href="{{ kw.url }}" target="_blank" rel="noopener">{{ kw.url }}</a></td>
+      {% elif kw.suggestions %}
+        <td colspan="3">
+          <div class="sc-sug" id="sug-{{ kw.id }}">
+            {% for key, label, match in kw.suggestions %}
+            <button class="sc-sug-btn" onclick="scApply({{ kw.id }}, '{{ key }}', this)"
+                    title="{{ label.title }} ({{ label.page }}.htm)">
+              {{ key }} <span class="sc-sug-match">{{ match }}</span>
+            </button>
+            {% endfor %}
+          </div>
+        </td>
+      {% else %}
+        <td class="sc-none" colspan="3">no URL &middot; no suggestions</td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function scRefresh(btn) {
+  btn.disabled = true; btn.textContent = 'Refreshing...';
+  const csrf = document.querySelector('meta[name="csrf-token"]').content;
+  try {
+    const res = await fetch('{{ url_for("admin.symcat_refresh") }}', {
+      method: 'POST',
+      headers: {'X-CSRFToken': csrf}
+    });
+    const data = await res.json();
+    if (data.ok) {
+      document.getElementById('sc-count').textContent = data.count + ' labels cached';
+      btn.textContent = 'Refreshed!';
+      setTimeout(() => location.reload(), 600);
+    } else {
+      btn.textContent = 'Error: ' + (data.error || 'unknown');
+    }
+  } catch(e) {
+    btn.textContent = 'Fetch failed';
+  }
+  setTimeout(() => { btn.disabled = false; btn.textContent = 'Refresh labels'; }, 3000);
+}
+
+function scFilter(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('#sc-tbody tr').forEach(tr => {
+    tr.style.display = tr.dataset.phrase.includes(q) || tr.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+let _activeTab = 'all';
+function scShowTab(tab, btn) {
+  _activeTab = tab;
+  document.querySelectorAll('.sc-tabs button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('#sc-tbody tr').forEach(tr => {
+    tr.style.display = (tab === 'all' || tr.dataset.tab === tab) ? '' : 'none';
+  });
+}
+
+async function scApply(kid, anchor, btn) {
+  const csrf = document.querySelector('meta[name="csrf-token"]').content;
+  const fd = new FormData();
+  fd.append('field', 'url');
+  fd.append('value', anchor);
+  try {
+    const res = await fetch(`/admin/keywords/${kid}/inline`, {
+      method: 'POST',
+      headers: {'X-CSRFToken': csrf},
+      body: fd
+    });
+    const data = await res.json();
+    if (data.ok) {
+      const container = document.getElementById('sug-' + kid);
+      container.innerHTML = '<span class="sc-sug-applied">\u2713 ' + anchor + '</span>';
+    } else {
+      btn.textContent = 'Error';
+    }
+  } catch(e) {
+    btn.textContent = 'Failed';
+  }
+}
+</script>
+{% endblock %}
