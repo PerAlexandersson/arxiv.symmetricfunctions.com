@@ -73,16 +73,16 @@ def arxiv2bib(paper_data):
 
     bib = (
         f"@article{{{key},\n"
-        f"Author = {{{author_str}}},\n"
-        f"Title = {{{protected_title}}},\n"
-        f"Year = {{{year}}},\n"
-        f"Eprint = {{{clean_arxiv_id}}},\n"
+        f"  author = {{{author_str}}},\n"
+        f"  title = {{{protected_title}}},\n"
+        f"  year = {{{year}}},\n"
+        f"  eprint = {{{clean_arxiv_id}}},\n"
         f"  url = {{https://arxiv.org/abs/{clean_arxiv_id}}},\n"
-        f"journal = {{arXiv e-prints}}"
+        f"  journal = {{arXiv e-prints}}"
     )
     if paper_data.get('journal_ref'):
-        bib += f",\njournalref = {{{paper_data['journal_ref']}}}"
+        bib += f",\n  journalref = {{{paper_data['journal_ref']}}}"
     if paper_data.get('doi'):
-        bib += f",\ndoi = {{{paper_data['doi']}}}"
+        bib += f",\n  doi = {{{paper_data['doi']}}}"
     bib += "\n}"
     return bib

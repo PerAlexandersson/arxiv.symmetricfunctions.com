@@ -150,11 +150,11 @@ def doi2bib(doi, paper_data=None):
         protected_title = protect_capitals_for_bibtex(paper_data['title'])
 
         bibtex = f"""@article{{{bibtex_key},
-Author = {{{author_str}}},
-Title = {{{protected_title}}},
-Year = {{{year}}},
-journal = {{{paper_data.get('journal_ref', '')}}},
-doi = {{{doi}}},
+  author = {{{author_str}}},
+  title = {{{protected_title}}},
+  year = {{{year}}},
+  journal = {{{paper_data.get('journal_ref', '')}}},
+  doi = {{{doi}}},
   url = {{https://doi.org/{doi}}}
 }}"""
         return bibtex
