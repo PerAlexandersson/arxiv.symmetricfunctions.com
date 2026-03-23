@@ -543,7 +543,43 @@ def generate_bibtex_api():
             return jsonify(result)
         else:
             cursor.close()
-            return jsonify({'error': 'arXiv paper not found in database'}), 404
+            # Fallback: fetch directly from arXiv API
+            try:
+                api_url = f"https://export.arxiv.org/api/query?id_list={arxiv_id}"
+                resp = requests.get(api_url, timeout=10)
+                resp.raise_for_status()
+                import xml.etree.ElementTree as ET
+                root = ET.fromstring(resp.text)
+                ns = {'atom': 'http://www.w3.org/2005/Atom',
+                      'arxiv': 'http://arxiv.org/schemas/atom'}
+                entry = root.find('atom:entry', ns)
+                if entry is None or entry.find('atom:title', ns) is None:
+                    return jsonify({'error': 'Paper not found on arXiv'}), 404
+                title = ' '.join(entry.find('atom:title', ns).text.split())
+                authors = [a.find('atom:name', ns).text
+                           for a in entry.findall('atom:author', ns)]
+                published = entry.find('atom:published', ns).text[:4]  # YYYY
+                doi_el = entry.find('arxiv:doi', ns)
+                doi_val = doi_el.text.strip() if doi_el is not None else None
+                journal_el = entry.find('arxiv:journal_ref', ns)
+                journal_val = journal_el.text.strip() if journal_el is not None else None
+                paper_data = {
+                    'arxiv_id': arxiv_id,
+                    'title': title,
+                    'authors': authors,
+                    'published_date': published,
+                    'journal_ref': journal_val,
+                    'doi': doi_val,
+                }
+                result = {'arxiv': arxiv2bib(paper_data)}
+                if doi_val:
+                    published_bib = doi2bib(doi_val, paper_data)
+                    if published_bib:
+                        result['published'] = published_bib
+                return jsonify(result)
+            except Exception as e:
+                logger.exception("arXiv API fallback failed for %s", arxiv_id)
+                return jsonify({'error': 'Paper not found in database and arXiv lookup failed'}), 404
 
     elif doi:
         # Fetch directly from DOI
