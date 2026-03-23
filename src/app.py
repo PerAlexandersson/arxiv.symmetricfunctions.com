@@ -442,7 +442,45 @@ def keyword_cloud():
         span = math.log(hi + 1) - lo_log or 1
         for k in keywords:
             k['weight'] = (math.log(k['paper_count'] + 1) - lo_log) / span
-    return render_template('keywords.html', keywords=keywords)
+
+    # For admins: compute symcat suggestions for keywords without URLs
+    suggestions = []
+    if session.get('admin_logged_in') and sf_labels:
+        for kw in keywords:
+            if kw['url']:
+                continue
+            phrase_lower = kw['phrase'].lower()
+            words = phrase_lower.split()
+            phrase_norm = phrase_lower.replace(' ', '').replace('-', '').replace('_', '')
+            kw_sugs = []
+            for key, label in sf_labels.items():
+                title_lower = label['title'].lower()
+                key_lower = key.lower()
+                key_norm = key_lower.replace('-', '').replace('_', '')
+                if phrase_lower == title_lower:
+                    kw_sugs.insert(0, (key, label, 'exact title'))
+                elif key_norm == phrase_norm:
+                    kw_sugs.insert(0, (key, label, 'key match'))
+                elif (len(phrase_norm) >= 4 and
+                      (key_norm.startswith(phrase_norm) or phrase_norm.startswith(key_norm))):
+                    kw_sugs.insert(0, (key, label, 'key prefix'))
+                elif phrase_lower in title_lower:
+                    kw_sugs.append((key, label, 'in title'))
+                elif title_lower in phrase_lower:
+                    kw_sugs.append((key, label, 'title in phrase'))
+                elif (len(phrase_norm) >= 4 and
+                      (phrase_norm in key_norm or key_norm in phrase_norm)):
+                    kw_sugs.append((key, label, 'key substr'))
+                elif len(words) > 1 and all(w in key_norm for w in words):
+                    kw_sugs.append((key, label, 'words in key'))
+                elif len(words) > 1 and all(w in title_lower for w in words):
+                    kw_sugs.append((key, label, 'words in title'))
+            if kw_sugs:
+                suggestions.append({'id': kw['id'], 'phrase': kw['phrase'],
+                                    'suggestions': kw_sugs[:8]})
+
+    return render_template('keywords.html', keywords=keywords,
+                           symcat_suggestions=suggestions)
 
 
 @app.route('/api/generate-bibtex', methods=['POST'])

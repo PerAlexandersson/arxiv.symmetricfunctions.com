@@ -703,25 +703,40 @@ def symcat():
             if not anchor and sf_labels:
                 phrase_lower = kw['phrase'].lower()
                 words = phrase_lower.split()
+                # Normalized form: remove spaces, hyphens, underscores
+                phrase_norm = phrase_lower.replace(' ', '').replace('-', '').replace('_', '')
                 for key, label in sf_labels.items():
                     title_lower = label['title'].lower()
                     key_lower = key.lower()
+                    key_norm = key_lower.replace('-', '').replace('_', '')
                     # Exact title match
                     if phrase_lower == title_lower:
                         kw['suggestions'].insert(0, (key, label, 'exact title'))
+                    # Key exactly matches normalized phrase
+                    elif key_norm == phrase_norm:
+                        kw['suggestions'].insert(0, (key, label, 'key match'))
+                    # Normalized phrase is a prefix of key or vice versa
+                    # (catches gtpattern→gtpatterns, plural mismatches)
+                    elif (len(phrase_norm) >= 4 and
+                          (key_norm.startswith(phrase_norm) or phrase_norm.startswith(key_norm))):
+                        kw['suggestions'].insert(0, (key, label, 'key prefix'))
                     # Phrase appears in title
                     elif phrase_lower in title_lower:
                         kw['suggestions'].append((key, label, 'in title'))
                     # Title appears in phrase
                     elif title_lower in phrase_lower:
                         kw['suggestions'].append((key, label, 'title in phrase'))
-                    # Key matches phrase with spaces/hyphens removed
-                    elif key_lower == phrase_lower.replace(' ', '').replace('-', ''):
-                        kw['suggestions'].insert(0, (key, label, 'key match'))
-                    # All keyword words appear in key
-                    elif len(words) > 1 and all(w in key_lower for w in words):
+                    # Normalized phrase is a substring of key or vice versa
+                    elif (len(phrase_norm) >= 4 and
+                          (phrase_norm in key_norm or key_norm in phrase_norm)):
+                        kw['suggestions'].append((key, label, 'key substr'))
+                    # All keyword words appear in key (multi-word)
+                    elif len(words) > 1 and all(w in key_norm for w in words):
                         kw['suggestions'].append((key, label, 'words in key'))
-                kw['suggestions'] = kw['suggestions'][:5]  # cap at 5
+                    # All keyword words appear in title (multi-word)
+                    elif len(words) > 1 and all(w in title_lower for w in words):
+                        kw['suggestions'].append((key, label, 'words in title'))
+                kw['suggestions'] = kw['suggestions'][:8]  # cap at 8
 
     return render_template('admin/symcat.html',
                            keywords=keywords,

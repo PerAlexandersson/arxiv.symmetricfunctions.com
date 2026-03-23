@@ -8,6 +8,29 @@
   word-spacing: 0.1rem;
   margin-top: 1rem;
 }
+.sc-panel {
+  margin-top: 2rem; padding: 1rem; border: 1px solid var(--c-border, #ccc);
+  border-radius: 6px; background: var(--c-bg-alt, #f9f9f9);
+}
+.sc-panel h3 { margin: 0 0 0.75rem; font-size: 1rem; }
+.sc-panel-item {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem;
+  padding: 0.3rem 0; border-bottom: 1px solid var(--c-border, #eee);
+}
+.sc-panel-item:last-child { border-bottom: none; }
+.sc-panel-phrase { font-weight: 600; min-width: 10rem; }
+.sc-sug {
+  display: flex; flex-wrap: wrap; gap: 0.3rem;
+}
+.sc-sug-btn {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  padding: 0.15rem 0.5rem; font-size: 0.78rem; cursor: pointer;
+  background: var(--c-bg-surface, #fff); border: 1px solid var(--c-border, #ccc);
+  border-radius: 3px; color: var(--c-text-sub, #555); font-family: inherit;
+}
+.sc-sug-btn:hover { border-color: var(--c-accent, #2a6); color: var(--c-accent, #2a6); }
+.sc-sug-btn .sc-sug-match { font-size: 0.7rem; color: var(--c-text-muted, #999); }
+.sc-sug-applied { font-size: 0.78rem; color: #4a4; font-weight: 600; }
 </style>
 {% endblock %}
 
@@ -36,5 +59,53 @@
 </div>
 {% else %}
 <p style="color:var(--c-text-muted)">No keywords yet.</p>
+{% endif %}
+
+{% if is_admin and symcat_suggestions %}
+<div class="sc-panel">
+  <h3>SymCat suggestions ({{ symcat_suggestions|length }} keywords without URLs)</h3>
+  {% for item in symcat_suggestions %}
+  <div class="sc-panel-item">
+    <span class="sc-panel-phrase">{{ item.phrase }}</span>
+    <div class="sc-sug" id="sug-{{ item.id }}">
+      {% for key, label, match in item.suggestions %}
+      <button class="sc-sug-btn" onclick="scApply({{ item.id }}, '{{ key }}', this)"
+              title="{{ label.title }} ({{ label.page }}.htm)">
+        {{ key }} <span class="sc-sug-match">{{ match }}</span>
+      </button>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if is_admin and symcat_suggestions %}
+<script>
+async function scApply(kid, anchor, btn) {
+  const csrf = document.querySelector('meta[name="csrf-token"]').content;
+  const fd = new FormData();
+  fd.append('field', 'url');
+  fd.append('value', anchor);
+  try {
+    const res = await fetch(`/admin/keywords/${kid}/inline`, {
+      method: 'POST',
+      headers: {'X-CSRFToken': csrf},
+      body: fd
+    });
+    const data = await res.json();
+    if (data.ok) {
+      const container = document.getElementById('sug-' + kid);
+      container.innerHTML = '<span class="sc-sug-applied">\u2713 ' + anchor + '</span>';
+    } else {
+      btn.textContent = 'Error';
+    }
+  } catch(e) {
+    btn.textContent = 'Failed';
+  }
+}
+</script>
 {% endif %}
 {% endblock %}
