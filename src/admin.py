@@ -738,9 +738,15 @@ def symcat():
                         kw['suggestions'].append((key, label, 'words in title'))
                 kw['suggestions'] = kw['suggestions'][:8]  # cap at 8
 
+    # Collect keywords whose anchor no longer exists in the labels JSON
+    stale_anchors = [kw for kw in keywords
+                     if kw['url'] and not kw['url'].startswith(('http://', 'https://'))
+                     and not kw.get('sf_label')]
+
     return render_template('admin/symcat.html',
                            keywords=keywords,
-                           label_count=len(sf_labels))
+                           label_count=len(sf_labels),
+                           stale_anchors=stale_anchors)
 
 
 @admin.route('/symcat/refresh', methods=['POST'])

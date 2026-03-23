@@ -71,6 +71,15 @@
 .sc-sug-applied {
   font-size: 0.78rem; color: #4a4; font-weight: 600;
 }
+.sc-warn {
+  margin-bottom: 1rem; padding: 0.75rem 1rem; border-radius: 5px;
+  background: #fff3cd; border: 1px solid #e0c36a; color: #664d03;
+  font-size: 0.88rem;
+}
+.sc-warn ul { margin: 0.4rem 0 0; padding-left: 1.3rem; }
+.sc-warn li { margin: 0.15rem 0; }
+.sc-warn code { font-size: 0.82rem; background: rgba(0,0,0,0.06); padding: 0.1rem 0.3rem; border-radius: 3px; }
+.sc-warn a { color: #664d03; text-decoration: underline; }
 
 @media (max-width: 700px) {
   .sc-header {
@@ -114,9 +123,25 @@
          oninput="scFilter(this.value)">
 </div>
 
+{% if stale_anchors %}
+<div class="sc-warn">
+  <strong>{{ stale_anchors|length }} stale anchor{{ 's' if stale_anchors|length != 1 }}:</strong>
+  the following keywords have anchors that no longer exist in the SymCat labels JSON.
+  They may have been renamed or removed.
+  <ul>
+    {% for kw in stale_anchors %}
+    <li><a href="/keyword/{{ kw.phrase | replace(' ', '%20') }}">{{ kw.phrase }}</a> — <code>{{ kw.url }}</code></li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
 <div class="sc-tabs">
   <button class="active" onclick="scShowTab('all', this)">All ({{ keywords|length }})</button>
-  <button onclick="scShowTab('linked', this)">Linked ({{ keywords|selectattr('url')|list|length }})</button>
+  <button onclick="scShowTab('linked', this)">Linked ({{ keywords|selectattr('url')|list|length - stale_anchors|length }})</button>
+  {% if stale_anchors %}
+  <button onclick="scShowTab('stale', this)" style="color:#c44">Stale ({{ stale_anchors|length }})</button>
+  {% endif %}
   <button onclick="scShowTab('suggestions', this)">Suggestions ({{ keywords|selectattr('suggestions')|list|length }})</button>
   <button onclick="scShowTab('unlinked', this)">Unlinked ({{ keywords|rejectattr('url')|rejectattr('suggestions')|list|length }})</button>
 </div>
@@ -133,7 +158,7 @@
   <tbody id="sc-tbody">
     {% for kw in keywords %}
     <tr data-phrase="{{ kw.phrase }}" data-kid="{{ kw.id }}"
-        data-tab="{% if kw.url %}linked{% elif kw.suggestions %}suggestions{% else %}unlinked{% endif %}">
+        data-tab="{% if kw.url and not kw.url.startswith('http') and not kw.sf_label %}stale{% elif kw.url %}linked{% elif kw.suggestions %}suggestions{% else %}unlinked{% endif %}">
       <td><a href="/keyword/{{ kw.phrase | replace(' ', '%20') }}">{{ kw.phrase }}</a></td>
       {% if kw.url and not kw.url.startswith('http') %}
         <td class="sc-anchor">{{ kw.url }}</td>
