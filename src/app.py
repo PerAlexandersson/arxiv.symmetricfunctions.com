@@ -483,113 +483,108 @@ def keyword_cloud():
                            symcat_suggestions=suggestions)
 
 
-@app.route('/api/generate-bibtex', methods=['POST'])
-def generate_bibtex_api():
-    """API endpoint to generate BibTeX from arXiv ID or DOI."""
-    data = request.get_json()
-    input_text = data.get('input', '').strip()
+def _generate_bibtex(input_text):
+    """Core BibTeX generation logic. Returns (result_dict, status_code)."""
+    import xml.etree.ElementTree as ET
 
     if not input_text:
-        return jsonify({'error': 'Please provide an arXiv ID or DOI'}), 400
+        return {'error': 'Please provide an arXiv ID or DOI'}, 400
 
-    # Try to parse as arXiv ID or URL
     arxiv_id = None
     doi = None
 
     # Check if it's an arXiv URL or ID
     if 'arxiv.org' in input_text.lower():
-        # Extract ID from URL
         match = re.search(r'arxiv\.org/(?:abs|pdf)/([0-9]+\.[0-9]+(?:v[0-9]+)?)', input_text, re.IGNORECASE)
         if match:
             arxiv_id = match.group(1)
     elif re.match(r'^[0-9]+\.[0-9]+(?:v[0-9]+)?$', input_text):
-        # Direct arXiv ID
         arxiv_id = input_text
 
-    # Check if it's a DOI or DOI URL
     if not arxiv_id:
         if 'doi.org/' in input_text.lower():
-            # Extract DOI from URL
             doi = input_text.split('doi.org/')[-1]
         elif re.match(r'^10\.\d+/', input_text):
-            # Direct DOI
             doi = input_text
 
     if arxiv_id:
-        # Fetch from our database
+        # Try local database first
         conn = get_db_connection()
         cursor = conn.cursor()
-
         cursor.execute("""
             SELECT id, arxiv_id, title, published_date, journal_ref, doi
-            FROM papers
-            WHERE arxiv_id LIKE %s
+            FROM papers WHERE arxiv_id LIKE %s
         """, (f"{arxiv_id}%",))
-
         paper = cursor.fetchone()
 
         if paper:
             paper['authors'] = get_paper_authors(cursor, paper['id'])
             cursor.close()
-
-            arxiv_bib = arxiv2bib(paper)
-            result = {'arxiv': arxiv_bib}
-
+            result = {'arxiv': arxiv2bib(paper)}
             if paper['doi']:
                 published_bib = doi2bib(paper['doi'], paper)
                 if published_bib:
                     result['published'] = published_bib
+            return result, 200
 
-            return jsonify(result)
-        else:
-            cursor.close()
-            # Fallback: fetch directly from arXiv API
-            try:
-                api_url = f"https://export.arxiv.org/api/query?id_list={arxiv_id}"
-                resp = requests.get(api_url, timeout=10)
-                resp.raise_for_status()
-                import xml.etree.ElementTree as ET
-                root = ET.fromstring(resp.text)
-                ns = {'atom': 'http://www.w3.org/2005/Atom',
-                      'arxiv': 'http://arxiv.org/schemas/atom'}
-                entry = root.find('atom:entry', ns)
-                if entry is None or entry.find('atom:title', ns) is None:
-                    return jsonify({'error': 'Paper not found on arXiv'}), 404
-                title = ' '.join(entry.find('atom:title', ns).text.split())
-                authors = [a.find('atom:name', ns).text
-                           for a in entry.findall('atom:author', ns)]
-                published = entry.find('atom:published', ns).text[:4]  # YYYY
-                doi_el = entry.find('arxiv:doi', ns)
-                doi_val = doi_el.text.strip() if doi_el is not None else None
-                journal_el = entry.find('arxiv:journal_ref', ns)
-                journal_val = journal_el.text.strip() if journal_el is not None else None
-                paper_data = {
-                    'arxiv_id': arxiv_id,
-                    'title': title,
-                    'authors': authors,
-                    'published_date': published,
-                    'journal_ref': journal_val,
-                    'doi': doi_val,
-                }
-                result = {'arxiv': arxiv2bib(paper_data)}
-                if doi_val:
-                    published_bib = doi2bib(doi_val, paper_data)
-                    if published_bib:
-                        result['published'] = published_bib
-                return jsonify(result)
-            except Exception as e:
-                logger.exception("arXiv API fallback failed for %s", arxiv_id)
-                return jsonify({'error': 'Paper not found in database and arXiv lookup failed'}), 404
+        cursor.close()
+        # Fallback: fetch directly from arXiv API
+        try:
+            api_url = f"https://export.arxiv.org/api/query?id_list={arxiv_id}"
+            resp = requests.get(api_url, timeout=10)
+            resp.raise_for_status()
+            root = ET.fromstring(resp.text)
+            ns = {'atom': 'http://www.w3.org/2005/Atom',
+                  'arxiv': 'http://arxiv.org/schemas/atom'}
+            entry = root.find('atom:entry', ns)
+            if entry is None or entry.find('atom:title', ns) is None:
+                return {'error': 'Paper not found on arXiv'}, 404
+            title = ' '.join(entry.find('atom:title', ns).text.split())
+            authors = [a.find('atom:name', ns).text
+                       for a in entry.findall('atom:author', ns)]
+            published = entry.find('atom:published', ns).text[:4]
+            doi_el = entry.find('arxiv:doi', ns)
+            doi_val = doi_el.text.strip() if doi_el is not None else None
+            journal_el = entry.find('arxiv:journal_ref', ns)
+            journal_val = journal_el.text.strip() if journal_el is not None else None
+            paper_data = {
+                'arxiv_id': arxiv_id, 'title': title, 'authors': authors,
+                'published_date': published, 'journal_ref': journal_val, 'doi': doi_val,
+            }
+            result = {'arxiv': arxiv2bib(paper_data)}
+            if doi_val:
+                published_bib = doi2bib(doi_val, paper_data)
+                if published_bib:
+                    result['published'] = published_bib
+            return result, 200
+        except Exception:
+            logger.exception("arXiv API fallback failed for %s", arxiv_id)
+            return {'error': 'Paper not found in database and arXiv lookup failed'}, 404
 
     elif doi:
-        # Fetch directly from DOI
         bibtex = doi2bib(doi)
         if bibtex:
-            return jsonify({'published': bibtex})
-        else:
-            return jsonify({'error': 'Failed to fetch BibTeX from DOI'}), 500
+            return {'published': bibtex}, 200
+        return {'error': 'Failed to fetch BibTeX from DOI'}, 500
 
-    return jsonify({'error': 'Could not parse input as arXiv ID or DOI'}), 400
+    return {'error': 'Could not parse input as arXiv ID or DOI'}, 400
+
+
+@app.route('/api/generate-bibtex', methods=['POST'])
+def generate_bibtex_api():
+    """POST endpoint for the tools page (requires CSRF)."""
+    data = request.get_json()
+    result, status = _generate_bibtex(data.get('input', '').strip())
+    return jsonify(result), status
+
+
+@app.route('/api/bibtex.json')
+@csrf.exempt
+def bibtex_json():
+    """GET JSON API: /api/bibtex.json?id=2001.00092 or ?doi=10.1002/jgt.22704"""
+    input_text = request.args.get('id') or request.args.get('doi', '')
+    result, status = _generate_bibtex(input_text.strip())
+    return jsonify(result), status
 
 
 @app.route('/search')
