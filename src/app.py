@@ -737,11 +737,41 @@ def keyword_papers(phrase):
     aliases = cursor.fetchall()
 
     all_kw_phrases = []
+    url_suggestions = []
     if session.get('admin_logged_in'):
         cursor.execute(
             "SELECT phrase FROM keywords WHERE active = 1 ORDER BY phrase"
         )
         all_kw_phrases = [row['phrase'] for row in cursor.fetchall()]
+
+        # Suggest symcat anchors if keyword has no URL
+        if not keyword['url'] and sf_labels:
+            phrase_lower = keyword['phrase'].lower()
+            words = phrase_lower.split()
+            phrase_norm = phrase_lower.replace(' ', '').replace('-', '').replace('_', '')
+            for key, label in sf_labels.items():
+                title_lower = label['title'].lower()
+                key_lower = key.lower()
+                key_norm = key_lower.replace('-', '').replace('_', '')
+                if phrase_lower == title_lower:
+                    url_suggestions.insert(0, (key, label, 'exact title'))
+                elif key_norm == phrase_norm:
+                    url_suggestions.insert(0, (key, label, 'key match'))
+                elif (len(phrase_norm) >= 4 and
+                      (key_norm.startswith(phrase_norm) or phrase_norm.startswith(key_norm))):
+                    url_suggestions.insert(0, (key, label, 'key prefix'))
+                elif phrase_lower in title_lower:
+                    url_suggestions.append((key, label, 'in title'))
+                elif title_lower in phrase_lower:
+                    url_suggestions.append((key, label, 'title in phrase'))
+                elif (len(phrase_norm) >= 4 and
+                      (phrase_norm in key_norm or key_norm in phrase_norm)):
+                    url_suggestions.append((key, label, 'key substr'))
+                elif len(words) > 1 and all(w in key_norm for w in words):
+                    url_suggestions.append((key, label, 'words in key'))
+                elif len(words) > 1 and all(w in title_lower for w in words):
+                    url_suggestions.append((key, label, 'words in title'))
+            url_suggestions = url_suggestions[:8]
 
     cursor.close()
 
@@ -754,7 +784,8 @@ def keyword_papers(phrase):
                            total=total,
                            watching=watching,
                            aliases=aliases,
-                           all_kw_phrases=all_kw_phrases)
+                           all_kw_phrases=all_kw_phrases,
+                           url_suggestions=url_suggestions)
 
 
 @app.route('/category/<path:cat>')

@@ -65,6 +65,16 @@
              value="{{ keyword.url or '' }}" placeholder="anchor or https://…"
              onblur="akwSaveUrl(this)"
              onkeydown="if(event.key==='Enter')this.blur(); if(event.key==='Escape'){this.value=this.defaultValue;this.blur();}">
+      {% if url_suggestions %}
+      <div class="sc-sug" id="akw-url-sug">
+        {% for key, label, match in url_suggestions %}
+        <button type="button" class="sc-sug-btn" onclick="akwApplySug('{{ key }}', this)"
+                title="{{ label.title }} ({{ label.page }}.htm)">
+          {{ key }} <span class="sc-sug-match">{{ match }}</span>
+        </button>
+        {% endfor %}
+      </div>
+      {% endif %}
     </label>
 
     <div style="display:flex; align-items:flex-end; gap:0.3rem; padding-bottom:0.05rem;">
@@ -177,6 +187,16 @@
 }
 .btn-trash:hover { color: #c00; }
 .btn-trash svg { width: 1rem; height: 1rem; vertical-align: middle; }
+.sc-sug { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.25rem; }
+.sc-sug-btn {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  padding: 0.15rem 0.5rem; font-size: 0.78rem; cursor: pointer;
+  background: var(--c-bg-surface, #fff); border: 1px solid var(--c-border, #ccc);
+  border-radius: 3px; color: var(--c-text-sub, #555); font-family: inherit;
+}
+.sc-sug-btn:hover { border-color: var(--c-accent, #2a6); color: var(--c-accent, #2a6); }
+.sc-sug-btn .sc-sug-match { font-size: 0.7rem; color: var(--c-text-muted, #999); }
+.sc-sug-applied { font-size: 0.78rem; color: #4a4; font-weight: 600; }
 </style>
 {% endblock %}
 
@@ -343,6 +363,23 @@ async function akwDelete() {
 function akwFlash(el, ok) {
   el.classList.add(ok ? 'saved' : 'error');
   setTimeout(() => el.classList.remove('saved', 'error'), 800);
+}
+
+async function akwApplySug(anchor, btn) {
+  const fd = new FormData();
+  fd.append('field', 'url');
+  fd.append('value', anchor);
+  try {
+    const res  = await csrfFetch(`/admin/keywords/${_kid}/inline`, fd);
+    const data = await res.json();
+    if (data.ok) {
+      document.getElementById('akw-url').value = anchor;
+      document.getElementById('akw-url').defaultValue = anchor;
+      document.getElementById('akw-url-sug').innerHTML =
+        '<span class="sc-sug-applied">\u2713 ' + anchor + '</span>';
+      location.reload();
+    } else { btn.textContent = 'Error'; }
+  } catch { btn.textContent = 'Failed'; }
 }
 {% endif %}
 </script>
