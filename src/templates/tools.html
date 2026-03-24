@@ -16,7 +16,8 @@
 <details style="margin-top:0.5rem; font-size:0.9rem; color:var(--c-text-sub);">
   <summary style="cursor:pointer;">JSON API</summary>
   <p style="margin:0.5rem 0 0;">
-    GET <code>/api/bibtex.json?id=2001.00092</code> or <code>/api/bibtex.json?doi=10.1002/jgt.22704</code>
+    GET <code>https://arxiv.symmetricfunctions.com/api/bibtex.json?id=2001.00092</code><br>
+    or <code>https://arxiv.symmetricfunctions.com/api/bibtex.json?doi=10.1002/jgt.22704</code>
   </p>
 </details>
 
@@ -97,17 +98,25 @@ async function generateBibtex(event) {
         }
 
         // Show results
-        if (data.arxiv) {
+        const hasArxiv = !!data.arxiv;
+        const hasPublished = !!data.published;
+
+        if (hasArxiv) {
             arxivBibtex.textContent = data.arxiv;
-            showTab('arxiv-tab');
+            document.getElementById('arxiv-tab-btn').style.display = 'inline-block';
+        } else {
+            document.getElementById('arxiv-tab-btn').style.display = 'none';
         }
 
-        if (data.published) {
+        if (hasPublished) {
             publishedBibtex.textContent = data.published;
             publishedTabBtn.style.display = 'inline-block';
         } else {
             publishedTabBtn.style.display = 'none';
         }
+
+        // Activate the most relevant tab
+        showTab(hasPublished && !hasArxiv ? 'published-tab' : 'arxiv-tab');
 
         resultContainer.style.display = 'block';
 

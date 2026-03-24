@@ -565,7 +565,7 @@ def _generate_bibtex(input_text):
         bibtex = doi2bib(doi)
         if bibtex:
             return {'published': bibtex}, 200
-        return {'error': 'Failed to fetch BibTeX from DOI'}, 500
+        return {'error': f'Could not resolve DOI: {doi}'}, 404
 
     return {'error': 'Could not parse input as arXiv ID or DOI'}, 400
 
