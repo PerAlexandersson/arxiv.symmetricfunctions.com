@@ -129,6 +129,61 @@ def _sf_url(value):
 app.jinja_env.filters['sf_url'] = _sf_url
 
 
+# ── Index page data cache ─────────────────────────────────────────────────────
+# Pre-computed after each /fetch run; avoids DB queries for anonymous visitors.
+_index_cache = {}   # {page_num: {papers, page, total_pages, total, total_authors, latest_date}}
+
+def _build_index_page(cursor, page, per_page, stats):
+    """Query one page of papers and attach authors + keywords."""
+    offset = (page - 1) * per_page
+    cursor.execute("""
+        SELECT id, arxiv_id, title, abstract, published_date, updated_date,
+               journal_ref, doi, comment, primary_category
+        FROM papers
+        ORDER BY published_date DESC, id DESC
+        LIMIT %s OFFSET %s
+    """, (per_page, offset))
+    papers = cursor.fetchall()
+    attach_authors(cursor, papers)
+    attach_keywords(cursor, papers)
+    total_pages = max(1, (stats['total'] + per_page - 1) // per_page)
+    return {
+        'papers': papers,
+        'page': page,
+        'total_pages': total_pages,
+        'total': stats['total'],
+        'total_authors': stats['total_authors'],
+        'latest_date': stats['latest_date'],
+    }
+
+def rebuild_index_cache():
+    """Pre-warm the index cache for pages 1-2. Call after data changes."""
+    global _index_cache
+    conn = pymysql.connect(**DB_CONFIG, cursorclass=pymysql.cursors.DictCursor)
+    cursor = conn.cursor()
+    cursor.execute("SELECT paper_count, author_count, latest_date FROM site_stats WHERE id = 1")
+    row = cursor.fetchone()
+    if not row:
+        cursor.close()
+        conn.close()
+        return
+    stats = {'total': row['paper_count'], 'total_authors': row['author_count'],
+             'latest_date': row['latest_date']}
+    new_cache = {}
+    for pg in (1, 2):
+        new_cache[pg] = _build_index_page(cursor, pg, 20, stats)
+    cursor.close()
+    conn.close()
+    _index_cache = new_cache
+    logger.info("Index cache rebuilt (pages 1-2, %d papers)", stats['total'])
+
+# Warm cache on startup
+try:
+    rebuild_index_cache()
+except Exception:
+    logger.warning("Could not pre-warm index cache on startup")
+
+
 def doi2bib(doi, paper_data=None):
     """
     Generate BibTeX entry from DOI using content negotiation,
@@ -247,6 +302,12 @@ def index():
     """Homepage - list recent papers."""
     page = max(1, request.args.get('page', 1, type=int))
     per_page = 20
+
+    # Serve from cache for anonymous visitors on pages 1-2
+    if not session.get('user_id') and page in _index_cache:
+        cached = _index_cache[page]
+        return render_template('index.html', **cached)
+
     offset = (page - 1) * per_page
 
     conn = get_db_connection()
@@ -1124,6 +1185,9 @@ def fetch_papers():
     """)
     conn.commit()
     cursor.close()
+
+    # Rebuild the index page cache with fresh data
+    rebuild_index_cache()
 
     return output.getvalue(), 200, {'Content-Type': 'text/plain; charset=utf-8'}
 
