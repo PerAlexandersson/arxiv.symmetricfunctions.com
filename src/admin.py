@@ -772,8 +772,12 @@ def dois():
         c['paper_authors'] = authors_map.get(c['paper_id'], [])[:3]
 
     cursor.close()
+    # Default date range: 1 year ago → today
+    today = str(date_type.today())
+    one_year_ago = str(date_type.today().replace(year=date_type.today().year - 1))
     return render_template('admin/dois.html',
-                           candidates=candidates, counts=counts, show=show)
+                           candidates=candidates, counts=counts, show=show,
+                           default_from=one_year_ago, default_to=today)
 
 
 @admin.route('/dois/<int:cid>/approve', methods=['POST'])
@@ -826,7 +830,14 @@ def run_doi_lookup():
         import sys
         buf = io.StringIO()
         old_argv = sys.argv
-        sys.argv = ['doi_lookup.py', '--batch', '20', '--auto-approve', '0.95']
+        argv = ['doi_lookup.py', '--batch', '20', '--auto-approve', '0.95']
+        from_date = request.form.get('from_date', '').strip()
+        to_date = request.form.get('to_date', '').strip()
+        if from_date:
+            argv += ['--from-date', from_date]
+        if to_date:
+            argv += ['--to-date', to_date]
+        sys.argv = argv
         with contextlib.redirect_stdout(buf):
             doi_main()
         sys.argv = old_argv

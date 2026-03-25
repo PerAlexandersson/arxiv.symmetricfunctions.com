@@ -79,6 +79,10 @@
   <span class="doi-badge">{{ counts.get('pending', 0) }} pending</span>
   <span class="doi-badge">{{ counts.get('approved', 0) }} approved</span>
   <span class="doi-badge">{{ counts.get('rejected', 0) }} rejected</span>
+</div>
+<div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap; margin-bottom:1rem; font-size:0.88rem;">
+  <label>From <input type="date" id="doi-from" value="{{ default_from }}" style="padding:0.2rem 0.4rem;"></label>
+  <label>To <input type="date" id="doi-to" value="{{ default_to }}" style="padding:0.2rem 0.4rem;"></label>
   <button class="doi-run-btn" onclick="runLookup(this)">Run lookup (20 papers)</button>
 </div>
 
@@ -176,9 +180,15 @@ async function runLookup(btn) {
   logDiv.style.display = 'block';
   logDiv.innerHTML = '<div class="doi-log">Looking up DOIs...</div>';
   try {
+    const fd = new FormData();
+    const fromDate = document.getElementById('doi-from').value;
+    const toDate = document.getElementById('doi-to').value;
+    if (fromDate) fd.append('from_date', fromDate);
+    if (toDate) fd.append('to_date', toDate);
     const res = await fetch('/admin/dois/run', {
       method: 'POST',
-      headers: {'X-CSRFToken': csrf}
+      headers: {'X-CSRFToken': csrf},
+      body: fd
     });
     const data = await res.json();
     logDiv.innerHTML = '<div class="doi-log">' +

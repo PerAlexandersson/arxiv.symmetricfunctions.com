@@ -54,6 +54,7 @@ CREATE TABLE papers (
     doi VARCHAR(100),                               -- Digital Object Identifier
     doi_status ENUM('arxiv','auto','verified') DEFAULT NULL, -- provenance
     doi_confidence DECIMAL(4,3) DEFAULT NULL,       -- match score (0-1)
+    doi_checked_at TIMESTAMP NULL DEFAULT NULL,    -- last Crossref lookup
 
     -- Internal tracking
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

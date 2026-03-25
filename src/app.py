@@ -184,6 +184,73 @@ except Exception:
     logger.warning("Could not pre-warm index cache on startup")
 
 
+def _reformat_doi_bibtex(raw_bib, doi):
+    """Reformat a raw BibTeX string from doi.org to match our house style.
+
+    - Key: ConcatenatedLastNames + Year (no 'x' suffix)
+    - Lowercase field names, 2-space indent
+    - Capital letters protected with {..}
+    """
+    # Parse entry type
+    m = re.match(r'@(\w+)\s*\{', raw_bib)
+    entry_type = m.group(1).lower() if m else 'article'
+
+    # Extract fields from raw bibtex
+    fields = {}
+    # Match field = {value} or field = value patterns
+    for fm in re.finditer(r'(\w+)\s*=\s*\{((?:[^{}]|\{[^{}]*\})*)\}', raw_bib):
+        fields[fm.group(1).lower()] = fm.group(2).strip()
+
+    # Extract authors and year for key generation
+    author_str = fields.get('author', '')
+    year = fields.get('year', '')
+
+    # Parse author names for key: handle "Last, First and Last, First" format
+    authors = []
+    if author_str:
+        for part in re.split(r'\s+and\s+', author_str):
+            part = part.strip()
+            if ',' in part:
+                last = part.split(',')[0].strip()
+            else:
+                words = part.split()
+                last = words[-1] if words else part
+            authors.append(last)
+
+    key = generate_bibtex_key(authors, year, published=True) if authors and year else None
+    if not key:
+        # Fallback: use first author underscore year from raw
+        key = re.search(r'\{([^,]+)', raw_bib)
+        key = key.group(1) if key else f"doi{year}"
+
+    # Protect capitals in title
+    title = fields.get('title', '')
+    if title:
+        # Remove existing {..} protection first, then re-apply ours
+        clean_title = re.sub(r'\{([^{}]*)\}', r'\1', title)
+        fields['title'] = protect_capitals_for_bibtex(clean_title)
+
+    # Build formatted output
+    # Field order preference
+    order = ['author', 'title', 'year', 'journal', 'volume', 'number',
+             'pages', 'publisher', 'doi', 'url', 'issn', 'isbn', 'month']
+    lines = [f"@{entry_type}{{{key},"]
+    seen = set()
+    for fname in order:
+        if fname in fields:
+            lines.append(f"  {fname} = {{{fields[fname]}}},")
+            seen.add(fname)
+    # Remaining fields not in preferred order
+    for fname, val in fields.items():
+        if fname not in seen:
+            lines.append(f"  {fname} = {{{val}}},")
+    # Remove trailing comma from last field
+    if lines[-1].endswith(','):
+        lines[-1] = lines[-1][:-1]
+    lines.append("}")
+    return '\n'.join(lines)
+
+
 def doi2bib(doi, paper_data=None):
     """
     Generate BibTeX entry from DOI using content negotiation,
@@ -214,13 +281,16 @@ def doi2bib(doi, paper_data=None):
 }}"""
         return bibtex
     else:
-        # Fetch from DOI.org
+        # Fetch from DOI.org and reformat to match our style
         try:
             doi_url = f"https://doi.org/{doi}"
             headers = {'Accept': 'application/x-bibtex'}
             response = requests.get(doi_url, headers=headers, timeout=10)
             response.raise_for_status()
-            return response.text
+            raw = response.text.strip()
+            if not raw or '@' not in raw[:50]:
+                return None
+            return _reformat_doi_bibtex(raw, doi)
         except requests.RequestException:
             return None
 

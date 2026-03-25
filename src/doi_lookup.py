@@ -121,23 +121,40 @@ def query_crossref(title, first_author_last):
         return []
 
 
-def get_papers_needing_doi(cursor, batch_size, min_age_days):
-    """Find papers without DOI that haven't been looked up recently."""
-    cursor.execute("""
-        SELECT p.id, p.arxiv_id, p.title, p.published_date
-        FROM papers p
-        WHERE p.doi IS NULL
-          AND p.published_date <= DATE_SUB(CURDATE(), INTERVAL %s DAY)
-          AND NOT EXISTS (
+def get_papers_needing_doi(cursor, batch_size, min_age_days,
+                           recheck_days=180, from_date=None, to_date=None):
+    """Find papers without DOI that haven't been checked recently.
+
+    Skips papers with doi_checked_at within the last recheck_days,
+    and papers with pending/approved candidates.
+    """
+    conditions = [
+        "p.doi IS NULL",
+        "p.published_date <= DATE_SUB(CURDATE(), INTERVAL %s DAY)",
+        "(p.doi_checked_at IS NULL OR p.doi_checked_at < DATE_SUB(NOW(), INTERVAL %s DAY))",
+        """NOT EXISTS (
               SELECT 1 FROM doi_candidates dc
               WHERE dc.paper_id = p.id
-                AND (dc.status IN ('pending', 'approved')
-                     OR (dc.status = 'rejected'
-                         AND dc.reviewed_at > DATE_SUB(NOW(), INTERVAL 180 DAY)))
-          )
+                AND dc.status IN ('pending', 'approved')
+          )""",
+    ]
+    params = [min_age_days, recheck_days]
+
+    if from_date:
+        conditions.append("p.published_date >= %s")
+        params.append(from_date)
+    if to_date:
+        conditions.append("p.published_date <= %s")
+        params.append(to_date)
+
+    params.append(batch_size)
+    cursor.execute(f"""
+        SELECT p.id, p.arxiv_id, p.title, p.published_date
+        FROM papers p
+        WHERE {' AND '.join(conditions)}
         ORDER BY p.published_date DESC
         LIMIT %s
-    """, (min_age_days, batch_size))
+    """, params)
     return cursor.fetchall()
 
 
@@ -157,6 +174,12 @@ def main():
     parser.add_argument('--batch', type=int, default=50, help='papers per run')
     parser.add_argument('--min-age', type=int, default=30,
                         help='skip papers published fewer than N days ago')
+    parser.add_argument('--recheck', type=int, default=180,
+                        help='skip papers checked within N days (default 180)')
+    parser.add_argument('--from-date', type=str, default=None,
+                        help='only papers published on or after this date (YYYY-MM-DD)')
+    parser.add_argument('--to-date', type=str, default=None,
+                        help='only papers published on or before this date (YYYY-MM-DD)')
     parser.add_argument('--dry-run', action='store_true',
                         help='print matches without writing to DB')
     parser.add_argument('--auto-approve', type=float, default=None,
@@ -166,7 +189,10 @@ def main():
     conn = pymysql.connect(**DB_CONFIG, cursorclass=pymysql.cursors.DictCursor)
     cursor = conn.cursor()
 
-    papers = get_papers_needing_doi(cursor, args.batch, args.min_age)
+    papers = get_papers_needing_doi(cursor, args.batch, args.min_age,
+                                    recheck_days=args.recheck,
+                                    from_date=args.from_date,
+                                    to_date=args.to_date)
     print(f"Found {len(papers)} papers to query.")
 
     stats = {'queried': 0, 'found': 0, 'auto_approved': 0, 'skipped': 0}
@@ -238,6 +264,12 @@ def main():
                 print(f"  {paper['arxiv_id']}  conf={best[0]:.3f}  (below threshold)")
             else:
                 print(f"  {paper['arxiv_id']}  no Crossref results")
+
+        # Mark paper as checked regardless of outcome
+        if not args.dry_run:
+            cursor.execute(
+                "UPDATE papers SET doi_checked_at = NOW() WHERE id = %s",
+                (paper['id'],))
 
         time.sleep(REQUEST_DELAY)
 
