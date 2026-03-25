@@ -102,6 +102,7 @@ echo -e "${YELLOW}Step 2: Uploading and applying database migrations...${NC}"
 # Only migration files — never schema.sql (that drops all tables, for fresh installs only)
 MIGRATIONS=(
     # Add new migration files here when needed; remove once applied everywhere.
+    migrate_doi_status.sql
 )
 
 for fname in "${MIGRATIONS[@]}"; do

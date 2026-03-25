@@ -5,7 +5,7 @@ app.py - Flask web application for arXiv combinatorics frontend
 Main web interface for browsing arXiv papers.
 """
 
-from flask import Flask, render_template, request, jsonify, abort, redirect, url_for, session, g
+from flask import Flask, render_template, request, jsonify, abort, redirect, url_for, session
 from urllib.parse import unquote
 import io
 import contextlib
@@ -507,45 +507,48 @@ def keyword_cloud():
     # For admins: compute symcat suggestions for keywords without URLs
     suggestions = []
     if session.get('admin_logged_in') and sf_labels:
+        from utils import suggest_sf_labels
         for kw in keywords:
             if kw['url']:
                 continue
-            phrase_lower = kw['phrase'].lower()
-            words = phrase_lower.split()
-            phrase_norm = phrase_lower.replace(' ', '').replace('-', '').replace('_', '')
-            kw_sugs = []
-            for key, label in sf_labels.items():
-                title_lower = label['title'].lower()
-                key_lower = key.lower()
-                key_norm = key_lower.replace('-', '').replace('_', '')
-                if phrase_lower == title_lower:
-                    kw_sugs.insert(0, (key, label, 'exact title'))
-                elif key_norm == phrase_norm:
-                    kw_sugs.insert(0, (key, label, 'key match'))
-                elif (len(phrase_norm) >= 4 and
-                      (key_norm.startswith(phrase_norm) or phrase_norm.startswith(key_norm))):
-                    kw_sugs.insert(0, (key, label, 'key prefix'))
-                elif phrase_lower in title_lower:
-                    kw_sugs.append((key, label, 'in title'))
-                elif title_lower in phrase_lower:
-                    kw_sugs.append((key, label, 'title in phrase'))
-                elif (len(phrase_norm) >= 4 and
-                      (phrase_norm in key_norm or key_norm in phrase_norm)):
-                    kw_sugs.append((key, label, 'key substr'))
-                elif len(words) > 1 and all(w in key_norm for w in words):
-                    kw_sugs.append((key, label, 'words in key'))
-                elif len(words) > 1 and all(w in title_lower for w in words):
-                    kw_sugs.append((key, label, 'words in title'))
+            kw_sugs = suggest_sf_labels(kw['phrase'], sf_labels)
             if kw_sugs:
                 suggestions.append({'id': kw['id'], 'phrase': kw['phrase'],
-                                    'suggestions': kw_sugs[:8]})
+                                    'suggestions': kw_sugs})
 
     return render_template('keywords.html', keywords=keywords,
                            symcat_suggestions=suggestions)
 
 
-def _generate_bibtex(input_text):
-    """Core BibTeX generation logic. Returns (result_dict, status_code)."""
+def _crossref_lookup_doi(title, authors, year):
+    """Try to find a DOI via Crossref for a paper without one.
+
+    Returns (doi, confidence) or (None, 0).
+    """
+    try:
+        from doi_lookup import query_crossref, score_match, _last_name
+        first_last = _last_name(authors[0]) if authors else ''
+        items = query_crossref(title, first_last)
+        best_doi, best_conf = None, 0
+        for item in items:
+            doi = item.get('DOI')
+            if not doi:
+                continue
+            conf, _, _ = score_match(title, authors, year, item)
+            if conf > best_conf:
+                best_conf, best_doi = conf, doi
+        if best_conf >= 0.75:
+            return best_doi, best_conf
+    except Exception:
+        logger.debug("Crossref lookup failed for %s", title[:60], exc_info=True)
+    return None, 0
+
+
+def _generate_bibtex(input_text, lookup_doi=False):
+    """Core BibTeX generation logic. Returns (result_dict, status_code).
+
+    If lookup_doi is True and the paper has no DOI, attempt a Crossref lookup.
+    """
     import xml.etree.ElementTree as ET
 
     if not input_text:
@@ -582,8 +585,20 @@ def _generate_bibtex(input_text):
             paper['authors'] = get_paper_authors(cursor, paper['id'])
             cursor.close()
             result = {'arxiv': arxiv2bib(paper)}
-            if paper['doi']:
-                published_bib = doi2bib(paper['doi'], paper)
+            paper_doi = paper['doi']
+            # Optionally look up DOI via Crossref
+            if not paper_doi and lookup_doi:
+                year = (paper['published_date'].year
+                        if hasattr(paper['published_date'], 'year')
+                        else int(str(paper['published_date'])[:4]))
+                found_doi, conf = _crossref_lookup_doi(
+                    paper['title'], paper['authors'], year)
+                if found_doi:
+                    paper_doi = found_doi
+                    result['doi_lookup'] = {
+                        'doi': found_doi, 'confidence': conf, 'source': 'crossref'}
+            if paper_doi:
+                published_bib = doi2bib(paper_doi, paper)
                 if published_bib:
                     result['published'] = published_bib
             return result, 200
@@ -613,6 +628,13 @@ def _generate_bibtex(input_text):
                 'published_date': published, 'journal_ref': journal_val, 'doi': doi_val,
             }
             result = {'arxiv': arxiv2bib(paper_data)}
+            # Optionally look up DOI via Crossref
+            if not doi_val and lookup_doi:
+                found_doi, conf = _crossref_lookup_doi(title, authors, int(published))
+                if found_doi:
+                    doi_val = found_doi
+                    result['doi_lookup'] = {
+                        'doi': found_doi, 'confidence': conf, 'source': 'crossref'}
             if doi_val:
                 published_bib = doi2bib(doi_val, paper_data)
                 if published_bib:
@@ -635,16 +657,20 @@ def _generate_bibtex(input_text):
 def generate_bibtex_api():
     """POST endpoint for the tools page (requires CSRF)."""
     data = request.get_json()
-    result, status = _generate_bibtex(data.get('input', '').strip())
+    lookup = data.get('lookup_doi', False)
+    result, status = _generate_bibtex(data.get('input', '').strip(),
+                                      lookup_doi=bool(lookup))
     return jsonify(result), status
 
 
 @app.route('/api/bibtex.json')
 @csrf.exempt
 def bibtex_json():
-    """GET JSON API: /api/bibtex.json?id=2001.00092 or ?doi=10.1002/jgt.22704"""
+    """GET JSON API: /api/bibtex.json?id=2001.00092&lookup_doi=1"""
     input_text = request.args.get('id') or request.args.get('doi', '')
-    result, status = _generate_bibtex(input_text.strip())
+    lookup = request.args.get('lookup_doi', '')
+    result, status = _generate_bibtex(input_text.strip(),
+                                      lookup_doi=lookup in ('1', 'true', 'yes'))
     return jsonify(result), status
 
 

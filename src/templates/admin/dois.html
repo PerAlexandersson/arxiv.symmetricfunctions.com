@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block title %}DOI Discovery — Admin{% endblock %}
+
+{% block extra_css %}
+<style>
+.doi-header {
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.doi-header h2 { margin: 0; }
+.doi-badge {
+  font-size: 0.82rem; padding: 0.2rem 0.7rem; border-radius: 99px;
+  background: var(--c-bg-alt, #eee); color: var(--c-text-sub, #555);
+}
+.doi-run-btn {
+  padding: 0.35rem 0.9rem; font-size: 0.85rem; cursor: pointer;
+  background: var(--c-accent, #2a6); color: #fff;
+  border: none; border-radius: 4px;
+}
+.doi-run-btn:disabled { opacity: 0.5; cursor: default; }
+.doi-tabs {
+  display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 2px solid var(--c-border, #ccc);
+}
+.doi-tabs a {
+  padding: 0.4rem 1rem; font-size: 0.85rem; cursor: pointer;
+  background: transparent; border: 1px solid transparent; border-bottom: none;
+  border-radius: 4px 4px 0 0; margin-bottom: -2px;
+  color: var(--c-text-sub, #555); text-decoration: none;
+}
+.doi-tabs a:hover { background: var(--c-bg-gray, #eee); }
+.doi-tabs a.active {
+  background: var(--c-bg-surface, #fff); font-weight: 600;
+  color: var(--c-text-main, #222); border-color: var(--c-border, #ccc);
+}
+.doi-table {
+  width: 100%; border-collapse: collapse; font-size: 0.88rem;
+}
+.doi-table th {
+  text-align: left; font-size: 0.78rem; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--c-text-muted, #888);
+  border-bottom: 2px solid var(--c-border, #ccc); padding: 0.4rem 0.6rem;
+}
+.doi-table td {
+  padding: 0.35rem 0.6rem; border-bottom: 1px solid var(--c-border, #eee);
+  vertical-align: top;
+}
+.doi-table tr:hover td { background: var(--c-bg-alt, #f8f8f8); }
+.doi-conf {
+  display: inline-block; padding: 0.1rem 0.5rem; border-radius: 3px;
+  font-weight: 600; font-size: 0.82rem;
+}
+.doi-conf-high { background: #d4edda; color: #155724; }
+.doi-conf-med  { background: #fff3cd; color: #856404; }
+.doi-conf-low  { background: #ffe0cc; color: #8a4500; }
+.doi-title { font-size: 0.84rem; color: var(--c-text-sub, #555); }
+.doi-authors { font-size: 0.78rem; color: var(--c-text-muted, #888); }
+.doi-actions button {
+  padding: 0.2rem 0.6rem; font-size: 0.82rem; cursor: pointer;
+  border: 1px solid var(--c-border, #ccc); border-radius: 3px;
+  background: var(--c-bg-surface, #fff); font-family: inherit;
+}
+.doi-actions .approve-btn { color: #155724; border-color: #155724; }
+.doi-actions .approve-btn:hover { background: #d4edda; }
+.doi-actions .reject-btn { color: #721c24; border-color: #721c24; }
+.doi-actions .reject-btn:hover { background: #f8d7da; }
+.doi-done { font-size: 0.82rem; font-weight: 600; }
+.doi-done-ok { color: #155724; }
+.doi-done-no { color: #721c24; }
+.doi-log { margin-top: 1rem; padding: 0.8rem; background: var(--c-bg-gray, #f5f5f5);
+  border-radius: 4px; font-size: 0.82rem; white-space: pre-wrap; max-height: 20rem; overflow-y: auto; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'admin/_nav.html' %}
+
+<div class="doi-header">
+  <h2>DOI Discovery</h2>
+  <span class="doi-badge">{{ counts.get('pending', 0) }} pending</span>
+  <span class="doi-badge">{{ counts.get('approved', 0) }} approved</span>
+  <span class="doi-badge">{{ counts.get('rejected', 0) }} rejected</span>
+  <button class="doi-run-btn" onclick="runLookup(this)">Run lookup (20 papers)</button>
+</div>
+
+<div class="doi-tabs">
+  <a href="?show=pending" class="{% if show == 'pending' %}active{% endif %}">Pending</a>
+  <a href="?show=approved" class="{% if show == 'approved' %}active{% endif %}">Approved</a>
+  <a href="?show=rejected" class="{% if show == 'rejected' %}active{% endif %}">Rejected</a>
+  <a href="?show=all" class="{% if show == 'all' %}active{% endif %}">All</a>
+</div>
+
+<div id="run-log" style="display:none;"></div>
+
+{% if candidates %}
+<table class="doi-table">
+  <thead>
+    <tr>
+      <th>arXiv Paper</th>
+      <th>Crossref Match</th>
+      <th>Conf</th>
+      <th>DOI</th>
+      {% if show == 'pending' or show == 'all' %}<th>Actions</th>{% endif %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in candidates %}
+    <tr id="row-{{ c.id }}">
+      <td>
+        <a href="/paper/{{ c.arxiv_id }}" target="_blank">{{ c.arxiv_id }}</a><br>
+        <span class="doi-title">{{ c.paper_title[:70] }}{% if c.paper_title|length > 70 %}...{% endif %}</span><br>
+        <span class="doi-authors">{{ c.paper_authors|join(', ') }}{% if c.paper_authors|length == 3 %} et al.{% endif %} ({{ c.published_date.year }})</span>
+      </td>
+      <td>
+        <span class="doi-title">{{ c.crossref_title[:70] }}{% if c.crossref_title and c.crossref_title|length > 70 %}...{% endif %}</span><br>
+        <span class="doi-authors">{{ c.crossref_authors[:80] }}{% if c.crossref_authors and c.crossref_authors|length > 80 %}...{% endif %}{% if c.crossref_year %} ({{ c.crossref_year }}){% endif %}</span>
+      </td>
+      <td>
+        <span class="doi-conf {% if c.confidence >= 0.90 %}doi-conf-high{% elif c.confidence >= 0.75 %}doi-conf-med{% else %}doi-conf-low{% endif %}">
+          {{ '%.0f'|format(c.confidence * 100) }}%
+        </span>
+      </td>
+      <td style="font-size:0.82rem;">
+        <a href="https://doi.org/{{ c.doi }}" target="_blank" rel="noopener">{{ c.doi }}</a>
+      </td>
+      {% if show == 'pending' or show == 'all' %}
+      <td class="doi-actions" id="act-{{ c.id }}">
+        {% if c.status == 'pending' %}
+        <button class="approve-btn" onclick="doiAction({{ c.id }}, 'approve', this)">Approve</button>
+        <button class="reject-btn" onclick="doiAction({{ c.id }}, 'reject', this)">Reject</button>
+        {% elif c.status == 'approved' %}
+        <span class="doi-done doi-done-ok">approved</span>
+        {% else %}
+        <span class="doi-done doi-done-no">rejected</span>
+        {% endif %}
+      </td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p style="color:var(--c-text-muted)">No candidates in this view.</p>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const csrf = document.querySelector('meta[name="csrf-token"]').content;
+
+async function doiAction(cid, action, btn) {
+  const container = document.getElementById('act-' + cid);
+  try {
+    const res = await fetch(`/admin/dois/${cid}/${action}`, {
+      method: 'POST',
+      headers: {'X-CSRFToken': csrf}
+    });
+    const data = await res.json();
+    if (data.ok) {
+      if (action === 'approve') {
+        container.innerHTML = '<span class="doi-done doi-done-ok">\u2713 approved</span>';
+      } else {
+        container.innerHTML = '<span class="doi-done doi-done-no">\u2717 rejected</span>';
+      }
+    } else {
+      btn.textContent = 'Error';
+    }
+  } catch(e) {
+    btn.textContent = 'Failed';
+  }
+}
+
+async function runLookup(btn) {
+  btn.disabled = true;
+  btn.textContent = 'Running...';
+  const logDiv = document.getElementById('run-log');
+  logDiv.style.display = 'block';
+  logDiv.innerHTML = '<div class="doi-log">Looking up DOIs...</div>';
+  try {
+    const res = await fetch('/admin/dois/run', {
+      method: 'POST',
+      headers: {'X-CSRFToken': csrf}
+    });
+    const data = await res.json();
+    logDiv.innerHTML = '<div class="doi-log">' +
+      (data.log || data.error || 'Done').replace(/</g, '&lt;') + '</div>';
+    if (data.ok) {
+      btn.textContent = 'Done — reload to see results';
+    } else {
+      btn.textContent = 'Error — see log';
+    }
+  } catch(e) {
+    logDiv.innerHTML = '<div class="doi-log">Request failed: ' + e.message + '</div>';
+    btn.textContent = 'Failed';
+  }
+}
+</script>
+{% endblock %}

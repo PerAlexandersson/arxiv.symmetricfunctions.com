@@ -12,18 +12,13 @@ Routes (API — JSON, CSRF-protected POST):
 import logging
 from flask import (Blueprint, render_template, request, jsonify,
                    redirect, url_for, session, abort)
-from db import get_db_connection, attach_authors, attach_keywords
+from db import get_db_connection, attach_authors, attach_keywords, require_user
 
 logger = logging.getLogger(__name__)
 watch_bp = Blueprint('watch', __name__)
 
 
-def _require_user():
-    """Return user_id from session or abort 401."""
-    user_id = session.get('user_id')
-    if not user_id:
-        abort(401)
-    return user_id
+_require_user = require_user  # back-compat alias
 
 
 # ── API routes ─────────────────────────────────────────────────────────────────

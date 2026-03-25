@@ -17,11 +17,11 @@ DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS paper_keywords;
 DROP TABLE IF EXISTS keyword_aliases;
 DROP TABLE IF EXISTS paper_authors;
-DROP TABLE IF EXISTS paper_tags;
+DROP TABLE IF EXISTS paper_tags;   -- legacy, unused
 DROP TABLE IF EXISTS paper_categories;
 DROP TABLE IF EXISTS authors;
 DROP TABLE IF EXISTS papers;
-DROP TABLE IF EXISTS tags;
+DROP TABLE IF EXISTS tags;         -- legacy, unused
 DROP TABLE IF EXISTS keywords;
 DROP TABLE IF EXISTS ignored_candidates;
 DROP TABLE IF EXISTS math_words;
@@ -52,7 +52,9 @@ CREATE TABLE papers (
     comment TEXT,                                   -- e.g., "23 pages, 5 figures, to appear in Combinatorica"
     journal_ref TEXT,                               -- e.g., "J. Combin. Theory Ser. A 156 (2018), 1-23"
     doi VARCHAR(100),                               -- Digital Object Identifier
-    
+    doi_status ENUM('arxiv','auto','verified') DEFAULT NULL, -- provenance
+    doi_confidence DECIMAL(4,3) DEFAULT NULL,       -- match score (0-1)
+
     -- Internal tracking
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -60,8 +62,30 @@ CREATE TABLE papers (
     -- Indexes for common queries
     INDEX idx_arxiv_id (arxiv_id),
     INDEX idx_published_date (published_date),
-    INDEX idx_updated_date (updated_date)
-    
+    INDEX idx_updated_date (updated_date),
+    INDEX idx_doi_status (doi_status)
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================================
+-- DOI Candidates (Crossref lookup staging table)
+-- ============================================================================
+CREATE TABLE doi_candidates (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    paper_id        INT NOT NULL,
+    doi             VARCHAR(100) NOT NULL,
+    confidence      DECIMAL(4,3) NOT NULL,
+    crossref_title  TEXT,
+    crossref_authors TEXT,
+    crossref_year   SMALLINT,
+    status          ENUM('pending','approved','rejected') DEFAULT 'pending',
+    reviewed_at     TIMESTAMP NULL DEFAULT NULL,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE KEY idx_paper_doi (paper_id, doi),
+    INDEX idx_status (status),
+    INDEX idx_confidence (confidence),
+    FOREIGN KEY (paper_id) REFERENCES papers(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
@@ -116,8 +140,7 @@ CREATE TABLE paper_categories (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
--- Tags Table
--- Stores all tags (MSC codes, personal tags, arXiv categories, etc.)
+-- Tags Table (LEGACY — replaced by keywords/paper_keywords, kept for compat)
 -- ============================================================================
 CREATE TABLE tags (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -143,9 +166,7 @@ CREATE TABLE tags (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
--- Paper-Tags Junction Table
--- Many-to-many relationship: papers can have multiple tags,
--- tags can be applied to multiple papers
+-- Paper-Tags Junction Table (LEGACY — see paper_keywords)
 -- ============================================================================
 CREATE TABLE paper_tags (
     paper_id INT NOT NULL,

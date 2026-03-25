@@ -7,8 +7,16 @@ as a teardown handler so the connection is closed once at end-of-request.
 """
 
 import pymysql
-from flask import g
+from flask import g, session, abort
 from config import DB_CONFIG
+
+
+def require_user():
+    """Return user_id from session or abort 401."""
+    user_id = session.get('user_id')
+    if not user_id:
+        abort(401)
+    return user_id
 
 
 def get_db_connection():

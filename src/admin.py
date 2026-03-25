@@ -701,42 +701,8 @@ def symcat():
             kw['sf_resolved'] = anchor  # full external URL or None
             # Suggest labels for keywords without a symcat anchor
             if not anchor and sf_labels:
-                phrase_lower = kw['phrase'].lower()
-                words = phrase_lower.split()
-                # Normalized form: remove spaces, hyphens, underscores
-                phrase_norm = phrase_lower.replace(' ', '').replace('-', '').replace('_', '')
-                for key, label in sf_labels.items():
-                    title_lower = label['title'].lower()
-                    key_lower = key.lower()
-                    key_norm = key_lower.replace('-', '').replace('_', '')
-                    # Exact title match
-                    if phrase_lower == title_lower:
-                        kw['suggestions'].insert(0, (key, label, 'exact title'))
-                    # Key exactly matches normalized phrase
-                    elif key_norm == phrase_norm:
-                        kw['suggestions'].insert(0, (key, label, 'key match'))
-                    # Normalized phrase is a prefix of key or vice versa
-                    # (catches gtpattern→gtpatterns, plural mismatches)
-                    elif (len(phrase_norm) >= 4 and
-                          (key_norm.startswith(phrase_norm) or phrase_norm.startswith(key_norm))):
-                        kw['suggestions'].insert(0, (key, label, 'key prefix'))
-                    # Phrase appears in title
-                    elif phrase_lower in title_lower:
-                        kw['suggestions'].append((key, label, 'in title'))
-                    # Title appears in phrase
-                    elif title_lower in phrase_lower:
-                        kw['suggestions'].append((key, label, 'title in phrase'))
-                    # Normalized phrase is a substring of key or vice versa
-                    elif (len(phrase_norm) >= 4 and
-                          (phrase_norm in key_norm or key_norm in phrase_norm)):
-                        kw['suggestions'].append((key, label, 'key substr'))
-                    # All keyword words appear in key (multi-word)
-                    elif len(words) > 1 and all(w in key_norm for w in words):
-                        kw['suggestions'].append((key, label, 'words in key'))
-                    # All keyword words appear in title (multi-word)
-                    elif len(words) > 1 and all(w in title_lower for w in words):
-                        kw['suggestions'].append((key, label, 'words in title'))
-                kw['suggestions'] = kw['suggestions'][:8]  # cap at 8
+                from utils import suggest_sf_labels
+                kw['suggestions'] = suggest_sf_labels(kw['phrase'], sf_labels)
 
     # Collect keywords whose anchor no longer exists in the labels JSON
     stale_anchors = [kw for kw in keywords
@@ -755,3 +721,134 @@ def symcat_refresh():
     from app import refresh_sf_labels
     count, error = refresh_sf_labels()
     return jsonify({'ok': error is None, 'count': count, 'error': error})
+
+
+# ── DOI Discovery ─────────────────────────────────────────────────────────────
+
+@admin.route('/dois')
+@login_required
+def dois():
+    show = request.args.get('show', 'pending')  # pending|approved|rejected|all
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Counts for badges
+    cursor.execute("""
+        SELECT status, COUNT(*) AS cnt
+        FROM doi_candidates GROUP BY status
+    """)
+    counts = {row['status']: row['cnt'] for row in cursor.fetchall()}
+
+    # Fetch candidates with paper info
+    where = "WHERE dc.status = %s" if show != 'all' else ""
+    params = [show] if show != 'all' else []
+    cursor.execute(f"""
+        SELECT dc.*, p.arxiv_id, p.title AS paper_title,
+               p.published_date, p.doi AS current_doi, p.doi_status
+        FROM doi_candidates dc
+        JOIN papers p ON p.id = dc.paper_id
+        {where}
+        ORDER BY dc.confidence DESC, dc.created_at DESC
+        LIMIT 200
+    """, params)
+    candidates = cursor.fetchall()
+
+    # Get first 3 authors for each paper
+    paper_ids = [c['paper_id'] for c in candidates]
+    authors_map = {}
+    if paper_ids:
+        placeholders = ','.join(['%s'] * len(paper_ids))
+        cursor.execute(f"""
+            SELECT pa.paper_id, a.name
+            FROM paper_authors pa
+            JOIN authors a ON a.id = pa.author_id
+            WHERE pa.paper_id IN ({placeholders})
+            ORDER BY pa.author_order
+        """, paper_ids)
+        for row in cursor.fetchall():
+            authors_map.setdefault(row['paper_id'], []).append(row['name'])
+
+    for c in candidates:
+        c['paper_authors'] = authors_map.get(c['paper_id'], [])[:3]
+
+    cursor.close()
+    return render_template('admin/dois.html',
+                           candidates=candidates, counts=counts, show=show)
+
+
+@admin.route('/dois/<int:cid>/approve', methods=['POST'])
+@login_required
+def approve_doi(cid):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT dc.paper_id, dc.doi, dc.confidence
+        FROM doi_candidates dc WHERE dc.id = %s
+    """, (cid,))
+    cand = cursor.fetchone()
+    if not cand:
+        cursor.close()
+        return jsonify({'ok': False, 'error': 'not found'}), 404
+    cursor.execute("""
+        UPDATE papers SET doi = %s, doi_status = 'verified',
+               doi_confidence = %s WHERE id = %s
+    """, (cand['doi'], cand['confidence'], cand['paper_id']))
+    cursor.execute("""
+        UPDATE doi_candidates SET status = 'approved', reviewed_at = NOW()
+        WHERE id = %s
+    """, (cid,))
+    conn.commit()
+    cursor.close()
+    return jsonify({'ok': True, 'doi': cand['doi']})
+
+
+@admin.route('/dois/<int:cid>/reject', methods=['POST'])
+@login_required
+def reject_doi(cid):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE doi_candidates SET status = 'rejected', reviewed_at = NOW()
+        WHERE id = %s
+    """, (cid,))
+    conn.commit()
+    cursor.close()
+    return jsonify({'ok': True})
+
+
+@admin.route('/dois/run', methods=['POST'])
+@login_required
+def run_doi_lookup():
+    """Trigger a small DOI lookup batch from the admin UI."""
+    import io, contextlib
+    try:
+        from doi_lookup import main as doi_main
+        import sys
+        buf = io.StringIO()
+        old_argv = sys.argv
+        sys.argv = ['doi_lookup.py', '--batch', '20', '--auto-approve', '0.95']
+        with contextlib.redirect_stdout(buf):
+            doi_main()
+        sys.argv = old_argv
+        return jsonify({'ok': True, 'log': buf.getvalue()})
+    except Exception as e:
+        logger.exception("DOI lookup failed")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@admin.route('/dois/<int:paper_id>/manual', methods=['POST'])
+@login_required
+def manual_doi(paper_id):
+    """Manually assign a DOI to a paper."""
+    doi = request.form.get('doi', '').strip()
+    if not doi:
+        return jsonify({'ok': False, 'error': 'empty'}), 400
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE papers SET doi = %s, doi_status = 'verified',
+               doi_confidence = 1.000 WHERE id = %s
+    """, (doi, paper_id))
+    conn.commit()
+    cursor.close()
+    return jsonify({'ok': True, 'doi': doi})

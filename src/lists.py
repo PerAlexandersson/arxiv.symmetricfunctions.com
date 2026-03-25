@@ -22,6 +22,7 @@ import logging
 from flask import (Blueprint, render_template, request, jsonify,
                    redirect, url_for, session, abort)
 from utils import arxiv2bib, slugify
+from db import require_user
 from db import get_db_connection
 
 logger = logging.getLogger(__name__)
@@ -33,12 +34,7 @@ STARRED_NAME = 'Starred'
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 
-def _require_user():
-    """Return user_id from session or abort 401."""
-    user_id = session.get('user_id')
-    if not user_id:
-        abort(401)
-    return user_id
+_require_user = require_user  # back-compat alias
 
 
 def _ensure_starred(user_id):

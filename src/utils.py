@@ -86,3 +86,39 @@ def arxiv2bib(paper_data):
         bib += f",\n  doi = {{{paper_data['doi']}}}"
     bib += "\n}"
     return bib
+
+
+# ── SymCat label matching ─────────────────────────────────────────────────────
+
+def suggest_sf_labels(phrase, sf_labels, limit=8):
+    """Find matching SymCat labels for a keyword phrase.
+
+    Returns a list of (key, label, match_type) tuples, best matches first.
+    """
+    phrase_lower = phrase.lower()
+    words = phrase_lower.split()
+    phrase_norm = phrase_lower.replace(' ', '').replace('-', '').replace('_', '')
+    suggestions = []
+    for key, label in sf_labels.items():
+        title_lower = label['title'].lower()
+        key_lower = key.lower()
+        key_norm = key_lower.replace('-', '').replace('_', '')
+        if phrase_lower == title_lower:
+            suggestions.insert(0, (key, label, 'exact title'))
+        elif key_norm == phrase_norm:
+            suggestions.insert(0, (key, label, 'key match'))
+        elif (len(phrase_norm) >= 4 and
+              (key_norm.startswith(phrase_norm) or phrase_norm.startswith(key_norm))):
+            suggestions.insert(0, (key, label, 'key prefix'))
+        elif phrase_lower in title_lower:
+            suggestions.append((key, label, 'in title'))
+        elif title_lower in phrase_lower:
+            suggestions.append((key, label, 'title in phrase'))
+        elif (len(phrase_norm) >= 4 and
+              (phrase_norm in key_norm or key_norm in phrase_norm)):
+            suggestions.append((key, label, 'key substr'))
+        elif len(words) > 1 and all(w in key_norm for w in words):
+            suggestions.append((key, label, 'words in key'))
+        elif len(words) > 1 and all(w in title_lower for w in words):
+            suggestions.append((key, label, 'words in title'))
+    return suggestions[:limit]

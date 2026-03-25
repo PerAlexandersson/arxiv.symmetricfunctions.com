@@ -66,6 +66,17 @@ def insert_or_update_paper(cursor, paper):
     if result:
         # Update existing paper
         paper_id = result[0]
+        # If arXiv provides a DOI, use it (most authoritative).
+        # If arXiv has no DOI but we already have one (e.g. from Crossref), keep it.
+        if doi:
+            update_doi, update_doi_status = doi, 'arxiv'
+        else:
+            cursor.execute("SELECT doi, doi_status FROM papers WHERE id = %s", (paper_id,))
+            existing = cursor.fetchone()
+            if existing and existing[0]:
+                update_doi, update_doi_status = existing[0], existing[1]
+            else:
+                update_doi, update_doi_status = None, None
         cursor.execute("""
             UPDATE papers SET
                 title = %s,
@@ -75,23 +86,26 @@ def insert_or_update_paper(cursor, paper):
                 comment = %s,
                 journal_ref = %s,
                 doi = %s,
+                doi_status = %s,
                 primary_category = %s
             WHERE id = %s
-        """, (title, abstract, published_date, updated_date, comment, 
-              journal_ref, doi, primary_category, paper_id))
+        """, (title, abstract, published_date, updated_date, comment,
+              journal_ref, update_doi, update_doi_status, primary_category,
+              paper_id))
         
         # Clear existing author relationships
         cursor.execute("DELETE FROM paper_authors WHERE paper_id = %s", (paper_id,))
         print(f"  Updated: {arxiv_id} - {title[:60]}...")
     else:
         # Insert new paper
+        doi_status = 'arxiv' if doi else None
         cursor.execute("""
-            INSERT INTO papers 
-            (arxiv_id, title, abstract, published_date, updated_date, 
-             comment, journal_ref, doi, primary_category)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO papers
+            (arxiv_id, title, abstract, published_date, updated_date,
+             comment, journal_ref, doi, doi_status, primary_category)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (arxiv_id, title, abstract, published_date, updated_date,
-              comment, journal_ref, doi, primary_category))
+              comment, journal_ref, doi, doi_status, primary_category))
         paper_id = cursor.lastrowid
         print(f"  Inserted: {arxiv_id} - {title[:60]}...")
     

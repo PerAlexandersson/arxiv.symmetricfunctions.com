@@ -64,6 +64,7 @@
   <a href="{{ url_for('admin.retag') }}"      class="tab{% if request.endpoint == 'admin.retag' %} active{% endif %}">Retag</a>
   <a href="{{ url_for('admin.fetch') }}"      class="tab{% if request.endpoint == 'admin.fetch' %} active{% endif %}">Fetch</a>
   <a href="{{ url_for('admin.symcat') }}"     class="tab{% if request.endpoint == 'admin.symcat' %} active{% endif %}">SymCat</a>
+  <a href="{{ url_for('admin.dois') }}"      class="tab{% if request.endpoint == 'admin.dois' %} active{% endif %}">DOIs</a>
   <a href="{{ url_for('admin.users') }}"      class="tab{% if request.endpoint == 'admin.users' %} active{% endif %}">Users</a>
   <span class="spacer"></span>
   <a href="{{ url_for('admin.logout') }}" class="logout-link">Log out</a>
