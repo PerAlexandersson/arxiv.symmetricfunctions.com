@@ -111,11 +111,11 @@
     <tr id="row-{{ c.id }}">
       <td>
         <a href="/paper/{{ c.arxiv_id }}" target="_blank">{{ c.arxiv_id }}</a><br>
-        <span class="doi-title">{{ c.paper_title[:70] }}{% if c.paper_title|length > 70 %}...{% endif %}</span><br>
+        <span class="doi-title" title="{{ c.paper_title }}">{{ c.paper_title[:70] }}{% if c.paper_title|length > 70 %}...{% endif %}</span><br>
         <span class="doi-authors">{{ c.paper_authors|join(', ') }}{% if c.paper_authors|length == 3 %} et al.{% endif %} ({{ c.published_date.year }})</span>
       </td>
       <td>
-        <span class="doi-title">{{ c.crossref_title[:70] }}{% if c.crossref_title and c.crossref_title|length > 70 %}...{% endif %}</span><br>
+        <span class="doi-title" title="{{ c.crossref_title }}">{{ c.crossref_title[:70] }}{% if c.crossref_title and c.crossref_title|length > 70 %}...{% endif %}</span><br>
         <span class="doi-authors">{{ c.crossref_authors[:80] }}{% if c.crossref_authors and c.crossref_authors|length > 80 %}...{% endif %}{% if c.crossref_year %} ({{ c.crossref_year }}){% endif %}</span>
       </td>
       <td>

@@ -86,6 +86,9 @@ def score_match(paper_title, paper_authors, paper_year, cr_item):
             cr_year = parts[0][0]
             break
     if cr_year is not None and paper_year:
+        # A publication can't predate its preprint
+        if int(cr_year) < int(paper_year) - 1:
+            return 0.0, cr_title, cr_year
         diff = abs(int(cr_year) - int(paper_year))
         year_score = 1.0 if diff <= 1 else (0.5 if diff <= 2 else 0.0)
     else:
