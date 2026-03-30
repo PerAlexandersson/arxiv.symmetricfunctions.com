@@ -133,6 +133,7 @@ def get_papers_needing_doi(cursor, batch_size, min_age_days,
     """
     conditions = [
         "p.doi IS NULL",
+        "(p.doi_status IS NULL OR p.doi_status NOT IN ('skipped'))",
         "p.published_date <= DATE_SUB(CURDATE(), INTERVAL %s DAY)",
         "(p.doi_checked_at IS NULL OR p.doi_checked_at < DATE_SUB(NOW(), INTERVAL %s DAY))",
         """NOT EXISTS (

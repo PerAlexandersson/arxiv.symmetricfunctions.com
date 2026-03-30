@@ -48,6 +48,13 @@
                style="padding:0.2rem 0.5rem; font-size:0.88rem; border:1px solid var(--c-border); border-radius:3px; width:22rem;">
         <button type="submit" style="padding:0.2rem 0.6rem; font-size:0.85rem; cursor:pointer;
                border:1px solid var(--c-border); border-radius:3px; background:var(--c-bg-surface);">Set DOI</button>
+        {% if not paper.doi %}
+        <button type="button" id="skip-doi-btn" onclick="toggleSkipDoi({{ paper.id }})"
+                class="skip-doi-btn{% if paper.doi_status == 'skipped' %} skip-doi-active{% endif %}"
+                title="{{ 'Paper marked as unlikely to get a DOI — click to undo' if paper.doi_status == 'skipped' else 'Mark as unlikely to ever get a DOI (skips future lookups)' }}">
+          {% if paper.doi_status == 'skipped' %}&#x2717; No DOI{% else %}No DOI{% endif %}
+        </button>
+        {% endif %}
         <span id="doi-status" style="font-size:0.82rem;"></span>
       </form>
     </div>
@@ -129,6 +136,16 @@
 }
 .refetch-btn:hover { color: var(--c-link); border-color: var(--c-link); }
 .refetch-btn:disabled { opacity: 0.5; cursor: default; }
+.skip-doi-btn {
+  padding: 0.2rem 0.6rem; font-size: 0.85rem; cursor: pointer;
+  border: 1px solid var(--c-border); border-radius: 3px;
+  background: var(--c-bg-surface); color: var(--c-text-sub);
+}
+.skip-doi-btn:hover { border-color: #721c24; color: #721c24; }
+.skip-doi-active {
+  background: #f8d7da; color: #721c24; border-color: #721c24;
+}
+.skip-doi-active:hover { background: var(--c-bg-surface); color: var(--c-text-sub); border-color: var(--c-border); }
 </style>
 {% endblock %}
 
@@ -165,6 +182,31 @@ function setDoi(e) {
   })
   .catch(() => { status.textContent = 'Failed'; status.style.color = 'red'; });
   return false;
+}
+
+function toggleSkipDoi(paperId) {
+  const btn = document.getElementById('skip-doi-btn');
+  const isSkipped = btn.classList.contains('skip-doi-active');
+  const action = isSkipped ? 'unskip' : 'skip';
+  const csrf = document.querySelector('meta[name="csrf-token"]').content;
+  fetch('/admin/dois/' + paperId + '/' + action, {
+    method: 'POST',
+    headers: {'X-CSRFToken': csrf}
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) {
+      if (action === 'skip') {
+        btn.classList.add('skip-doi-active');
+        btn.innerHTML = '&#x2717; No DOI';
+        btn.title = 'Paper marked as unlikely to get a DOI \u2014 click to undo';
+      } else {
+        btn.classList.remove('skip-doi-active');
+        btn.textContent = 'No DOI';
+        btn.title = 'Mark as unlikely to ever get a DOI (skips future lookups)';
+      }
+    }
+  });
 }
 
 function refetchPaper(arxivId) {

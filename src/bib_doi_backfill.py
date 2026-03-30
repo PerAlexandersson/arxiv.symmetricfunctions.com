@@ -105,6 +105,9 @@ def main():
             already_has_doi += 1
             continue
 
+        if paper['doi_status'] == 'skipped':
+            continue
+
         # First: check if the .bib file itself has a DOI for this entry
         if arxiv_id in bib_dois:
             doi = bib_dois[arxiv_id]

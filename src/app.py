@@ -432,7 +432,7 @@ def paper_detail(arxiv_id):
 
     cursor.execute("""
         SELECT id, arxiv_id, title, abstract, published_date, updated_date,
-               comment, journal_ref, doi, primary_category
+               comment, journal_ref, doi, doi_status, primary_category
         FROM papers
         WHERE arxiv_id = %s
     """, (arxiv_id,))

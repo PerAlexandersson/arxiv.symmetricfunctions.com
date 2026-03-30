@@ -52,7 +52,7 @@ CREATE TABLE papers (
     comment TEXT,                                   -- e.g., "23 pages, 5 figures, to appear in Combinatorica"
     journal_ref TEXT,                               -- e.g., "J. Combin. Theory Ser. A 156 (2018), 1-23"
     doi VARCHAR(100),                               -- Digital Object Identifier
-    doi_status ENUM('arxiv','auto','verified') DEFAULT NULL, -- provenance
+    doi_status ENUM('arxiv','auto','verified','skipped') DEFAULT NULL, -- provenance (skipped = no DOI expected)
     doi_confidence DECIMAL(4,3) DEFAULT NULL,       -- match score (0-1)
     doi_checked_at TIMESTAMP NULL DEFAULT NULL,    -- last Crossref lookup
 

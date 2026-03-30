@@ -725,23 +725,34 @@ def symcat_refresh():
 
 # ── DOI Discovery ─────────────────────────────────────────────────────────────
 
-@admin.route('/dois')
-@login_required
-def dois():
-    show = request.args.get('show', 'pending')  # pending|approved|rejected|all
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Counts for badges
+def _doi_counts(cursor):
+    """Return dict of status -> count for doi_candidates."""
     cursor.execute("""
         SELECT status, COUNT(*) AS cnt
         FROM doi_candidates GROUP BY status
     """)
-    counts = {row['status']: row['cnt'] for row in cursor.fetchall()}
+    return {row['status']: row['cnt'] for row in cursor.fetchall()}
 
-    # Fetch candidates with paper info
+
+def _doi_candidates_page(cursor, show, page, per_page=50):
+    """Fetch one page of DOI candidates with paper info + authors.
+
+    Returns (candidates_list, total_count, total_pages).
+    """
     where = "WHERE dc.status = %s" if show != 'all' else ""
     params = [show] if show != 'all' else []
+
+    # Total count for pagination
+    cursor.execute(f"""
+        SELECT COUNT(*) AS cnt FROM doi_candidates dc
+        JOIN papers p ON p.id = dc.paper_id {where}
+    """, params)
+    total = cursor.fetchone()['cnt']
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = max(1, min(page, total_pages))
+
+    # Fetch page
+    offset = (page - 1) * per_page
     cursor.execute(f"""
         SELECT dc.*, p.arxiv_id, p.title AS paper_title,
                p.published_date, p.doi AS current_doi, p.doi_status
@@ -749,8 +760,8 @@ def dois():
         JOIN papers p ON p.id = dc.paper_id
         {where}
         ORDER BY dc.confidence DESC, dc.created_at DESC
-        LIMIT 200
-    """, params)
+        LIMIT %s OFFSET %s
+    """, params + [per_page, offset])
     candidates = cursor.fetchall()
 
     # Get first 3 authors for each paper
@@ -771,13 +782,62 @@ def dois():
     for c in candidates:
         c['paper_authors'] = authors_map.get(c['paper_id'], [])[:3]
 
+    return candidates, total, total_pages, page
+
+
+@admin.route('/dois')
+@login_required
+def dois():
+    show = request.args.get('show', 'pending')
+    page = request.args.get('page', 1, type=int)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    counts = _doi_counts(cursor)
+    candidates, total, total_pages, page = _doi_candidates_page(cursor, show, page)
     cursor.close()
-    # Default date range: 1 year ago → today
     today = str(date_type.today())
     one_year_ago = str(date_type.today().replace(year=date_type.today().year - 1))
     return render_template('admin/dois.html',
                            candidates=candidates, counts=counts, show=show,
+                           page=page, total_pages=total_pages, total=total,
                            default_from=one_year_ago, default_to=today)
+
+
+@admin.route('/dois/tab')
+@login_required
+def dois_tab():
+    """AJAX endpoint: return paginated DOI candidates as JSON."""
+    show = request.args.get('show', 'pending')
+    page = request.args.get('page', 1, type=int)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    counts = _doi_counts(cursor)
+    candidates, total, total_pages, page = _doi_candidates_page(cursor, show, page)
+    cursor.close()
+    return jsonify({
+        'ok': True,
+        'candidates': [
+            {
+                'id': c['id'],
+                'arxiv_id': c['arxiv_id'],
+                'paper_title': c['paper_title'],
+                'paper_authors': c['paper_authors'],
+                'published_year': c['published_date'].year,
+                'crossref_title': c['crossref_title'],
+                'crossref_authors': c['crossref_authors'],
+                'crossref_year': c['crossref_year'],
+                'doi': c['doi'],
+                'confidence': float(c['confidence']),
+                'status': c['status'],
+            }
+            for c in candidates
+        ],
+        'counts': counts,
+        'page': page,
+        'total_pages': total_pages,
+        'total': total,
+        'show': show,
+    })
 
 
 @admin.route('/dois/<int:cid>/approve', methods=['POST'])
@@ -802,8 +862,9 @@ def approve_doi(cid):
         WHERE id = %s
     """, (cid,))
     conn.commit()
+    counts = _doi_counts(cursor)
     cursor.close()
-    return jsonify({'ok': True, 'doi': cand['doi']})
+    return jsonify({'ok': True, 'doi': cand['doi'], 'counts': counts})
 
 
 @admin.route('/dois/<int:cid>/reject', methods=['POST'])
@@ -816,8 +877,9 @@ def reject_doi(cid):
         WHERE id = %s
     """, (cid,))
     conn.commit()
+    counts = _doi_counts(cursor)
     cursor.close()
-    return jsonify({'ok': True})
+    return jsonify({'ok': True, 'counts': counts})
 
 
 @admin.route('/dois/run', methods=['POST'])
@@ -830,13 +892,13 @@ def run_doi_lookup():
         import sys
         buf = io.StringIO()
         old_argv = sys.argv
-        argv = ['doi_lookup.py', '--batch', '20', '--auto-approve', '0.95']
+        argv = ['doi_lookup.py', '--batch', '20', '--auto-approve', '0.85']
         from_date = request.form.get('from_date', '').strip()
         to_date = request.form.get('to_date', '').strip()
         if from_date:
             argv += ['--from-date', from_date]
-        if to_date:
-            argv += ['--to-date', to_date]
+        # Default: only papers up to end of 2023 (older papers more likely to have DOIs)
+        argv += ['--to-date', to_date or '2023-12-31']
         sys.argv = argv
         with contextlib.redirect_stdout(buf):
             doi_main()
@@ -863,3 +925,33 @@ def manual_doi(paper_id):
     conn.commit()
     cursor.close()
     return jsonify({'ok': True, 'doi': doi})
+
+
+@admin.route('/dois/<int:paper_id>/skip', methods=['POST'])
+@login_required
+def skip_doi(paper_id):
+    """Mark a paper as unlikely to ever receive a DOI."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE papers SET doi_status = 'skipped' WHERE id = %s AND doi IS NULL",
+        (paper_id,)
+    )
+    conn.commit()
+    cursor.close()
+    return jsonify({'ok': True})
+
+
+@admin.route('/dois/<int:paper_id>/unskip', methods=['POST'])
+@login_required
+def unskip_doi(paper_id):
+    """Remove the 'skipped' flag so the paper is eligible for DOI lookup again."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE papers SET doi_status = NULL WHERE id = %s AND doi_status = 'skipped'",
+        (paper_id,)
+    )
+    conn.commit()
+    cursor.close()
+    return jsonify({'ok': True})

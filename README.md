@@ -1,12 +1,12 @@
-# arXiv Combinatorics Frontend
+# arXiv++ Combinatorics
 
-A web interface for browsing arXiv papers in combinatorics (math.CO category).
+A web interface for browsing arXiv papers in combinatorics (math.CO category), with DOI discovery, keyword tagging, and more.
 
-Built with [Claude Code](https://claude.ai/claude-code).
+Live at **https://arxiv.symmetricfunctions.com**. Built with [Claude Code](https://claude.ai/claude-code).
 
-**Tech stack:** Python 3 / Flask, MariaDB, plain HTML/CSS/JS, arXiv API.
+**Tech stack:** Python 3 / Flask, MariaDB, plain HTML/CSS/JS, arXiv API, Crossref API, ORCID OAuth.
 
-**Features:** Browse papers, search by author/title, one-click BibTeX export, KaTeX math rendering, keyword tagging with admin UI.
+**Features:** Browse papers, search by author/title/keyword, one-click BibTeX export, KaTeX math rendering, keyword tagging with admin UI, DOI discovery via Crossref, ORCID login with personal paper lists and personalized feeds.
 
 ---
 
@@ -97,12 +97,26 @@ Then visit **http://localhost:5000** in your browser.
 
 ## Web Interface Features
 
-- **Browse papers** - Paginated list sorted by publication date
-- **Search** - Search by title, author, or abstract
-- **Author pages** - View all papers by a specific author
-- **Keyword pages** - `/keyword/<phrase>` lists all papers tagged with a keyword
-- **BibTeX export** - One-click copy/download for citations
-- **Math rendering** - KaTeX support for LaTeX in titles and abstracts
+### Public
+
+- **Browse papers** — Paginated list sorted by publication date (homepage cached for anonymous visitors)
+- **Search** — Full-text search by title, author, or abstract with keyword scoring
+- **Author pages** — `/author/<slug>` lists all papers by a specific author; `/authors` shows prolific authors
+- **Keyword pages** — `/keyword/<phrase>` lists all papers tagged with a keyword
+- **Keyword cloud** — `/keywords` page with all active keywords sized by paper count
+- **Category browsing** — `/category/<cat>` lists papers by arXiv subject category (e.g. math.CO, cs.DM)
+- **Calendar browse** — `/browse` shows a month calendar; click a date to see that day's papers
+- **Random paper** — `/random` redirects to a random paper
+- **BibTeX export** — One-click copy/download for arXiv and published (DOI) citations
+- **BibTeX tools** — `/tools` generates BibTeX from arbitrary arXiv IDs or DOIs
+- **Math rendering** — KaTeX support for LaTeX in titles and abstracts
+- **DOI and journal info** — Papers show DOI links and journal references when available
+
+### Authenticated (ORCID login)
+
+- **My Feed** — `/my-feed` shows recent papers matching watched keywords and authors
+- **Watch keywords / authors** — Follow topics or researchers to build a personalized feed
+- **My Lists** — `/lists` lets users organize papers into custom named lists (plus a special "Starred" list)
 
 ---
 
@@ -176,41 +190,76 @@ arxiv.symmetricfunctions.com/
 ├── activate_venv.sh          # Source to activate venv
 ├── run_app.sh                # Start the Flask dev server
 ├── fetch_papers.sh           # Fetch papers from arXiv
+├── tag_papers.sh             # Run auto-tagger
+├── find_dois.sh              # Run DOI lookup
+├── batch_doi_lookup.sh       # Batch DOI lookup (date range, configurable)
+├── sync_to_prod.sh           # Sync code to production server
+├── backfill_production.sh    # Backfill papers on production
+├── use_local.sh              # Switch .env to local development
 ├── passenger_wsgi.py         # WSGI entry point (shared hosting)
+├── CRONJOBS.md               # Production cron job schedule
 ├── database/
-│   ├── schema.sql            # Database schema
+│   ├── schema.sql            # Database schema (fresh install only)
 │   ├── setup_database.sh     # Database setup script
+│   ├── reset_database.sh     # Nuke and recreate database
 │   ├── pull_prod_db.sh       # Pull production DB to local
-│   ├── migrate.sql           # Migrations (run in order)
-│   └── drop_tag_name.sql     # Migration: remove tag_name column
+│   ├── migrate_doi_status.sql    # Migration: add DOI status tracking
+│   ├── migrate_doi_checked.sql   # Migration: add DOI lookup timestamp
+│   └── migrate_doi_skipped.sql   # Migration: add 'skipped' DOI status
+├── deployment/
+│   ├── QUICKSTART.md         # Quick deployment guide
+│   ├── SETUP_STEPS.md        # Detailed setup instructions
+│   ├── SHARED_HOSTING.md     # Passenger/cPanel deployment docs
+│   ├── CHECKLIST.md          # Pre-deployment checklist
+│   ├── deploy_shared.sh      # Deployment script for shared hosting
+│   ├── .htaccess             # Apache config for shared hosting
+│   ├── htaccess_template     # Template for .htaccess
+│   └── static_htaccess       # Static files .htaccess
 └── src/
-    ├── app.py                # Flask web application
-    ├── admin.py              # Admin blueprint (keyword management)
+    ├── app.py                # Flask web application (main routes)
+    ├── admin.py              # Admin blueprint (keyword/DOI management)
+    ├── auth.py               # ORCID OAuth authentication
+    ├── lists.py              # User saved-paper lists blueprint
+    ├── watch.py              # Watched keywords/authors feed blueprint
     ├── config.py             # Configuration loader
-    ├── fetch_arxiv.py        # arXiv fetching script
+    ├── db.py                 # Shared database helpers
+    ├── fetch_arxiv.py        # arXiv paper fetching script
     ├── auto_tag.py           # Tag papers with curated keywords
     ├── extract_keywords.py   # Extract keyword candidates from corpus
-    ├── utils.py              # Shared utilities (slugify, etc.)
+    ├── doi_lookup.py         # Find DOIs via Crossref API
+    ├── bib_doi_backfill.py   # Backfill missing DOIs in bulk
+    ├── utils.py              # Shared utilities (slugify, BibTeX, etc.)
     ├── static/
     │   ├── style.css         # Stylesheet
     │   └── utils.js          # Client-side utilities
     └── templates/
         ├── base.html         # Base template with KaTeX + Ko-fi donate widget
         ├── _macros.html      # Reusable template macros
-        ├── index.html        # Homepage
-        ├── paper.html        # Paper details (with keyword tags)
+        ├── index.html        # Homepage (recent papers)
+        ├── paper.html        # Paper details (keywords, DOI, BibTeX)
         ├── author.html       # Author page
+        ├── authors.html      # Prolific authors list
         ├── keyword.html      # Papers by keyword
-        ├── authors.html      # Author list
+        ├── keywords.html     # Keyword cloud
+        ├── category.html     # Papers by arXiv category
         ├── search.html       # Search results
         ├── browse.html       # Calendar browse
         ├── date.html         # Papers by date
         ├── tools.html        # BibTeX tools
+        ├── login.html        # ORCID login page
+        ├── feed.html         # Personalized feed (My Feed)
+        ├── lists.html        # User saved lists overview
+        ├── list_detail.html  # Papers in a specific list
         └── admin/
+            ├── _nav.html         # Admin navigation
             ├── login.html        # Admin login
             ├── candidates.html   # Keyword candidate triage
             ├── keywords.html     # Curated keyword list (inline-edit, merge, aliases)
-            └── retag.html        # Retag papers by date range
+            ├── retag.html        # Retag papers by date range
+            ├── dois.html         # DOI candidate review
+            ├── fetch.html        # Trigger paper fetch
+            ├── users.html        # User management
+            └── symcat.html       # Category management
 ```
 
 **Note:** The `venv/` directory is machine-local and not included in the repository.
@@ -241,7 +290,7 @@ arxiv.symmetricfunctions.com/
 
 **Different paper counts / keyword changes not visible on other machine**
 - Pull the production database locally: `cd database && ./pull_prod_db.sh`
-- Then apply any pending migrations (e.g. `drop_tag_name.sql`)
+- Then apply any pending migrations (see `database/migrate_*.sql`)
 
 ---
 
@@ -251,11 +300,14 @@ Papers are auto-tagged with curated keywords managed via the admin UI at `/admin
 
 ### Admin UI
 
-Password-protected (set `ADMIN_PASSWORD` in `.env`).
+Password-protected (set `ADMIN_PASSWORD` in `.env`) or auto-granted via `ADMIN_ORCID`.
 
 - `/admin/candidates` — triage keyword candidates from `keywords.csv` (mark as *useful*, *math*, or *ignore*)
 - `/admin/keywords` — list/edit/delete curated keywords; inline-edit phrase, URL, score; manage aliases (synonyms); merge two keywords; paper count per keyword
 - `/admin/retag` — re-tag papers by date range directly from the browser
+- `/admin/dois` — review DOI candidates found by Crossref lookup (approve/reject)
+- `/admin/fetch` — trigger paper fetch from the browser
+- `/admin/users` — view registered users
 
 ### Keyword pipeline
 
@@ -287,19 +339,65 @@ python3 extract_keywords.py       # outputs keywords.csv
 
 ---
 
+## DOI Discovery
+
+Papers that arrive without a DOI can have one found automatically via the Crossref API.
+
+```bash
+# Interactive batch lookup (recommended)
+./batch_doi_lookup.sh                      # 500 papers before 2023
+./batch_doi_lookup.sh 500 0.90 2020-01-01  # custom: batch, threshold, start date
+
+# Or directly
+cd src && source ../venv/bin/activate
+python3 doi_lookup.py --batch 50 --auto-approve 0.90 --to-date 2023-01-01
+python3 bib_doi_backfill.py /path/to/file.bib   # bulk backfill from .bib file
+```
+
+- Matches ≥ 90% are auto-approved; ≤ 60% are auto-rejected
+- 61-89% go to `/admin/dois` for manual review
+- Admin UI has date range controls; defaults to 1 year ago → today
+- Admin can manually set DOIs on individual paper pages
+- Papers that predate their Crossref match are automatically filtered out
+- DOI provenance: `arxiv` (from arXiv metadata), `auto` (Crossref match), `verified` (admin-approved), `skipped` (unlikely to ever get a DOI)
+- `doi_checked_at` tracks when each paper was last queried (skipped for 180 days)
+
+---
+
 ## Database Design
 
 See `database/schema.sql` for the complete schema.
 
-- **`papers`** — Main paper metadata (arxiv_id, title, abstract, dates)
-- **`authors`** — Author names (normalized, no duplicates)
-- **`paper_authors`** — Many-to-many junction table
+**Core tables:**
+
+- **`papers`** — Paper metadata (arxiv_id, title, abstract, dates, DOI, journal_ref, doi_status/confidence/checked_at)
+- **`authors`** — Author names with URL slugs (deduplicated)
+- **`paper_authors`** — Many-to-many junction with author ordering
+- **`paper_categories`** — arXiv subject categories per paper (primary + cross-listings)
+
+**Keyword system:**
+
 - **`keywords`** — Curated keyword phrases with relevance scores and optional URLs
 - **`keyword_aliases`** — Alternative phrasings mapping to a keyword
 - **`paper_keywords`** — Auto-generated by `auto_tag.py`; links papers to matched keywords
 - **`ignored_candidates`** — Phrases marked as non-math/typos (excluded from candidate view)
 - **`math_words`** — Valid math terms too broad to tag on their own
-- **`tags`** / **`paper_tags`** — legacy MSC-code tag system (unused)
+
+**DOI discovery:**
+
+- **`doi_candidates`** — Crossref lookup staging table (pending/approved/rejected)
+
+**User/personalization:**
+
+- **`users`** — Authenticated users (ORCID login)
+- **`user_categories`** — Named list buckets per user (includes special "Starred" list)
+- **`user_lists`** — Papers saved to specific lists
+- **`user_watched_keywords`** — Keywords a user follows (powers "My Feed")
+- **`user_watched_authors`** — Authors a user follows (powers "My Feed")
+
+**Legacy:**
+
+- **`tags`** / **`paper_tags`** — MSC-code tag system (unused, kept for compatibility)
 
 ---
 
@@ -307,9 +405,8 @@ See `database/schema.sql` for the complete schema.
 
 See `TODO.md` for the full roadmap. Short list:
 
+- **Comments on preprints** — logged-in users leave short comments on papers
 - **Abstract keyword linking** — hyperlink matched phrases in abstracts to their `keyword.url` at render time
 - **`import_keyword_urls.py`** — import a `phrase → url` JSON map from the symmetricfunctions.com build
-- **User authentication** (ORCID or Google) + personal paper lists
 - **RSS/Atom feed** for recent papers
 - **"Similar papers"** section on paper detail (papers sharing the most keyword tags)
-- **Keyword cloud** — `/keywords` page with all active keywords sized by paper count

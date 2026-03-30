@@ -1,6 +1,8 @@
-# arXiv Combinatorics Browser — TODO
+# arXiv++ Combinatorics — TODO
 
 ---
+
+
 
 ## Comments on Preprints
 
@@ -43,3 +45,24 @@ POST /api/comments/<id>/edit    → edit own comment body
 - **"Similar papers" section** — on the paper detail page, list papers sharing the
   most keyword tags (easy to query from `paper_keywords`).
 
+- **Abstract keyword linking** — hyperlink matched keyword phrases in abstracts
+  to their `keyword.url` at render time.
+
+- **`import_keyword_urls.py`** — import a `phrase → url` JSON map from the
+  symmetricfunctions.com build to populate keyword URLs in bulk.
+
+- **RSS/Atom feed** — subscribe to recent papers or specific keywords.
+
+- **Drop legacy `tags` / `paper_tags` tables** — unused anywhere in the codebase.
+  `tags` has 15 pre-seeded MSC codes, `paper_tags` is empty. Remove from `schema.sql`
+  and write a `migrate_drop_legacy_tags.sql`.
+
+---
+
+## Completed
+
+- ~~User authentication (ORCID login) + personal paper lists~~ — `auth.py`, `lists.py`
+- ~~Keyword cloud (`/keywords` page)~~ — `keywords.html`
+- ~~DOI discovery via Crossref API~~ — `doi_lookup.py`, `bib_doi_backfill.py`, `/admin/dois`
+- ~~Watched keywords/authors + personalized feed~~ — `watch.py`, `feed.html`
+- ~~Category browsing (`/category/<cat>`)~~ — `category.html`
