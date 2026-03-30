@@ -12,10 +12,18 @@
     </script>
     <script>if(localStorage.getItem('dark-mode')==='on')document.documentElement.classList.add('dark')</script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}arXiv Combinatorics Browser{% endblock %}</title>
+    <title>{% block title %}arXiv++ Combinatorics{% endblock %}</title>
     <meta name="author" content="Per Alexandersson" />
     <meta name="description" content="Browse arXiv papers in combinatorics (math.CO category)" />
     <meta name="csrf-token" content="{{ csrf_token() }}" />
+    {% set _canon_path = request.path %}
+    {% set _canon_args = request.args.to_dict() %}
+    {% if _canon_args.get('page') == '1' %}{% set _ = _canon_args.pop('page') %}{% endif %}
+    {% if _canon_args %}
+    <link rel="canonical" href="https://arxiv.symmetricfunctions.com{{ _canon_path }}?{{ _canon_args|urlencode }}" />
+    {% else %}
+    <link rel="canonical" href="https://arxiv.symmetricfunctions.com{{ _canon_path }}" />
+    {% endif %}
 
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32.png') }}">
     <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='favicon-192.png') }}">
@@ -73,7 +81,7 @@
     <header>
         <div class="container">
             <h1 class="site-title">
-                <a href="/">arXiv Combinatorics Browser</a>
+                <a href="/">arXiv++ Combinatorics</a>
             </h1>
             {% if current_user %}
             <p class="site-logged-in">logged in as <a href="{{ url_for('lists.my_papers') }}">{{ current_user.name }}</a></p>
@@ -95,7 +103,7 @@
                     <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a3 3 0 013-3h5c.256 0 .512.098.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
                   </a>
                   <a href="/tools" class="nav-icon-btn nav-icon-primary" title="Tools" aria-label="Tools">
-                    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/></svg>
+                    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M19 5.5a4.5 4.5 0 01-4.791 4.49c-.873-.055-1.808.128-2.368.8l-6.024 7.23a2.724 2.724 0 11-3.837-3.837l7.23-6.024c.672-.56.855-1.495.8-2.368A4.5 4.5 0 0114.5 1c.74 0 1.441.178 2.06.494.196.1.296.321.24.533a.753.753 0 01-.218.37L14.5 4.48l.673 2.347L17.52 7.5l2.083-2.083a.753.753 0 01.37-.218c.212-.056.432.044.533.24.316.619.494 1.32.494 2.06zM4.867 17.133a.75.75 0 11-1.06-1.06.75.75 0 011.06 1.06z" clip-rule="evenodd"/></svg>
                   </a>
                   <a href="https://ko-fi.com/W7W41VN3WK" class="nav-icon-btn nav-kofi" target="_blank" rel="noopener" title="Support on Ko-fi" aria-label="Support on Ko-fi">
                     <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M5 5a1 1 0 00-1 1v7a2 2 0 002 2h6a2 2 0 002-2V6a1 1 0 00-1-1H5z"/><path fill-rule="evenodd" d="M14 8A2.5 2.5 0 0114 13V8zM14 9.5A1 1 0 0114 11.5V9.5z" clip-rule="evenodd"/></svg>
