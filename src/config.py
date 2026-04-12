@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 # Load .env file if it exists
 load_dotenv()
 
+DEFAULT_FLASK_SECRET_KEY = 'dev-secret-key-change-in-production'
+
 # Database configuration
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
@@ -21,7 +23,7 @@ DB_CONFIG = {
 
 # Flask configuration
 FLASK_CONFIG = {
-    'SECRET_KEY': os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production'),
+    'SECRET_KEY': os.getenv('FLASK_SECRET_KEY', DEFAULT_FLASK_SECRET_KEY),
     'DEBUG': os.getenv('FLASK_DEBUG', 'False').lower() == 'true',
     'PREFERRED_URL_SCHEME': os.getenv('PREFERRED_URL_SCHEME', 'http'),
 }
@@ -39,18 +41,22 @@ ADMIN_ORCID = os.getenv('ADMIN_ORCID', '')
 ORCID_CLIENT_ID     = os.getenv('ORCID_CLIENT_ID', '')
 ORCID_CLIENT_SECRET = os.getenv('ORCID_CLIENT_SECRET', '')
 
-def validate_config():
-    """Validate that required configuration is set."""
+def validate_config(require_web_security=False):
+    """Validate required configuration, with optional strict web-app checks."""
     errors = []
+    secret_is_critical = require_web_security and not FLASK_CONFIG['DEBUG']
     if not DB_CONFIG['password']:
         errors.append("DB_PASSWORD not set")
     if not ADMIN_PASSWORD:
         errors.append("ADMIN_PASSWORD not set (admin UI will be inaccessible)")
     if not FETCH_SECRET:
         errors.append("FETCH_SECRET not set (paper fetch endpoint disabled)")
-    if FLASK_CONFIG['SECRET_KEY'] == 'dev-secret-key-change-in-production':
-        errors.append("FLASK_SECRET_KEY is using the insecure default — set it in .env")
+    if FLASK_CONFIG['SECRET_KEY'] == DEFAULT_FLASK_SECRET_KEY:
+        msg = "FLASK_SECRET_KEY is using the insecure default — set it in .env"
+        errors.append(msg)
     critical = [e for e in errors if 'DB_PASSWORD' in e]
+    if secret_is_critical:
+        critical += [e for e in errors if 'FLASK_SECRET_KEY' in e]
     warnings = [e for e in errors if e not in critical]
     if critical:
         raise ValueError(
@@ -64,7 +70,7 @@ def validate_config():
 if __name__ == '__main__':
     # Test configuration
     try:
-        validate_config()
+        validate_config(require_web_security=True)
         print("Configuration loaded successfully:")
         print(f"  DB Host: {DB_CONFIG['host']}")
         print(f"  DB User: {DB_CONFIG['user']}")

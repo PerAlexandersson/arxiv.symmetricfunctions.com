@@ -11,12 +11,13 @@ Routes:
 import os
 import requests as http_requests
 from flask import (Blueprint, render_template, redirect, url_for,
-                   session, request, flash, current_app)
+                   session, request, flash, current_app, abort)
 from authlib.integrations.flask_client import OAuth
 from config import ORCID_CLIENT_ID, ORCID_CLIENT_SECRET, ADMIN_ORCID
 from db import get_db_connection
 
 DEV_ORCID_ID = os.getenv('DEV_ORCID_ID', '')
+_LOCALHOST_ADDRS = {'127.0.0.1', '::1', '::ffff:127.0.0.1'}
 
 auth = Blueprint('auth', __name__)
 
@@ -66,8 +67,12 @@ def _set_session(user_id, name, orcid_id):
     session['user_id']   = user_id
     session['user_name'] = name
     session['orcid_id']  = orcid_id
-    if ADMIN_ORCID and orcid_id == ADMIN_ORCID:
-        session['admin_logged_in'] = True
+    session['admin_logged_in'] = bool(ADMIN_ORCID and orcid_id == ADMIN_ORCID)
+
+
+def _dev_login_allowed():
+    """Allow the dev-login shortcut only on a local debug server."""
+    return current_app.debug and request.remote_addr in _LOCALHOST_ADDRS
 
 
 def _upsert_user(provider, provider_id, display_name):
@@ -143,8 +148,8 @@ def dev_login():
     """Dev-only shortcut: log in as DEV_ORCID_ID without OAuth.
     Only works when DEV_ORCID_ID is set in .env (never set this in production).
     """
-    if not DEV_ORCID_ID:
-        return redirect(url_for('admin.login'))
+    if not DEV_ORCID_ID or not _dev_login_allowed():
+        abort(404)
     name = _fetch_orcid_name(DEV_ORCID_ID)
     user_id = _upsert_user('orcid', DEV_ORCID_ID, name)
     _set_session(user_id, name, DEV_ORCID_ID)

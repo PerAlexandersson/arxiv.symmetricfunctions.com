@@ -21,7 +21,7 @@
     {% for paper in papers %}
         {{ render_paper(paper, latest_date) }}
     {% endfor %}
-    {{ render_pagination(page, total_pages, '/author/' ~ (author.name | slugify) ~ '?page=') }}
+    {{ render_pagination(page, total_pages, '/author/' ~ author.slug ~ '?page=') }}
 {% else %}
     <p>No papers found for this author.</p>
 {% endif %}

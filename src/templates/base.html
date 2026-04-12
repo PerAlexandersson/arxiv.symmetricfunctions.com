@@ -16,14 +16,8 @@
     <meta name="author" content="Per Alexandersson" />
     <meta name="description" content="Browse arXiv papers in combinatorics (math.CO category)" />
     <meta name="csrf-token" content="{{ csrf_token() }}" />
-    {% set _canon_path = request.path %}
-    {% set _canon_args = request.args.to_dict() %}
-    {% if _canon_args.get('page') == '1' %}{% set _ = _canon_args.pop('page') %}{% endif %}
-    {% if _canon_args %}
-    <link rel="canonical" href="https://arxiv.symmetricfunctions.com{{ _canon_path }}?{{ _canon_args|urlencode }}" />
-    {% else %}
-    <link rel="canonical" href="https://arxiv.symmetricfunctions.com{{ _canon_path }}" />
-    {% endif %}
+    {% if robots_meta %}<meta name="robots" content="{{ robots_meta }}" />{% endif %}
+    <link rel="canonical" href="{{ canonical_url }}" />
 
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32.png') }}">
     <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='favicon-192.png') }}">

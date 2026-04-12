@@ -9,7 +9,7 @@
       <span>Found {{ total }} paper(s) matching "{{ query }}"</span>
       <span style="font-size:0.85rem; color:var(--c-text-sub,#666);">
         Sort:
-        <a href="?q={{ query | urlencode }}&sort=relevance"
+        <a href="?q={{ query | urlencode }}"
            {% if sort == 'relevance' %}style="font-weight:700; color:var(--c-text); text-decoration:none;"{% endif %}>Relevance</a>
         ·
         <a href="?q={{ query | urlencode }}&sort=date"

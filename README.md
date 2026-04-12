@@ -193,7 +193,7 @@ arxiv.symmetricfunctions.com/
 ├── tag_papers.sh             # Run auto-tagger
 ├── find_dois.sh              # Run DOI lookup
 ├── batch_doi_lookup.sh       # Batch DOI lookup (date range, configurable)
-├── sync_to_prod.sh           # Sync code to production server
+├── sync_to_prod.sh           # Deploy code/config to production (no DB changes)
 ├── backfill_production.sh    # Backfill papers on production
 ├── use_local.sh              # Switch .env to local development
 ├── passenger_wsgi.py         # WSGI entry point (shared hosting)

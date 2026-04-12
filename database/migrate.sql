@@ -12,7 +12,6 @@ CREATE TABLE IF NOT EXISTS keywords (
     phrase    VARCHAR(255) NOT NULL,
     score     INT NOT NULL DEFAULT 5,
     url       TEXT,
-    tag_name  VARCHAR(255),
     active    BOOLEAN NOT NULL DEFAULT 1,
 
     UNIQUE KEY idx_unique_phrase (phrase),

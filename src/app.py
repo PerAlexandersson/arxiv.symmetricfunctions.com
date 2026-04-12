@@ -6,7 +6,7 @@ Main web interface for browsing arXiv papers.
 """
 
 from flask import Flask, render_template, request, jsonify, abort, redirect, url_for, session
-from urllib.parse import unquote, urlparse
+from urllib.parse import unquote, urlparse, urlencode
 import io
 import contextlib
 import calendar
@@ -25,9 +25,10 @@ logging.basicConfig(
     format='%(asctime)s %(levelname)s %(name)s: %(message)s',
 )
 logger = logging.getLogger(__name__)
+SITE_URL = 'https://arxiv.symmetricfunctions.com'
 
 # Validate configuration on startup
-validate_config()
+validate_config(require_web_security=True)
 
 app = Flask(__name__)
 app.config.update(FLASK_CONFIG)
@@ -90,6 +91,102 @@ def inject_current_user():
         ctx['watched_kw_phrases']    = frozenset()
         ctx['watched_author_names']  = frozenset()
     return ctx
+
+
+def _canonical_query_items():
+    """Return normalized query params for public page canonicals."""
+    if not request.args:
+        return []
+
+    endpoint = request.endpoint or ''
+    current_year = str(datetime.now().year)
+    items = []
+    order = {'q': 0, 'sort': 1, 'year': 2, 'page': 99}
+
+    for key in sorted(request.args.keys(), key=lambda k: (order.get(k, 50), k)):
+        value = request.args.get(key)
+        if value is None or value == '':
+            continue
+        if key.startswith('utm_') or key in {'fbclid', 'gclid', 'mc_cid', 'mc_eid'}:
+            continue
+        if key == 'page':
+            try:
+                page_num = int(value)
+            except (TypeError, ValueError):
+                continue
+            if page_num <= 1:
+                continue
+            value = str(page_num)
+        if endpoint == 'search' and key == 'sort':
+            if value not in {'relevance', 'date'}:
+                continue
+            if value == 'relevance':
+                continue
+        if endpoint == 'prolific_authors' and key == 'sort':
+            if value not in {'count', 'name'}:
+                continue
+            if value == 'count':
+                continue
+        if endpoint == 'browse_by_date' and key == 'year':
+            try:
+                year_num = int(value)
+            except (TypeError, ValueError):
+                continue
+            if str(year_num) == current_year:
+                continue
+            value = str(year_num)
+        items.append((key, value))
+
+    return items
+
+
+def _canonical_relative_url():
+    """Return the normalized relative URL for the current page."""
+    if not request.endpoint:
+        return request.path
+
+    rel = url_for(request.endpoint, **(request.view_args or {}))
+    query_items = _canonical_query_items()
+    if query_items:
+        rel = f"{rel}?{urlencode(query_items)}"
+    return rel
+
+
+@app.context_processor
+def inject_seo_metadata():
+    return {
+        'canonical_url': f"{SITE_URL}{_canonical_relative_url()}",
+        'robots_meta': 'noindex,follow' if request.endpoint == 'search' else None,
+    }
+
+
+@app.before_request
+def redirect_public_query_duplicates():
+    """Redirect obvious duplicate public URLs to a single normalized form."""
+    if request.method not in ('GET', 'HEAD'):
+        return None
+
+    if request.endpoint not in {
+        'index',
+        'search',
+        'prolific_authors',
+        'browse_by_date',
+        'keyword_papers',
+        'category_papers',
+        'author_papers',
+    }:
+        return None
+
+    current_items = [
+        (key, value)
+        for key, value in request.args.items()
+        if value is not None and value != ''
+    ]
+    canonical_items = _canonical_query_items()
+    if current_items != canonical_items:
+        return redirect(_canonical_relative_url(), code=301)
+
+    return None
 
 
 # Register slugify as a Jinja filter
@@ -609,6 +706,8 @@ def tools():
 def prolific_authors():
     """List authors with 50 or more papers."""
     sort = request.args.get('sort', 'count')
+    if sort not in ('count', 'name'):
+        sort = 'count'
     conn = get_db_connection()
     cursor = conn.cursor()
     if sort == 'name':
@@ -828,6 +927,8 @@ def search():
     """Search papers by title, abstract, author, or direct arXiv identifier."""
     query = request.args.get('q', '').strip()[:500]  # cap at 500 chars
     sort  = request.args.get('sort', 'relevance')  # 'relevance' or 'date'
+    if sort not in ('relevance', 'date'):
+        sort = 'relevance'
     page  = max(1, request.args.get('page', 1, type=int))
     per_page = 20
     offset = (page - 1) * per_page
@@ -1374,4 +1475,4 @@ def fetch_papers():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=app.config.get('DEBUG', False))
