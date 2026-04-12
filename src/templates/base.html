@@ -150,7 +150,7 @@
             </p>
 
             <form action="/search" method="get" class="search-form" role="search" aria-label="Search papers">
-                <input type="text" id="search-input" name="q" placeholder="Search by title, author, or abstract..." value="{{ request.args.get('q', '') }}" aria-label="Search by title, author, or abstract">
+                <input type="text" id="search-input" name="q" placeholder="Search by title, author, abstract, or arXiv ID..." value="{{ request.args.get('q', '') }}" aria-label="Search by title, author, abstract, or arXiv ID">
                 <button type="submit">Search</button>
             </form>
         </div>

@@ -6,7 +6,7 @@ Main web interface for browsing arXiv papers.
 """
 
 from flask import Flask, render_template, request, jsonify, abort, redirect, url_for, session
-from urllib.parse import unquote
+from urllib.parse import unquote, urlparse
 import io
 import contextlib
 import calendar
@@ -127,6 +127,85 @@ def _sf_url(value):
     return f'{SF_BASE}#{value}'
 
 app.jinja_env.filters['sf_url'] = _sf_url
+
+
+_ARXIV_ID_PATTERNS = (
+    re.compile(r'^\d{4}\.\d{4,5}(?:v\d+)?$', re.IGNORECASE),
+    re.compile(r'^[a-z.-]+/\d{7}(?:v\d+)?$', re.IGNORECASE),
+)
+
+
+def _extract_arxiv_id(value):
+    """Return a normalized arXiv ID from a raw ID or an arXiv URL."""
+    if not value:
+        return None
+
+    candidate = value.strip()
+    if not candidate:
+        return None
+
+    if candidate.lower().startswith('arxiv:'):
+        candidate = candidate.split(':', 1)[1].strip()
+    elif candidate.lower().startswith(('arxiv.org/', 'www.arxiv.org/', 'export.arxiv.org/')):
+        candidate = 'https://' + candidate
+    elif candidate.startswith('//'):
+        candidate = 'https:' + candidate
+
+    parsed = urlparse(candidate)
+    hostname = (parsed.netloc or '').lower()
+
+    if hostname.endswith('arxiv.org'):
+        path = parsed.path.lstrip('/')
+        if path.startswith('abs/'):
+            candidate = path[4:]
+        elif path.startswith('pdf/'):
+            candidate = path[4:]
+        else:
+            return None
+    elif parsed.scheme and parsed.netloc:
+        return None
+
+    candidate = candidate.strip().strip('/')
+    if candidate.lower().endswith('.pdf'):
+        candidate = candidate[:-4]
+
+    for pattern in _ARXIV_ID_PATTERNS:
+        if pattern.fullmatch(candidate):
+            return candidate
+
+    return None
+
+
+def _resolve_paper_arxiv_id(cursor, value):
+    """Resolve raw arXiv input to the canonical stored paper ID, if present."""
+    arxiv_id = _extract_arxiv_id(value)
+    if not arxiv_id:
+        return None
+
+    cursor.execute("""
+        SELECT arxiv_id
+        FROM papers
+        WHERE arxiv_id = %s
+        ORDER BY id DESC
+        LIMIT 1
+    """, (arxiv_id,))
+    paper = cursor.fetchone()
+    if paper:
+        return paper['arxiv_id']
+
+    base_id = re.sub(r'v\d+$', '', arxiv_id, flags=re.IGNORECASE)
+    cursor.execute("""
+        SELECT arxiv_id
+        FROM papers
+        WHERE arxiv_id = %s OR arxiv_id LIKE %s
+        ORDER BY
+            CASE WHEN arxiv_id = %s THEN 0 ELSE 1 END,
+            COALESCE(updated_date, published_date) DESC,
+            id DESC
+        LIMIT 1
+    """, (base_id, f"{base_id}v%", base_id))
+    paper = cursor.fetchone()
+    return paper['arxiv_id'] if paper else None
 
 
 # ── Index page data cache ─────────────────────────────────────────────────────
@@ -440,6 +519,10 @@ def paper_detail(arxiv_id):
     paper = cursor.fetchone()
 
     if not paper:
+        canonical_id = _resolve_paper_arxiv_id(cursor, arxiv_id)
+        cursor.close()
+        if canonical_id and canonical_id != arxiv_id:
+            return redirect(url_for('paper_detail', arxiv_id=canonical_id))
         abort(404)
 
     paper['authors'] = get_paper_authors(cursor, paper['id'])
@@ -624,16 +707,8 @@ def _generate_bibtex(input_text, lookup_doi=False):
     if not input_text:
         return {'error': 'Please provide an arXiv ID or DOI'}, 400
 
-    arxiv_id = None
+    arxiv_id = _extract_arxiv_id(input_text)
     doi = None
-
-    # Check if it's an arXiv URL or ID
-    if 'arxiv.org' in input_text.lower():
-        match = re.search(r'arxiv\.org/(?:abs|pdf)/([0-9]+\.[0-9]+(?:v[0-9]+)?)', input_text, re.IGNORECASE)
-        if match:
-            arxiv_id = match.group(1)
-    elif re.match(r'^[0-9]+\.[0-9]+(?:v[0-9]+)?$', input_text):
-        arxiv_id = input_text
 
     if not arxiv_id:
         if 'doi.org/' in input_text.lower():
@@ -645,11 +720,15 @@ def _generate_bibtex(input_text, lookup_doi=False):
         # Try local database first
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT id, arxiv_id, title, published_date, journal_ref, doi
-            FROM papers WHERE arxiv_id LIKE %s
-        """, (f"{arxiv_id}%",))
-        paper = cursor.fetchone()
+        paper = None
+        canonical_id = _resolve_paper_arxiv_id(cursor, arxiv_id)
+        if canonical_id:
+            cursor.execute("""
+                SELECT id, arxiv_id, title, published_date, journal_ref, doi
+                FROM papers
+                WHERE arxiv_id = %s
+            """, (canonical_id,))
+            paper = cursor.fetchone()
 
         if paper:
             paper['authors'] = get_paper_authors(cursor, paper['id'])
@@ -746,7 +825,7 @@ def bibtex_json():
 
 @app.route('/search')
 def search():
-    """Search papers by title, abstract, or author."""
+    """Search papers by title, abstract, author, or direct arXiv identifier."""
     query = request.args.get('q', '').strip()[:500]  # cap at 500 chars
     sort  = request.args.get('sort', 'relevance')  # 'relevance' or 'date'
     page  = max(1, request.args.get('page', 1, type=int))
@@ -759,7 +838,13 @@ def search():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # 1. Exact author name match → redirect to their page
+    # 1. Direct arXiv ID / URL → redirect to the paper page
+    canonical_id = _resolve_paper_arxiv_id(cursor, query)
+    if canonical_id:
+        cursor.close()
+        return redirect(url_for('paper_detail', arxiv_id=canonical_id))
+
+    # 2. Exact author name match → redirect to their page
     cursor.execute(
         "SELECT slug FROM authors WHERE LOWER(name) = LOWER(%s) LIMIT 1",
         (query,)
@@ -769,7 +854,7 @@ def search():
         cursor.close()
         return redirect(url_for('author_papers', author_slug=author['slug']))
 
-    # 2. Exact keyword phrase match → redirect to keyword page
+    # 3. Exact keyword phrase match → redirect to keyword page
     cursor.execute(
         "SELECT phrase FROM keywords WHERE phrase = %s AND active = 1",
         (query.lower(),)
@@ -779,7 +864,7 @@ def search():
         cursor.close()
         return redirect(url_for('keyword_papers', phrase=keyword['phrase']))
 
-    # 3. Full-text / LIKE search on titles and abstracts
+    # 4. Full-text / LIKE search on titles and abstracts
     cursor.execute("SELECT latest_date FROM site_stats WHERE id = 1")
     row = cursor.fetchone()
     latest_date = row['latest_date'] if row else None
