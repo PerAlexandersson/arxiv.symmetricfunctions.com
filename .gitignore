@@ -39,6 +39,8 @@ use_local.sh
 
 # Claude Code
 .claude/
+.codex/
+.codex
 
 # Local-only docs (server-specific, not repo state)
 CRONJOBS.md
