@@ -96,6 +96,30 @@ _TEX_GREEK_RES = [
     )
     for name, ascii_name in _GREEK_NAME_MAP.items()
 ]
+_TITLE_WORD_NORMALIZATIONS = {
+    'analogue': 'analog',
+    'analogues': 'analogs',
+    'behaviour': 'behavior',
+    'behaviours': 'behaviors',
+    'catalogue': 'catalog',
+    'catalogues': 'catalogs',
+    'centre': 'center',
+    'centres': 'centers',
+    'colour': 'color',
+    'colours': 'colors',
+    'coloured': 'colored',
+    'colouring': 'coloring',
+    'colourings': 'colorings',
+    'fibre': 'fiber',
+    'fibres': 'fibers',
+    'labelled': 'labeled',
+    'labelling': 'labeling',
+    'modelling': 'modeling',
+    'optimisation': 'optimization',
+    'optimisations': 'optimizations',
+    'randomisation': 'randomization',
+    'randomisations': 'randomizations',
+}
 _AUTHOR_SURNAME_PARTICLES = {
     'al', 'ap', 'ben', 'bin', 'da', 'de', 'del', 'della', 'der', 'di', 'du',
     'el', 'ibn', 'la', 'le', 'st', 'ten', 'ter', 'van', 'von',
@@ -154,6 +178,24 @@ def _title_similarity_from_normalized(left_norm, right_norm):
     return 0.65 * token_sim + 0.35 * string_sim
 
 
+def _normalize_regional_spellings(text):
+    """Canonicalize a small curated set of British/American spellings."""
+    if not text:
+        return ''
+    return ' '.join(_TITLE_WORD_NORMALIZATIONS.get(word, word) for word in text.split())
+
+
+def _substring_title_similarity_boost(left_norm, right_norm):
+    """Boost when the paper title is almost contained in the published title."""
+    left_compact = left_norm.replace(' ', '')
+    right_compact = right_norm.replace(' ', '')
+    if not left_compact or not right_compact:
+        return 0.0
+    if left_compact in right_compact and len(right_compact) <= 1.2 * len(left_compact):
+        return 0.96
+    return 0.0
+
+
 def normalize_title(text):
     """Normalize titles across TeX, HTML/MathML, Unicode, and punctuation."""
     if not text:
@@ -173,6 +215,7 @@ def normalize_title(text):
 
     text = _ascii_fold(text)
     text = re.sub(r'[^a-z0-9\s]', ' ', text)
+    text = _normalize_regional_spellings(text)
     return re.sub(r'\s+', ' ', text).strip()
 
 
@@ -274,6 +317,7 @@ def score_title_author_match(left_title, left_authors, right_title, right_author
     left_norm = normalize_title(left_title)
     right_norm = normalize_title(right_title)
     title_sim = _title_similarity_from_normalized(left_norm, right_norm)
+    title_sim = max(title_sim, _substring_title_similarity_boost(left_norm, right_norm))
     author_sim = author_similarity(left_authors, right_authors)
 
     # When titles normalize identically, Crossref author data is often a

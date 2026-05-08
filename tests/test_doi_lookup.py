@@ -43,6 +43,12 @@ class NormalizeTests(unittest.TestCase):
             normalize_title("schur positivity in macdonald theory"),
         )
 
+    def test_british_and_american_spellings_normalize_together(self):
+        self.assertEqual(
+            normalize_title("coloured graph labelling"),
+            normalize_title("colored graph labeling"),
+        )
+
     def test_author_normalization_handles_accents_and_suffixes(self):
         self.assertEqual(
             normalize_author_name("Dvořák-Smith, Jr."),
@@ -104,6 +110,17 @@ class NormalizeTests(unittest.TestCase):
                 "MacdonaldPolynomial positivity",
                 ["Doe, Jane"],
             ),
+        )
+
+    def test_short_published_suffix_boosts_near_substring_match(self):
+        self.assertGreaterEqual(
+            score_title_author_match(
+                "Coloured Graphs",
+                ["Jane Doe"],
+                "Colored Graphs II",
+                ["Doe, Jane"],
+            ),
+            0.97,
         )
 
 
