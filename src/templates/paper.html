@@ -46,7 +46,7 @@
         <input type="text" id="doi-input" placeholder="Enter DOI or DOI URL..."
                value="{{ paper.doi or '' }}"
                style="padding:0.2rem 0.5rem; font-size:0.88rem; border:1px solid var(--c-border); border-radius:3px; width:22rem;">
-        <button type="submit" style="padding:0.2rem 0.6rem; font-size:0.85rem; cursor:pointer;
+        <button type="submit" id="doi-save-btn" style="padding:0.2rem 0.6rem; font-size:0.85rem; cursor:pointer;
                border:1px solid var(--c-border); border-radius:3px; background:var(--c-bg-surface);">Set DOI</button>
         {% if not paper.doi %}
         <button type="button" id="skip-doi-btn" onclick="toggleSkipDoi({{ paper.id }})"
@@ -152,50 +152,48 @@
 {% block extra_js %}
 <script>
 {% if is_admin %}
-function setDoi(e) {
+async function setDoi(e) {
   e.preventDefault();
   let val = document.getElementById('doi-input').value.trim();
   const status = document.getElementById('doi-status');
+  const saveBtn = document.getElementById('doi-save-btn');
   if (!val) { status.textContent = 'empty'; return false; }
   // Extract DOI from URL
   const m = val.match(/doi\.org\/(.+)/i);
   if (m) val = m[1];
-  status.textContent = 'Saving and refreshing...';
-  const csrf = document.querySelector('meta[name="csrf-token"]').content;
+  status.textContent = 'Saving…';
+  status.style.color = 'var(--c-text-sub)';
+  saveBtn.disabled = true;
   const fd = new FormData();
   fd.append('doi', val);
-  fetch('/admin/dois/{{ paper.id }}/manual', {
-    method: 'POST',
-    headers: {'X-CSRFToken': csrf},
-    body: fd
-  })
-  .then(r => r.json())
-  .then(data => {
+  try {
+    const data = await csrfJsonFetch('/admin/dois/{{ paper.id }}/manual', fd);
     if (data.ok) {
-      status.textContent = data.refetched ? '\u2713 saved and refreshed' : '\u2713 saved; refresh failed';
-      status.style.color = data.refetched ? 'green' : '#856404';
+      status.textContent = '\u2713 saved';
+      status.style.color = 'green';
       document.getElementById('doi-input').value = data.doi;
-      if (data.refetched) setTimeout(() => window.location.reload(), 700);
+      setTimeout(() => window.location.reload(), 500);
     } else {
       status.textContent = data.error || 'Error';
       status.style.color = 'red';
+      saveBtn.disabled = false;
     }
-  })
-  .catch(() => { status.textContent = 'Failed'; status.style.color = 'red'; });
+  } catch (e2) {
+    if (e2.message !== 'AUTH_REQUIRED') {
+      status.textContent = 'Failed';
+      status.style.color = 'red';
+    }
+    saveBtn.disabled = false;
+  }
   return false;
 }
 
-function toggleSkipDoi(paperId) {
+async function toggleSkipDoi(paperId) {
   const btn = document.getElementById('skip-doi-btn');
   const isSkipped = btn.classList.contains('skip-doi-active');
   const action = isSkipped ? 'unskip' : 'skip';
-  const csrf = document.querySelector('meta[name="csrf-token"]').content;
-  fetch('/admin/dois/' + paperId + '/' + action, {
-    method: 'POST',
-    headers: {'X-CSRFToken': csrf}
-  })
-  .then(r => r.json())
-  .then(data => {
+  try {
+    const data = await csrfJsonFetch('/admin/dois/' + paperId + '/' + action, {});
     if (data.ok) {
       if (action === 'skip') {
         btn.classList.add('skip-doi-active');
@@ -207,35 +205,37 @@ function toggleSkipDoi(paperId) {
         btn.title = 'Mark as unlikely to ever get a DOI (skips future lookups)';
       }
     }
-  });
+  } catch (e2) {
+    if (e2.message !== 'AUTH_REQUIRED') {
+      console.error('toggleSkipDoi failed', e2);
+    }
+  }
 }
 
-function refetchPaper(arxivId) {
+async function refetchPaper(arxivId) {
   const btn = document.getElementById('refetch-btn');
   const status = document.getElementById('refetch-status');
   btn.disabled = true;
   status.textContent = 'Fetching…';
-  const csrf = document.querySelector('meta[name="csrf-token"]').content;
-  fetch('/admin/paper/' + arxivId + '/refetch', {
-    method: 'POST',
-    headers: {'X-CSRFToken': csrf}
-  })
-  .then(r => r.json())
-  .then(data => {
+  status.style.color = 'var(--c-text-sub)';
+  try {
+    const data = await csrfJsonFetch('/admin/paper/' + arxivId + '/refetch', {});
     if (data.ok) {
-      status.textContent = 'Done — reload to see updates.';
+      status.textContent = 'Done — reloading…';
       status.style.color = 'green';
+      setTimeout(() => window.location.reload(), 500);
     } else {
       status.textContent = 'Error: ' + (data.error || 'unknown');
       status.style.color = 'red';
       btn.disabled = false;
     }
-  })
-  .catch(() => {
-    status.textContent = 'Request failed.';
-    status.style.color = 'red';
-    btn.disabled = false;
-  });
+  } catch (e2) {
+    if (e2.message !== 'AUTH_REQUIRED') {
+      status.textContent = 'Request failed.';
+      status.style.color = 'red';
+      btn.disabled = false;
+    }
+  }
 }
 {% endif %}
 

@@ -1033,7 +1033,11 @@ def run_doi_lookup():
 @admin.route('/dois/<int:paper_id>/manual', methods=['POST'])
 @login_required
 def manual_doi(paper_id):
-    """Manually assign a DOI to a paper, then refresh arXiv metadata."""
+    """Manually assign a DOI to a paper.
+
+    Keep this request fast and reliable: the paper page already exposes a
+    separate "Re-fetch" action for refreshing arXiv metadata.
+    """
     doi = request.form.get('doi', '').strip()
     if not doi:
         return jsonify({'ok': False, 'error': 'empty'}), 400
@@ -1065,18 +1069,13 @@ def manual_doi(paper_id):
     _mark_other_doi_candidates_rejected(cursor, paper_id, keep_doi=doi)
     conn.commit()
     cursor.close()
-
-    try:
-        log = _refetch_arxiv_paper(paper['arxiv_id'])
-        return jsonify({'ok': True, 'doi': doi, 'refetched': True, 'log': log})
-    except Exception as e:
-        logger.exception("manual DOI refetch failed for %s", paper['arxiv_id'])
-        return jsonify({
-            'ok': True,
-            'doi': doi,
-            'refetched': False,
-            'refetch_error': str(e),
-        })
+    return jsonify({
+        'ok': True,
+        'doi': doi,
+        'saved': True,
+        'message': 'DOI saved',
+        'arxiv_id': paper['arxiv_id'],
+    })
 
 
 @admin.route('/dois/<int:paper_id>/skip', methods=['POST'])
