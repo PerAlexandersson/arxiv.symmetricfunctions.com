@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # sync_to_prod.sh — Deploy code/config to production.
 #
 # What this does:
@@ -17,7 +17,7 @@
 # The production database is authoritative and should only be changed
 # intentionally, outside routine code deploys.
 
-set -eu
+set -euo pipefail
 
 REMOTE_HOST="symmetricf@ns12.inleed.net"
 REMOTE_PORT="2020"
@@ -36,13 +36,20 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-echo "========================================="
-echo "  Deploy → production (code only)"
-echo "========================================="
-echo "  Remote: $REMOTE_HOST:$REMOTE_PORT"
-echo ""
+printf '%s\n' "========================================="
+printf '%s\n' "  Deploy -> production (code only)"
+printf '%s\n' "========================================="
+printf '%s\n' "  Remote: $REMOTE_HOST:$REMOTE_PORT"
+printf '%s\n' ""
 
-echo -e "${YELLOW}Step 1: Ensuring remote directories exist...${NC}"
+printf '%b\n' "${YELLOW}Preflight: checking SSH command execution...${NC}"
+if ! ssh -p "$REMOTE_PORT" "$REMOTE_HOST" "printf '%s\n' ssh-ok" >/dev/null; then
+    printf '%s\n' "Error: SSH login worked poorly or remote command execution is disabled."
+    printf '%s\n' "Try: ssh -p $REMOTE_PORT $REMOTE_HOST 'echo ok'"
+    exit 1
+fi
+
+printf '%b\n' "${YELLOW}Step 1: Ensuring remote directories exist...${NC}"
 ssh -p "$REMOTE_PORT" "$REMOTE_HOST" "
     mkdir -p ~/$REMOTE_PATH/src
     mkdir -p ~/$REMOTE_PATH/src/static
@@ -53,7 +60,7 @@ ssh -p "$REMOTE_PORT" "$REMOTE_HOST" "
     mkdir -p ~/$REMOTE_PATH/log
 "
 
-echo -e "${YELLOW}Step 2: Uploading code and config...${NC}"
+printf '%b\n' "${YELLOW}Step 2: Uploading code and config...${NC}"
 scp -P "$REMOTE_PORT" "$SCRIPT_DIR/passenger_wsgi.py" \
     "$REMOTE_HOST:~/$REMOTE_PATH/"
 scp -P "$REMOTE_PORT" "$SCRIPT_DIR/requirements.txt" \
@@ -87,10 +94,10 @@ if [ -f "$SCRIPT_DIR/deployment/static_htaccess" ]; then
         "$REMOTE_HOST:~/$REMOTE_PATH/public_html/static/.htaccess"
 fi
 
-echo -e "${YELLOW}Step 3: Installing dependencies...${NC}"
+printf '%b\n' "${YELLOW}Step 3: Installing dependencies...${NC}"
 ssh -p "$REMOTE_PORT" "$REMOTE_HOST" "
     set -e
-    source $REMOTE_VENV
+    . $REMOTE_VENV
     cd ~/$REMOTE_PATH
     pip install -r requirements.txt
     chmod 755 passenger_wsgi.py
@@ -98,12 +105,12 @@ ssh -p "$REMOTE_PORT" "$REMOTE_HOST" "
     chmod 664 public_html/static/*.css public_html/static/*.js 2>/dev/null || true
 "
 
-echo -e "${YELLOW}Step 4: Restarting Passenger...${NC}"
+printf '%b\n' "${YELLOW}Step 4: Restarting Passenger...${NC}"
 ssh -p "$REMOTE_PORT" "$REMOTE_HOST" \
     "touch ~/$REMOTE_PATH/passenger_wsgi.py ~/$REMOTE_PATH/tmp/restart.txt"
 
-echo ""
-echo -e "${GREEN}=========================================${NC}"
-echo -e "${GREEN}  Done!${NC}"
-echo -e "${GREEN}=========================================${NC}"
-echo "Code/config deploy complete. No database changes were made."
+printf '%s\n' ""
+printf '%b\n' "${GREEN}=========================================${NC}"
+printf '%b\n' "${GREEN}  Done!${NC}"
+printf '%b\n' "${GREEN}=========================================${NC}"
+printf '%s\n' "Code/config deploy complete. No database changes were made."

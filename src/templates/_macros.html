@@ -41,6 +41,14 @@
 {% endif %}
 <div class="paper{% if is_latest %} paper--new{% endif %}{% if ns.is_watched %} paper--watched{% endif %}" id="paper-{{ paper.arxiv_id }}">
     <div class="paper-authors-row">
+        {% if ns.is_watched %}
+        <span class="paper-watch-indicator" title="Watched paper: matches one of your watched authors or keywords." aria-label="Watched paper: matches one of your watched authors or keywords.">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M2.5 10s2.8-5 7.5-5 7.5 5 7.5 5-2.8 5-7.5 5-7.5-5-7.5-5z"/>
+                <circle cx="10" cy="10" r="2.3"/>
+            </svg>
+        </span>
+        {% endif %}
         <div class="paper-date{% if is_latest %} latest-date{% endif %}">
             {{ paper.published_date }}
             {% if 'v' in paper.arxiv_id and paper.arxiv_id.split('v')[-1].isdigit() %}

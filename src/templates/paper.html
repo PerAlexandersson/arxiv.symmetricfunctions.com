@@ -160,7 +160,7 @@ function setDoi(e) {
   // Extract DOI from URL
   const m = val.match(/doi\.org\/(.+)/i);
   if (m) val = m[1];
-  status.textContent = 'Saving...';
+  status.textContent = 'Saving and refreshing...';
   const csrf = document.querySelector('meta[name="csrf-token"]').content;
   const fd = new FormData();
   fd.append('doi', val);
@@ -172,9 +172,10 @@ function setDoi(e) {
   .then(r => r.json())
   .then(data => {
     if (data.ok) {
-      status.textContent = '\u2713 saved';
-      status.style.color = 'green';
+      status.textContent = data.refetched ? '\u2713 saved and refreshed' : '\u2713 saved; refresh failed';
+      status.style.color = data.refetched ? 'green' : '#856404';
       document.getElementById('doi-input').value = data.doi;
+      if (data.refetched) setTimeout(() => window.location.reload(), 700);
     } else {
       status.textContent = data.error || 'Error';
       status.style.color = 'red';

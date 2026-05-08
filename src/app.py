@@ -10,6 +10,7 @@ from urllib.parse import unquote, urlparse, urlencode
 import io
 import contextlib
 import calendar
+import html
 import logging
 import random
 import re
@@ -26,6 +27,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 SITE_URL = 'https://arxiv.symmetricfunctions.com'
+OEIS_SEARCH_URL = 'https://oeis.org/search'
 
 # Validate configuration on startup
 validate_config(require_web_security=True)
@@ -360,6 +362,20 @@ except Exception:
     logger.warning("Could not pre-warm index cache on startup")
 
 
+def _clean_doi_title(title):
+    """Strip publisher markup from DOI titles while preserving text content."""
+    clean_title = re.sub(r'\{([^{}]*)\}', r'\1', title)
+    clean_title = html.unescape(clean_title)
+    if re.search(r'</?[A-Za-z][^>]*>', clean_title):
+        clean_title = re.sub(r'<[^>]+>', '', clean_title)
+    clean_title = ' '.join(clean_title.split())
+    clean_title = re.sub(r'([(\[{])\s+', r'\1', clean_title)
+    clean_title = re.sub(r'\s+([)\]}])', r'\1', clean_title)
+    clean_title = re.sub(r'\s+([,;:.!?])', r'\1', clean_title)
+    clean_title = re.sub(r'([)\]}])\s+-\s*', r'\1-', clean_title)
+    return clean_title
+
+
 def _reformat_doi_bibtex(raw_bib, doi):
     """Reformat a raw BibTeX string from doi.org to match our house style.
 
@@ -402,9 +418,7 @@ def _reformat_doi_bibtex(raw_bib, doi):
     # Protect capitals in title
     title = fields.get('title', '')
     if title:
-        # Remove existing {..} protection first, then re-apply ours
-        clean_title = re.sub(r'\{([^{}]*)\}', r'\1', title)
-        fields['title'] = protect_capitals_for_bibtex(clean_title)
+        fields['title'] = protect_capitals_for_bibtex(_clean_doi_title(title))
 
     # Build formatted output
     # Field order preference
@@ -427,6 +441,57 @@ def _reformat_doi_bibtex(raw_bib, doi):
     return '\n'.join(lines)
 
 
+def _fetch_doi_bibtex(doi):
+    """Fetch DOI BibTeX from doi.org and reformat it to match our style."""
+    try:
+        doi_url = f"https://doi.org/{doi}"
+        headers = {'Accept': 'application/x-bibtex'}
+        response = requests.get(doi_url, headers=headers, timeout=10)
+        response.raise_for_status()
+        raw = response.text.strip()
+        if not raw or '@' not in raw[:50]:
+            return None
+        return _reformat_doi_bibtex(raw, doi)
+    except requests.RequestException:
+        return None
+
+
+def _custom_doi_bibtex(doi, paper_data):
+    """Generate a DOI BibTeX entry from local paper metadata."""
+    year = (paper_data['published_date'].year
+            if hasattr(paper_data['published_date'], 'year')
+            else paper_data['published_date'])
+    bibtex_key = generate_bibtex_key(paper_data.get('authors', []), year, published=True)
+    author_str = ' and '.join(paper_data.get('authors', [])) if paper_data.get('authors') else 'Unknown'
+    protected_title = protect_capitals_for_bibtex(paper_data['title'])
+
+    fields = [
+        ('author', author_str),
+        ('title', protected_title),
+        ('year', year),
+        ('journal', paper_data.get('journal_ref')),
+        ('doi', doi),
+        ('url', f"https://doi.org/{doi}"),
+    ]
+    lines = [f"@article{{{bibtex_key},"]
+    field_lines = [f"  {name} = {{{value}}}" for name, value in fields if value]
+    lines.extend(f"{line}," for line in field_lines[:-1])
+    if field_lines:
+        lines.append(field_lines[-1])
+    lines.append("}")
+    return '\n'.join(lines)
+
+
+def published_doi_bibtex(doi, paper_data=None):
+    """Generate published BibTeX from DOI metadata, with local metadata fallback."""
+    bibtex = _fetch_doi_bibtex(doi)
+    if bibtex:
+        return bibtex
+    if paper_data:
+        return _custom_doi_bibtex(doi, paper_data)
+    return None
+
+
 def doi2bib(doi, paper_data=None):
     """
     Generate BibTeX entry from DOI using content negotiation,
@@ -440,35 +505,8 @@ def doi2bib(doi, paper_data=None):
         BibTeX string or None on error
     """
     if paper_data:
-        # Generate custom BibTeX with user's preferred format
-        year = paper_data['published_date'].year if hasattr(paper_data['published_date'], 'year') else paper_data['published_date']
-        bibtex_key = generate_bibtex_key(paper_data.get('authors', []), year, published=True)
-
-        author_str = ' and '.join(paper_data.get('authors', [])) if paper_data.get('authors') else 'Unknown'
-        protected_title = protect_capitals_for_bibtex(paper_data['title'])
-
-        bibtex = f"""@article{{{bibtex_key},
-  author = {{{author_str}}},
-  title = {{{protected_title}}},
-  year = {{{year}}},
-  journal = {{{paper_data.get('journal_ref', '')}}},
-  doi = {{{doi}}},
-  url = {{https://doi.org/{doi}}}
-}}"""
-        return bibtex
-    else:
-        # Fetch from DOI.org and reformat to match our style
-        try:
-            doi_url = f"https://doi.org/{doi}"
-            headers = {'Accept': 'application/x-bibtex'}
-            response = requests.get(doi_url, headers=headers, timeout=10)
-            response.raise_for_status()
-            raw = response.text.strip()
-            if not raw or '@' not in raw[:50]:
-                return None
-            return _reformat_doi_bibtex(raw, doi)
-        except requests.RequestException:
-            return None
+        return _custom_doi_bibtex(doi, paper_data)
+    return _fetch_doi_bibtex(doi)
 
 
 app.teardown_appcontext(close_db_connection)
@@ -688,8 +726,7 @@ def doi_bibtex(arxiv_id):
     paper['authors'] = get_paper_authors(cursor, paper['id'])
     cursor.close()
 
-    # Generate custom BibTeX with user's preferred format
-    bibtex = doi2bib(paper['doi'], paper)
+    bibtex = published_doi_bibtex(paper['doi'], paper)
     if bibtex:
         return bibtex, 200, {'Content-Type': 'text/plain; charset=utf-8'}
     else:
@@ -846,7 +883,7 @@ def _generate_bibtex(input_text, lookup_doi=False):
                     result['doi_lookup'] = {
                         'doi': found_doi, 'confidence': conf, 'source': 'crossref'}
             if paper_doi:
-                published_bib = doi2bib(paper_doi, paper)
+                published_bib = published_doi_bibtex(paper_doi, paper)
                 if published_bib:
                     result['published'] = published_bib
             return result, 200
@@ -884,7 +921,7 @@ def _generate_bibtex(input_text, lookup_doi=False):
                     result['doi_lookup'] = {
                         'doi': found_doi, 'confidence': conf, 'source': 'crossref'}
             if doi_val:
-                published_bib = doi2bib(doi_val, paper_data)
+                published_bib = published_doi_bibtex(doi_val, paper_data)
                 if published_bib:
                     result['published'] = published_bib
             return result, 200
@@ -893,7 +930,7 @@ def _generate_bibtex(input_text, lookup_doi=False):
             return {'error': 'Paper not found in database and arXiv lookup failed'}, 404
 
     elif doi:
-        bibtex = doi2bib(doi)
+        bibtex = published_doi_bibtex(doi)
         if bibtex:
             return {'published': bibtex}, 200
         return {'error': f'Could not resolve DOI: {doi}'}, 404
@@ -920,6 +957,122 @@ def bibtex_json():
     result, status = _generate_bibtex(input_text.strip(),
                                       lookup_doi=lookup in ('1', 'true', 'yes'))
     return jsonify(result), status
+
+
+SEARCH_AUTHOR_STOPWORDS = {
+    'a', 'an', 'and', 'by', 'for', 'from', 'in', 'of', 'on', 'or', 'the',
+    'to', 'with',
+}
+
+
+def _search_author_terms(query):
+    """Return significant tokens for matching a query against paper authors."""
+    terms = []
+    seen = set()
+    for term in re.findall(r"[\w'-]+", query.lower()):
+        term = term.strip("'-")
+        if len(term) < 2 or term in SEARCH_AUTHOR_STOPWORDS or term in seen:
+            continue
+        seen.add(term)
+        terms.append(term)
+    return terms
+
+
+def _author_search_condition(author_terms):
+    """Build SQL requiring every term to appear among a paper's authors."""
+    if not author_terms:
+        return "0 = 1", []
+
+    having = []
+    params = []
+    for term in author_terms:
+        having.append("SUM(CASE WHEN LOWER(a.name) LIKE %s THEN 1 ELSE 0 END) > 0")
+        params.append(f"%{term}%")
+
+    return f"""
+        EXISTS (
+            SELECT 1
+            FROM paper_authors pa
+            JOIN authors a ON pa.author_id = a.id
+            WHERE pa.paper_id = p.id
+            GROUP BY pa.paper_id
+            HAVING {' AND '.join(having)}
+        )
+    """, params
+
+
+def _cors_json(payload, status=200, max_age=3600):
+    resp = jsonify(payload)
+    resp.status_code = status
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    resp.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+    resp.headers['Access-Control-Max-Age'] = '86400'
+    resp.headers['Cache-Control'] = f'public, max-age={max_age}'
+    return resp
+
+
+@app.route('/api/oeis-search', methods=['GET', 'OPTIONS'])
+@csrf.exempt
+def oeis_search_proxy():
+    """Proxy OEIS JSON search for static symmetricfunctions.com tools."""
+    if request.method == 'OPTIONS':
+        return _cors_json({'ok': True}, 200)
+
+    query = (request.args.get('q') or '').strip()
+    limit = request.args.get('limit', default=3, type=int) or 3
+    limit = max(1, min(limit, 10))
+
+    if not query:
+        return _cors_json({'ok': False, 'error': 'missing q parameter'}, 400, max_age=300)
+    if len(query) > 5000:
+        return _cors_json({'ok': False, 'error': 'query too long'}, 400, max_age=300)
+    if not re.fullmatch(r'[-\d,\s]+', query):
+        return _cors_json({'ok': False, 'error': 'query must be a comma-separated integer sequence'}, 400, max_age=300)
+
+    try:
+        upstream = requests.get(
+            OEIS_SEARCH_URL,
+            params={'q': query, 'fmt': 'json'},
+            headers={'User-Agent': 'arxiv.symmetricfunctions.com OEIS proxy'},
+            timeout=12,
+        )
+        upstream.raise_for_status()
+        payload = upstream.json()
+    except Exception as exc:
+        logger.warning("OEIS proxy lookup failed for %r: %s", query[:120], exc)
+        return _cors_json({'ok': False, 'error': 'OEIS lookup failed'}, 502, max_age=300)
+
+    if isinstance(payload, list):
+        raw_results = payload
+    elif isinstance(payload, dict):
+        raw_results = payload.get('results') or []
+    else:
+        raw_results = []
+
+    if isinstance(raw_results, dict):
+        raw_results = [raw_results]
+    elif not isinstance(raw_results, list):
+        raw_results = []
+    results = []
+    for item in raw_results[:limit]:
+        number = item.get('number')
+        try:
+            anum = f"A{int(number):06d}"
+        except (TypeError, ValueError):
+            anum = None
+        results.append({
+            'number': number,
+            'id': anum,
+            'name': item.get('name', ''),
+            'data': item.get('data', ''),
+        })
+
+    return _cors_json({
+        'ok': True,
+        'query': query,
+        'count': len(raw_results),
+        'results': results,
+    }, 200, max_age=21600)
 
 
 @app.route('/search')
@@ -977,67 +1130,68 @@ def search():
          GROUP BY pk.paper_id) kw
     """
 
-    order_clause = ("kw_score DESC, p.published_date DESC, p.id DESC"
+    order_clause = ("author_match DESC, text_score DESC, kw_score DESC, p.published_date DESC, p.id DESC"
                     if sort == 'relevance'
                     else "p.published_date DESC, p.id DESC")
 
     words = query.split()
     use_fulltext = all(len(w) >= 3 for w in words) and len(words) > 0
-
-    author_subquery = """
-        p.id IN (
-            SELECT pa.paper_id FROM paper_authors pa
-            JOIN authors a ON pa.author_id = a.id
-            WHERE a.name LIKE %s
-        )
-    """
+    author_condition, author_params = _author_search_condition(
+        _search_author_terms(query))
 
     if use_fulltext:
         ft_query = '+' + ' +'.join(words)  # boolean mode: require all words
-        author_term = f"%{query}%"
 
         cursor.execute(f"""
             SELECT COUNT(DISTINCT p.id) as count
             FROM papers p
             WHERE MATCH(p.title, p.abstract) AGAINST(%s IN BOOLEAN MODE)
-               OR {author_subquery}
-        """, (ft_query, author_term))
+               OR {author_condition}
+        """, [ft_query] + author_params)
         total = cursor.fetchone()['count']
 
         cursor.execute(f"""
             SELECT p.id, p.arxiv_id, p.title, p.abstract,
                    p.published_date, p.updated_date, p.journal_ref, p.doi,
                    p.comment, p.primary_category,
+                   ({author_condition}) AS author_match,
+                   MATCH(p.title, p.abstract) AGAINST(%s IN BOOLEAN MODE) AS text_score,
                    COALESCE(kw.kw_score, 0) AS kw_score
             FROM papers p
             LEFT JOIN {kw_subquery} ON p.id = kw.paper_id
             WHERE MATCH(p.title, p.abstract) AGAINST(%s IN BOOLEAN MODE)
-               OR {author_subquery}
+               OR {author_condition}
             ORDER BY {order_clause}
             LIMIT %s OFFSET %s
-        """, (ft_query, author_term, per_page, offset))
+        """, author_params + [ft_query, ft_query] + author_params + [per_page, offset])
     else:
         like_term = f"%{query}%"
 
         cursor.execute(f"""
             SELECT COUNT(DISTINCT p.id) as count FROM papers p
             WHERE p.title LIKE %s OR p.abstract LIKE %s
-               OR {author_subquery}
-        """, (like_term, like_term, like_term))
+               OR {author_condition}
+        """, [like_term, like_term] + author_params)
         total = cursor.fetchone()['count']
 
         cursor.execute(f"""
             SELECT p.id, p.arxiv_id, p.title, p.abstract,
                    p.published_date, p.updated_date, p.journal_ref, p.doi,
                    p.comment, p.primary_category,
+                   ({author_condition}) AS author_match,
+                   CASE
+                       WHEN p.title LIKE %s THEN 2
+                       WHEN p.abstract LIKE %s THEN 1
+                       ELSE 0
+                   END AS text_score,
                    COALESCE(kw.kw_score, 0) AS kw_score
             FROM papers p
             LEFT JOIN {kw_subquery} ON p.id = kw.paper_id
             WHERE p.title LIKE %s OR p.abstract LIKE %s
-               OR {author_subquery}
+               OR {author_condition}
             ORDER BY {order_clause}
             LIMIT %s OFFSET %s
-        """, (like_term, like_term, like_term, per_page, offset))
+        """, author_params + [like_term, like_term, like_term, like_term] + author_params + [per_page, offset])
 
     papers = cursor.fetchall()
     attach_authors(cursor, papers)
@@ -1424,7 +1578,7 @@ def author_bibtex(author_slug):
         entries.append(arxiv2bib(paper))
         # If published, also include the published entry
         if paper.get('doi'):
-            pub_bib = doi2bib(paper['doi'], paper)
+            pub_bib = published_doi_bibtex(paper['doi'], paper)
             if pub_bib:
                 entries.append(pub_bib)
 
