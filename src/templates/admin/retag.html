@@ -16,6 +16,9 @@
   background: #f0f8f0; border: 1px solid #b2d9b2; border-radius: 4px;
   font-size: 0.95rem;
 }
+.result-box.err {
+  background: #fdf0f0; border-color: #e0b2b2;
+}
 
 @media (max-width: 500px) {
   .retag-form { max-width: 100%; }
@@ -34,7 +37,7 @@
   Tagging all papers may take a minute or two.
 </p>
 
-<form class="retag-form" method="post">
+<form class="retag-form" id="retag-form" method="post">
   <div class="row">
     <div style="flex:1">
       <label for="from_date">From</label>
@@ -49,22 +52,23 @@
              min="{{ earliest }}" max="{{ today }}">
     </div>
   </div>
-  <button type="submit"
+  <button type="submit" id="retag-submit" data-running-label="Tagging…"
           style="padding: 0.45rem 1.2rem; font-size: 0.9rem; cursor: pointer;
                  background: var(--c-accent, #2a6); color: #fff;
-                 border: none; border-radius: 4px;"
-          onclick="this.disabled=true; this.textContent='Tagging…'; this.form.submit()">
+                 border: none; border-radius: 4px;">
     Run retag
   </button>
 </form>
 
-{% if result %}
-<div class="result-box">
-  Done. Tagged <strong>{{ result.papers }}</strong> paper{{ 's' if result.papers != 1 }}
-  ({{ result.from }} → {{ result.to }}) —
-  <strong>{{ result.tags }}</strong> keyword tag{{ 's' if result.tags != 1 }} applied.
+<div class="result-box{% if not result %} err{% endif %}" id="retag-result"{% if not result %} style="display:none"{% endif %}>
+  <span id="retag-result-text">
+  {% if result %}
+    Done. Tagged <strong>{{ result.papers }}</strong> paper{{ 's' if result.papers != 1 }}
+    ({{ result.from }} → {{ result.to }}) —
+    <strong>{{ result.tags }}</strong> keyword tag{{ 's' if result.tags != 1 }} applied.
+  {% endif %}
+  </span>
 </div>
-{% endif %}
 
 {% with messages = get_flashed_messages() %}
   {% if messages %}
@@ -73,4 +77,45 @@
     {% endfor %}
   {% endif %}
 {% endwith %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const retagForm = document.getElementById('retag-form');
+const retagResult = document.getElementById('retag-result');
+const retagResultText = document.getElementById('retag-result-text');
+
+retagForm?.addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const btn = e.submitter || document.getElementById('retag-submit');
+  const originalText = btn?.textContent || 'Run retag';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = btn.dataset.runningLabel || 'Running…';
+  }
+  retagResult.style.display = 'block';
+  retagResult.classList.remove('ok', 'err');
+  retagResultText.textContent = 'Running retag…';
+  try {
+    const data = await csrfJsonFetch(retagForm.action || window.location.pathname, new FormData(retagForm));
+    if (data.ok) {
+      retagResult.classList.add('ok');
+      retagResultText.innerHTML = `Done. Tagged <strong>${data.papers}</strong> paper${data.papers === 1 ? '' : 's'} (${data.from} → ${data.to}) — <strong>${data.tags}</strong> keyword tag${data.tags === 1 ? '' : 's'} applied.`;
+    } else {
+      retagResult.classList.add('err');
+      retagResultText.textContent = data.error || 'Retag failed.';
+    }
+  } catch (err) {
+    if (err.message !== 'AUTH_REQUIRED') {
+      retagResult.classList.add('err');
+      retagResultText.textContent = 'Retag request failed.';
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  }
+});
+</script>
 {% endblock %}

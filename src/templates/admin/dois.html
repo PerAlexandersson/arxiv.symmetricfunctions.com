@@ -499,8 +499,9 @@ async function loadTab(tab, page) {
     a.classList.toggle('active', a.dataset.tab === tab);
   });
   try {
-    const res = await fetch('/admin/dois/tab?show=' + tab + '&page=' + page);
-    const data = await res.json();
+    const data = await fetchJson('/admin/dois/tab?show=' + tab + '&page=' + page, {
+      headers: {'Accept': 'application/json'}
+    });
     if (!data.ok) return;
     updateCounts(data.counts);
     renderRows(data.candidates);
@@ -523,25 +524,23 @@ document.querySelectorAll('#doi-tabs a').forEach(a => {
 async function doiAction(cid, action, btn) {
   const container = document.getElementById('act-' + cid);
   try {
-    const res = await fetch('/admin/dois/' + cid + '/' + action, {
-      method: 'POST',
-      headers: {'X-CSRFToken': csrf}
-    });
-    const data = await res.json();
+    const data = await csrfJsonFetch('/admin/dois/' + cid + '/' + action, {});
     if (data.ok) {
+      if (data.counts) updateCounts(data.counts);
+      if (currentTab === 'pending') {
+        await loadTab(currentTab, currentPage);
+        return;
+      }
       const confBadge = container.querySelector('.doi-conf');
       const confHtml = confBadge ? confBadge.outerHTML : '';
-      if (action === 'approve') {
-        container.innerHTML = confHtml + '<span class="doi-done doi-done-ok">&#x2713; approved</span>';
-      } else {
-        container.innerHTML = confHtml + '<span class="doi-done doi-done-no">&#x2717; rejected</span>';
-      }
-      if (data.counts) updateCounts(data.counts);
+      container.innerHTML = confHtml + (action === 'approve'
+        ? '<span class="doi-done doi-done-ok">&#x2713; approved</span>'
+        : '<span class="doi-done doi-done-no">&#x2717; rejected</span>');
     } else {
       btn.textContent = 'Error';
     }
   } catch(e) {
-    btn.textContent = 'Failed';
+    if (e.message !== 'AUTH_REQUIRED') btn.textContent = 'Failed';
   }
 }
 
@@ -560,12 +559,7 @@ async function runLookup(btn, withDates) {
       if (fromDate) fd.append('from_date', fromDate);
       if (toDate) fd.append('to_date', toDate);
     }
-    const res = await fetch('/admin/dois/run', {
-      method: 'POST',
-      headers: {'X-CSRFToken': csrf},
-      body: fd
-    });
-    const data = await res.json();
+    const data = await csrfJsonFetch('/admin/dois/run', fd);
     logDiv.innerHTML = '<div class="doi-log">' +
       (data.log || data.error || 'Done').replace(/</g, '&lt;') + '</div>';
     if (data.ok) {
@@ -575,8 +569,10 @@ async function runLookup(btn, withDates) {
       btn.textContent = 'Error — see log';
     }
   } catch(e) {
-    logDiv.innerHTML = '<div class="doi-log">Request failed: ' + e.message + '</div>';
-    btn.textContent = 'Failed';
+    if (e.message !== 'AUTH_REQUIRED') {
+      logDiv.innerHTML = '<div class="doi-log">Request failed: ' + e.message + '</div>';
+      btn.textContent = 'Failed';
+    }
   }
   setTimeout(() => {
     btn.disabled = false;

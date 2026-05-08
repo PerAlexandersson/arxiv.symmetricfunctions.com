@@ -40,7 +40,7 @@
   or <em>Date range</em> to backfill a specific period.
 </p>
 
-<form class="fetch-form" method="post">
+<form class="fetch-form" id="fetch-form" method="post">
   <p class="sep">Recent papers</p>
   <div class="row">
     <div style="flex:1">
@@ -48,11 +48,10 @@
       <input type="number" id="days" name="days" value="3" min="1" max="30" style="width:6rem">
     </div>
     <div>
-      <button type="submit" name="mode" value="recent"
+      <button type="submit" name="mode" value="recent" data-running-label="Fetching…"
               style="padding: 0.45rem 1.2rem; font-size: 0.9rem; cursor: pointer;
                      background: var(--c-accent, #2a6); color: #fff;
-                     border: none; border-radius: 4px;"
-              onclick="this.disabled=true; this.textContent='Fetching…'; this.form.submit()">
+                     border: none; border-radius: 4px;">
         Fetch recent
       </button>
     </div>
@@ -71,21 +70,58 @@
              value="{{ request.form.get('to_date', today) }}" max="{{ today }}">
     </div>
     <div>
-      <button type="submit" name="mode" value="range"
+      <button type="submit" name="mode" value="range" data-running-label="Fetching…"
               style="padding: 0.45rem 1.2rem; font-size: 0.9rem; cursor: pointer;
                      background: var(--c-brand, #357); color: #fff;
-                     border: none; border-radius: 4px;"
-              onclick="this.disabled=true; this.textContent='Fetching…'; this.form.submit()">
+                     border: none; border-radius: 4px;">
         Fetch range
       </button>
     </div>
   </div>
 </form>
 
-{% if result %}
-<div class="result-box {{ 'ok' if result.ok else 'err' }}">
-  <strong>{{ 'Done' if result.ok else 'Error' }}</strong>
-  <pre>{{ result.log }}</pre>
+<div class="result-box {{ 'ok' if result and result.ok else 'err' }}" id="fetch-result"{% if not result %} style="display:none"{% endif %}>
+  <strong>{{ 'Done' if result and result.ok else 'Error' }}</strong>
+  <pre id="fetch-result-log">{{ result.log if result else '' }}</pre>
 </div>
-{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const fetchForm = document.getElementById('fetch-form');
+const fetchResult = document.getElementById('fetch-result');
+const fetchResultLog = document.getElementById('fetch-result-log');
+
+fetchForm?.addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const btn = e.submitter;
+  const originalText = btn?.textContent || 'Run';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = btn.dataset.runningLabel || 'Running…';
+  }
+  fetchResult.style.display = 'block';
+  fetchResult.classList.remove('ok', 'err');
+  fetchResultLog.textContent = 'Running fetch…';
+  try {
+    const fd = new FormData(fetchForm);
+    if (btn?.name && !fd.has(btn.name)) fd.append(btn.name, btn.value);
+    const data = await csrfJsonFetch(fetchForm.action || window.location.pathname, fd);
+    fetchResult.classList.add(data.ok ? 'ok' : 'err');
+    fetchResult.querySelector('strong').textContent = data.ok ? 'Done' : 'Error';
+    fetchResultLog.textContent = data.log || data.error || '';
+  } catch (err) {
+    if (err.message !== 'AUTH_REQUIRED') {
+      fetchResult.classList.add('err');
+      fetchResult.querySelector('strong').textContent = 'Error';
+      fetchResultLog.textContent = 'Request failed.';
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  }
+});
+</script>
 {% endblock %}

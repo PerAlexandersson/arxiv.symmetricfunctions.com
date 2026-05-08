@@ -208,7 +208,7 @@ def get_paper_authors(cursor, paper_id):
     return [row['name'] for row in cursor.fetchall()]
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description='Find DOIs via Crossref')
     parser.add_argument('--batch', type=int, default=50, help='papers per run')
     parser.add_argument('--min-age', type=int, default=30,
@@ -223,7 +223,7 @@ def main():
                         help='print matches without writing to DB')
     parser.add_argument('--auto-approve', type=float, default=None,
                         help='auto-promote DOIs with confidence >= threshold')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     conn = pymysql.connect(**DB_CONFIG, cursorclass=pymysql.cursors.DictCursor)
     cursor = conn.cursor()

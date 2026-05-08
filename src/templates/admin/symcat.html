@@ -195,13 +195,8 @@
 <script>
 async function scRefresh(btn) {
   btn.disabled = true; btn.textContent = 'Refreshing...';
-  const csrf = document.querySelector('meta[name="csrf-token"]').content;
   try {
-    const res = await fetch('{{ url_for("admin.symcat_refresh") }}', {
-      method: 'POST',
-      headers: {'X-CSRFToken': csrf}
-    });
-    const data = await res.json();
+    const data = await csrfJsonFetch('{{ url_for("admin.symcat_refresh") }}', {});
     if (data.ok) {
       document.getElementById('sc-count').textContent = data.count + ' labels cached';
       btn.textContent = 'Refreshed!';
@@ -210,7 +205,7 @@ async function scRefresh(btn) {
       btn.textContent = 'Error: ' + (data.error || 'unknown');
     }
   } catch(e) {
-    btn.textContent = 'Fetch failed';
+    if (e.message !== 'AUTH_REQUIRED') btn.textContent = 'Fetch failed';
   }
   setTimeout(() => { btn.disabled = false; btn.textContent = 'Refresh labels'; }, 3000);
 }
@@ -233,17 +228,11 @@ function scShowTab(tab, btn) {
 }
 
 async function scApply(kid, anchor, btn) {
-  const csrf = document.querySelector('meta[name="csrf-token"]').content;
   const fd = new FormData();
   fd.append('field', 'url');
   fd.append('value', anchor);
   try {
-    const res = await fetch(`/admin/keywords/${kid}/inline`, {
-      method: 'POST',
-      headers: {'X-CSRFToken': csrf},
-      body: fd
-    });
-    const data = await res.json();
+    const data = await csrfJsonFetch(`/admin/keywords/${kid}/inline`, fd);
     if (data.ok) {
       const container = document.getElementById('sug-' + kid);
       container.innerHTML = '<span class="sc-sug-applied">\u2713 ' + anchor + '</span>';
@@ -251,7 +240,7 @@ async function scApply(kid, anchor, btn) {
       btn.textContent = 'Error';
     }
   } catch(e) {
-    btn.textContent = 'Failed';
+    if (e.message !== 'AUTH_REQUIRED') btn.textContent = 'Failed';
   }
 }
 </script>

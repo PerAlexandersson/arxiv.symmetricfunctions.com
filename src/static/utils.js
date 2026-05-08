@@ -502,7 +502,7 @@ function getCsrfToken() {
 function csrfFetch(url, data) {
     let body;
     if (data instanceof FormData) {
-        data.append('csrf_token', getCsrfToken());
+        if (!data.has('csrf_token')) data.append('csrf_token', getCsrfToken());
         body = data;
     } else {
         const fd = new FormData();
@@ -510,7 +510,61 @@ function csrfFetch(url, data) {
         for (const [k, v] of Object.entries(data || {})) fd.append(k, v);
         body = fd;
     }
-    return fetch(url, { method: 'POST', body });
+    return fetch(url, {
+        method: 'POST',
+        body,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    });
+}
+
+/**
+ * Parse a JSON response, redirecting to login if the session has expired.
+ * @param {Response} response
+ * @returns {Promise<object>}
+ */
+async function fetchResponseJson(response) {
+    const contentType = (response.headers.get('content-type') || '').toLowerCase();
+    const redirectedUrl = response.url ? new URL(response.url, window.location.origin) : null;
+    const redirectedToLogin = redirectedUrl && /\/(?:admin\/)?login\/?$/.test(redirectedUrl.pathname);
+
+    if ((response.status === 401 || response.status === 403) ||
+        (response.redirected && redirectedToLogin && contentType.includes('text/html'))) {
+        window.location.href = redirectedUrl ? redirectedUrl.toString() : '/login';
+        throw new Error('AUTH_REQUIRED');
+    }
+
+    if (!contentType.includes('application/json')) {
+        throw new Error(`Expected JSON response, got ${contentType || 'unknown content type'}`);
+    }
+
+    return response.json();
+}
+
+/**
+ * GET/POST helper for JSON endpoints that may redirect to login.
+ * @param {string} url
+ * @param {RequestInit} options
+ * @returns {Promise<object>}
+ */
+async function fetchJson(url, options) {
+    const opts = { ...(options || {}) };
+    const headers = new Headers(opts.headers || {});
+    if (!headers.has('Accept')) headers.set('Accept', 'application/json');
+    if (!headers.has('X-Requested-With')) headers.set('X-Requested-With', 'XMLHttpRequest');
+    opts.headers = headers;
+    const response = await fetch(url, opts);
+    return fetchResponseJson(response);
+}
+
+/**
+ * CSRF-protected POST helper that expects a JSON response.
+ * @param {string} url
+ * @param {FormData|object} data
+ * @returns {Promise<object>}
+ */
+async function csrfJsonFetch(url, data) {
+    const response = await csrfFetch(url, data);
+    return fetchResponseJson(response);
 }
 
 // ============================================================================

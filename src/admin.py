@@ -87,7 +87,15 @@ def login_required(f):
     @functools.wraps(f)
     def wrapped(*args, **kwargs):
         if not session.get('admin_logged_in'):
-            return redirect(url_for('admin.login', next=request.url))
+            login_url = url_for('admin.login', next=request.url)
+            wants_json = (
+                request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+                or (request.accept_mimetypes.accept_json
+                    and not request.accept_mimetypes.accept_html)
+            )
+            if wants_json:
+                return jsonify({'ok': False, 'error': 'auth required', 'login_url': login_url}), 401
+            return redirect(login_url)
         return f(*args, **kwargs)
     return wrapped
 
@@ -570,6 +578,32 @@ def _refetch_arxiv_paper(arxiv_id):
     return output.getvalue()
 
 
+def _wants_json_response():
+    """Return True when the request is an AJAX/json admin action."""
+    best = request.accept_mimetypes.best
+    return (
+        request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or request.is_json
+        or best == 'application/json'
+    )
+
+
+def _mark_other_doi_candidates_rejected(cursor, paper_id, keep_doi=None):
+    """Reject other pending DOI candidates for the same paper."""
+    if keep_doi:
+        cursor.execute("""
+            UPDATE doi_candidates
+            SET status = 'rejected', reviewed_at = NOW()
+            WHERE paper_id = %s AND status = 'pending' AND doi <> %s
+        """, (paper_id, keep_doi))
+    else:
+        cursor.execute("""
+            UPDATE doi_candidates
+            SET status = 'rejected', reviewed_at = NOW()
+            WHERE paper_id = %s AND status = 'pending'
+        """, (paper_id,))
+
+
 @admin.route('/paper/<path:arxiv_id>/refetch', methods=['POST'])
 @login_required
 def refetch_paper(arxiv_id):
@@ -635,6 +669,9 @@ def retag():
 
         phrase_to_id = load_keywords(cursor)
         if not phrase_to_id:
+            if _wants_json_response():
+                cursor.close()
+                return jsonify({'ok': False, 'error': 'No active keywords found.'}), 400
             flash('No active keywords found.')
         else:
             max_ngram = max(len(p.split()) for p in phrase_to_id)
@@ -648,6 +685,9 @@ def retag():
             conn.commit()
             result = {'papers': len(papers), 'tags': n_tags,
                       'from': from_date, 'to': to_date}
+            if _wants_json_response():
+                cursor.close()
+                return jsonify({'ok': True, **result})
 
     cursor.close()
     return render_template('admin/retag.html',
@@ -676,8 +716,12 @@ def fetch():
                     from fetch_arxiv import fetch_recent_papers
                     fetch_recent_papers(days)
             result = {'log': buf.getvalue(), 'ok': True}
+            if _wants_json_response():
+                return jsonify(result)
         except Exception as e:
             result = {'log': buf.getvalue() + f'\nERROR: {e}', 'ok': False}
+            if _wants_json_response():
+                return jsonify(result), 500
 
     return render_template('admin/fetch.html', today=today, result=result)
 
@@ -893,6 +937,7 @@ def approve_doi(cid):
         UPDATE doi_candidates SET status = 'approved', reviewed_at = NOW()
         WHERE id = %s
     """, (cid,))
+    _mark_other_doi_candidates_rejected(cursor, cand['paper_id'], keep_doi=cand['doi'])
     conn.commit()
     counts = _doi_counts(cursor)
     cursor.close()
@@ -921,20 +966,16 @@ def run_doi_lookup():
     import io, contextlib
     try:
         from doi_lookup import main as doi_main
-        import sys
         buf = io.StringIO()
-        old_argv = sys.argv
-        argv = ['doi_lookup.py', '--batch', '20', '--auto-approve', '0.85']
+        argv = ['--batch', '20', '--auto-approve', '0.85']
         from_date = request.form.get('from_date', '').strip()
         to_date = request.form.get('to_date', '').strip()
         if from_date:
             argv += ['--from-date', from_date]
         # Default: only papers up to end of 2023 (older papers more likely to have DOIs)
         argv += ['--to-date', to_date or '2023-12-31']
-        sys.argv = argv
         with contextlib.redirect_stdout(buf):
-            doi_main()
-        sys.argv = old_argv
+            doi_main(argv)
         return jsonify({'ok': True, 'log': buf.getvalue()})
     except Exception as e:
         logger.exception("DOI lookup failed")
@@ -964,6 +1005,16 @@ def manual_doi(paper_id):
         UPDATE papers SET doi = %s, doi_status = 'verified',
                doi_confidence = 1.000, doi_checked_at = NOW() WHERE id = %s
     """, (doi, paper_id))
+    cursor.execute("""
+        INSERT INTO doi_candidates
+            (paper_id, doi, confidence, status, reviewed_at)
+        VALUES (%s, %s, 1.000, 'approved', NOW())
+        ON DUPLICATE KEY UPDATE
+            confidence = VALUES(confidence),
+            status = 'approved',
+            reviewed_at = NOW()
+    """, (paper_id, doi))
+    _mark_other_doi_candidates_rejected(cursor, paper_id, keep_doi=doi)
     conn.commit()
     cursor.close()
 
