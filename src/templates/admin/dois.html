@@ -104,6 +104,27 @@
   text-decoration: none;
 }
 .doi-meta-link:hover { text-decoration: underline; }
+.doi-warning {
+  margin-top: 0.45rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid #d39e00;
+  border-radius: 6px;
+  background: #fff3cd;
+  color: #7a4f01;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+.doi-warning strong {
+  color: #6a2600;
+}
+.doi-warning-links {
+  display: inline;
+}
+.doi-warning-link {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
 
 /* ── Confidence badge ── */
 .doi-conf {
@@ -338,6 +359,16 @@
       <td>
         <span class="doi-title" title="{{ c.crossref_title }}">{{ c.crossref_title_display[:80] }}{% if c.crossref_title_display and c.crossref_title_display|length > 80 %}&hellip;{% endif %}</span><br>
         <a class="doi-link" href="https://doi.org/{{ c.doi }}" target="_blank" rel="noopener">{{ c.doi }}</a>
+        {% if c.doi_conflicts %}
+        <div class="doi-warning"{% if c.doi_conflict_tooltip %} title="{{ c.doi_conflict_tooltip }}"{% endif %}>
+          <strong>Already assigned</strong> to
+          <span class="doi-warning-links">
+            {% for conflict in c.doi_conflicts %}
+            <a class="doi-warning-link" href="/paper/{{ conflict.arxiv_id }}" target="_blank">arXiv: {{ conflict.arxiv_id }}</a>{% if conflict.doi_status %} ({{ conflict.doi_status }}){% endif %}{% if not loop.last %}, {% endif %}
+            {% endfor %}
+          </span>
+        </div>
+        {% endif %}
         <span class="doi-authors"{% if c.crossref_authors_full %} title="{{ c.crossref_authors_full }}"{% endif %}>{{ c.crossref_authors_display }}{% if c.crossref_year %} ({{ c.crossref_year }}){% endif %}</span>
       </td>
       <td class="doi-actions" id="act-{{ c.id }}">
@@ -347,7 +378,7 @@
           </span>
           {% if c.status == 'pending' %}
           <div class="doi-action-buttons">
-            <button class="approve-btn" onclick="doiAction({{ c.id }}, 'approve', this)" title="Approve &mdash; assign this DOI to the paper">&#x2713;</button>
+            <button class="approve-btn" onclick="doiAction({{ c.id }}, 'approve', this)" title="Approve &mdash; assign this DOI to the paper"{% if c.doi_conflict_summary %} data-conflict-summary="{{ c.doi_conflict_summary }}"{% endif %}>&#x2713;</button>
             <button class="reject-btn" onclick="doiAction({{ c.id }}, 'reject', this)" title="Reject &mdash; wrong match, discard">&#x1f5d1;&#xfe0e;</button>
           </div>
           {% elif c.status == 'approved' %}
@@ -403,6 +434,18 @@ function truncateText(text, maxLen) {
   return text.length > maxLen ? text.slice(0, maxLen) + '\u2026' : text;
 }
 
+function renderConflictWarning(c) {
+  if (!c.doi_conflicts || !c.doi_conflicts.length) return '';
+  const links = c.doi_conflicts.map(conflict => {
+    const status = conflict.doi_status ? ' (' + esc(conflict.doi_status) + ')' : '';
+    return '<a class="doi-warning-link" href="/paper/' + encodeURIComponent(conflict.arxiv_id) +
+      '" target="_blank">arXiv: ' + esc(conflict.arxiv_id) + '</a>' + status;
+  }).join(', ');
+  const tooltip = c.doi_conflict_tooltip ? ' title="' + esc(c.doi_conflict_tooltip) + '"' : '';
+  return '<div class="doi-warning"' + tooltip + '><strong>Already assigned</strong> to ' +
+    '<span class="doi-warning-links">' + links + '</span></div>';
+}
+
 /* ── Help modal ── */
 function openHelp()  { document.getElementById('help-overlay').style.display='block'; document.getElementById('help-popup').style.display='block'; }
 function closeHelp() { document.getElementById('help-overlay').style.display='none';  document.getElementById('help-popup').style.display='none'; }
@@ -447,7 +490,9 @@ function renderRows(candidates) {
     let actionHtml = '<div class="doi-actions-inner"><span class="doi-conf ' + confClass + '">' + confPct + '%</span>';
     if (c.status === 'pending') {
       actionHtml += '<div class="doi-action-buttons">' +
-        '<button class="approve-btn" onclick="doiAction(' + c.id + ',\'approve\',this)" title="Approve — assign this DOI to the paper">&#x2713;</button>' +
+        '<button class="approve-btn" onclick="doiAction(' + c.id + ',\'approve\',this)" title="Approve — assign this DOI to the paper"' +
+          (c.doi_conflict_summary ? ' data-conflict-summary="' + esc(c.doi_conflict_summary) + '"' : '') +
+          '>&#x2713;</button>' +
         '<button class="reject-btn" onclick="doiAction(' + c.id + ',\'reject\',this)" title="Reject — wrong match, discard">&#x1f5d1;&#xfe0e;</button>' +
         '</div>';
     } else if (c.status === 'approved') {
@@ -465,6 +510,7 @@ function renderRows(candidates) {
         '</span></td>' +
       '<td><span class="doi-title" title="' + esc(c.crossref_title || '') + '">' + esc(crTitle) + '</span><br>' +
         '<a class="doi-link" href="https://doi.org/' + encodeURI(c.doi) + '" target="_blank" rel="noopener">' + esc(c.doi) + '</a>' +
+        renderConflictWarning(c) +
         '<span class="doi-authors"' + (c.crossref_authors_full ? ' title="' + esc(c.crossref_authors_full) + '"' : '') + '>' +
           esc(c.crossref_authors_display || '') + yrSuffix +
         '</span></td>' +
@@ -523,6 +569,13 @@ document.querySelectorAll('#doi-tabs a').forEach(a => {
 /* ── Approve / reject (AJAX) ── */
 async function doiAction(cid, action, btn) {
   const container = document.getElementById('act-' + cid);
+  const conflictSummary = btn && btn.dataset ? btn.dataset.conflictSummary : '';
+  if (action === 'approve' && conflictSummary) {
+    const ok = window.confirm(
+      'This DOI is already assigned to ' + conflictSummary + '. Approve anyway?'
+    );
+    if (!ok) return;
+  }
   try {
     const data = await csrfJsonFetch('/admin/dois/' + cid + '/' + action, {});
     if (data.ok) {

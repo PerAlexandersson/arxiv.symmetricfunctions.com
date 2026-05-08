@@ -803,6 +803,50 @@ def _attach_doi_display_fields(candidates):
         candidate['crossref_authors_full'] = crossref_full
         published = candidate.get('published_date')
         candidate['paper_year'] = published.year if hasattr(published, 'year') else None
+        conflicts = candidate.get('doi_conflicts') or []
+        labels = []
+        details = []
+        for conflict in conflicts:
+            label = f"arXiv: {conflict['arxiv_id']}"
+            if conflict.get('doi_status'):
+                label += f" ({conflict['doi_status']})"
+            labels.append(label)
+            detail = label
+            if conflict.get('title'):
+                detail += f": {conflict['title']}"
+            details.append(detail)
+        candidate['doi_conflict_summary'] = ', '.join(labels[:2])
+        if len(labels) > 2:
+            candidate['doi_conflict_summary'] += f" +{len(labels) - 2} more"
+        candidate['doi_conflict_tooltip'] = ' | '.join(details)
+
+
+def _attach_doi_conflicts(cursor, candidates):
+    """Annotate candidates whose DOI is already assigned to another paper."""
+    dois = sorted({c.get('doi') for c in candidates if c.get('doi')})
+    if not dois:
+        return
+
+    placeholders = ','.join(['%s'] * len(dois))
+    cursor.execute(f"""
+        SELECT id AS paper_id, arxiv_id, title, doi, doi_status
+        FROM papers
+        WHERE doi IN ({placeholders})
+    """, dois)
+    assignments_by_doi = {}
+    for row in cursor.fetchall():
+        assignments_by_doi.setdefault(row['doi'], []).append({
+            'paper_id': row['paper_id'],
+            'arxiv_id': row['arxiv_id'],
+            'title': row['title'],
+            'doi_status': row['doi_status'],
+        })
+
+    for candidate in candidates:
+        candidate['doi_conflicts'] = [
+            row for row in assignments_by_doi.get(candidate.get('doi'), [])
+            if row['paper_id'] != candidate['paper_id']
+        ]
 
 
 def _doi_candidates_page(cursor, show, page, per_page=50):
@@ -852,6 +896,7 @@ def _doi_candidates_page(cursor, show, page, per_page=50):
 
     for c in candidates:
         c['paper_authors'] = authors_map.get(c['paper_id'], [])
+    _attach_doi_conflicts(cursor, candidates)
     _attach_doi_display_fields(candidates)
 
     return candidates, total, total_pages, page
@@ -903,6 +948,9 @@ def dois_tab():
                 'crossref_authors_full': c['crossref_authors_full'],
                 'crossref_year': c['crossref_year'],
                 'doi': c['doi'],
+                'doi_conflicts': c['doi_conflicts'],
+                'doi_conflict_summary': c['doi_conflict_summary'],
+                'doi_conflict_tooltip': c['doi_conflict_tooltip'],
                 'confidence': float(c['confidence']),
                 'status': c['status'],
             }
