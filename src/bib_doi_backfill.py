@@ -93,7 +93,8 @@ def main():
 
     for arxiv_id in arxiv_ids:
         cursor.execute(
-            "SELECT id, title, doi, doi_status FROM papers WHERE arxiv_id LIKE %s",
+            """SELECT id, title, doi, doi_status, published_date
+               FROM papers WHERE arxiv_id LIKE %s""",
             (f"{arxiv_id}%",))
         paper = cursor.fetchone()
 
@@ -123,8 +124,9 @@ def main():
         # Otherwise: query Crossref
         authors = get_paper_authors(cursor, paper['id'])
         first_last = _last_name(authors[0]) if authors else ''
-        year_match = re.search(r'\d{4}', str(paper.get('published_date', '')))
-        year = int(year_match.group()) if year_match else None
+        year = (paper['published_date'].year
+                if hasattr(paper.get('published_date'), 'year')
+                else None)
 
         items = query_crossref(paper['title'], first_last)
 
@@ -134,7 +136,8 @@ def main():
             if not doi:
                 continue
             conf, cr_title, cr_year = score_match(
-                paper['title'], authors, year, item)
+                paper['title'], authors, year, item,
+                paper_published_date=paper.get('published_date'))
             cr_authors_str = '; '.join(
                 (a.get('family', '') + ', ' + a.get('given', '')).strip(', ')
                 for a in item.get('author', [])

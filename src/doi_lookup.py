@@ -14,82 +14,115 @@ Usage:
 """
 
 import argparse
-import re
+from datetime import date
 import sys
 import time
-import unicodedata
 
 import pymysql
 import requests
 
 from config import DB_CONFIG
+from title_matching import (
+    author_last_name as _last_name,
+    normalize_title as _normalize,
+    score_title_author_match,
+)
 
 CROSSREF_API = "https://api.crossref.org/works"
 USER_AGENT = "arxiv-symmetricfunctions/1.0 (mailto:per.alexandersson@math.su.se)"
 REQUEST_DELAY = 0.5  # seconds between Crossref requests
 
 
-def _normalize(text):
-    """Lowercase, strip accents, remove LaTeX math, collapse whitespace."""
-    if not text:
-        return ''
-    text = re.sub(r'\$[^$]*\$', ' ', text)       # remove inline math
-    text = re.sub(r'\\[a-zA-Z]+\{([^}]*)\}', r'\1', text)  # \cmd{x} -> x
-    text = unicodedata.normalize('NFKD', text)
-    text = ''.join(c for c in text if not unicodedata.combining(c))
-    text = text.lower()
-    text = re.sub(r'[^a-z0-9\s]', ' ', text)
-    return re.sub(r'\s+', ' ', text).strip()
+def _crossref_date_parts(cr_item, include_created=True):
+    """Return (date_parts, field_name) from the first usable Crossref date."""
+    fields = ['published-print', 'published-online', 'issued']
+    if include_created:
+        fields.append('created')
+
+    for field in fields:
+        parts = (cr_item.get(field) or {}).get('date-parts', [[]])
+        if not parts or not parts[0]:
+            continue
+        cleaned = []
+        for part in parts[0][:3]:
+            try:
+                cleaned.append(int(part))
+            except (TypeError, ValueError):
+                break
+        if cleaned:
+            return cleaned, field
+    return None, None
 
 
-def _tokens(text):
-    return set(_normalize(text).split())
+def _paper_year_and_date(paper_year, paper_published_date=None):
+    """Coerce caller input to a paper year and, when possible, a full date."""
+    paper_date = None
+
+    if paper_published_date is not None:
+        if isinstance(paper_published_date, date):
+            paper_date = paper_published_date
+        else:
+            try:
+                paper_date = date.fromisoformat(str(paper_published_date)[:10])
+            except ValueError:
+                paper_date = None
+    elif isinstance(paper_year, date):
+        paper_date = paper_year
+
+    year = None
+    if paper_date is not None:
+        year = paper_date.year
+    elif paper_year not in (None, ''):
+        try:
+            year = int(str(paper_year)[:4])
+        except (TypeError, ValueError):
+            year = None
+
+    return year, paper_date
 
 
-def _last_name(full_name):
-    """Extract last name from 'First Last' or 'Last, First' format."""
-    if ',' in full_name:
-        return _normalize(full_name.split(',')[0])
-    parts = full_name.strip().split()
-    return _normalize(parts[-1]) if parts else ''
+def _crossref_predates_paper(cr_item, paper_year, paper_published_date=None):
+    """Return True only when Crossref is definitely earlier than arXiv."""
+    arxiv_year, arxiv_date = _paper_year_and_date(paper_year, paper_published_date)
+    parts, _ = _crossref_date_parts(cr_item, include_created=False)
+    if not parts or arxiv_year is None:
+        return False
+
+    cr_year = parts[0]
+    if len(parts) >= 3 and arxiv_date is not None:
+        try:
+            cr_date = date(parts[0], parts[1], parts[2])
+        except ValueError:
+            return cr_year < arxiv_year
+        return cr_date < arxiv_date
+
+    return cr_year < arxiv_year
 
 
-def _jaccard(a, b):
-    if not a and not b:
-        return 1.0
-    if not a or not b:
-        return 0.0
-    return len(a & b) / len(a | b)
-
-
-def score_match(paper_title, paper_authors, paper_year, cr_item):
+def score_match(paper_title, paper_authors, paper_year, cr_item,
+                paper_published_date=None):
     """Compute a confidence score (0-1) for a Crossref result."""
-    # Title similarity (weight 0.50)
     cr_title = ' '.join(cr_item.get('title', []))
-    title_sim = _jaccard(_tokens(paper_title), _tokens(cr_title))
+    cr_authors = []
+    for author in cr_item.get('author', []):
+        full_name = (
+            (author.get('family', '') + ', ' + author.get('given', '')).strip(', ')
+            or author.get('name', '')
+        )
+        if full_name:
+            cr_authors.append(full_name)
 
-    # Author overlap (weight 0.30)
-    cr_authors = cr_item.get('author', [])
-    cr_last_names = set()
-    for a in cr_authors:
-        name = a.get('family', '') or a.get('name', '')
-        if name:
-            cr_last_names.add(_normalize(name))
-    paper_last_names = {_last_name(a) for a in paper_authors}
-    author_sim = _jaccard(paper_last_names, cr_last_names)
+    # Crossref publication date must not be earlier than the first arXiv date.
+    paper_year_val, paper_date = _paper_year_and_date(
+        paper_year, paper_published_date)
+    parts, _ = _crossref_date_parts(cr_item)
+    cr_year = parts[0] if parts else None
+    if _crossref_predates_paper(cr_item, paper_year_val, paper_date):
+        return 0.0, cr_title, cr_year
 
     # Year match (weight 0.10)
-    cr_year = None
-    for field in ('published-print', 'published-online', 'issued', 'created'):
-        parts = cr_item.get(field, {}).get('date-parts', [[]])
-        if parts and parts[0] and parts[0][0]:
-            cr_year = parts[0][0]
-            break
-    if cr_year is not None and paper_year:
-        # A publication can't predate its preprint
-        if int(cr_year) < int(paper_year) - 1:
-            return 0.0, cr_title, cr_year
-        diff = abs(int(cr_year) - int(paper_year))
+    if cr_year is not None and paper_year_val is not None:
+        diff = abs(int(cr_year) - int(paper_year_val))
         year_score = 1.0 if diff <= 1 else (0.5 if diff <= 2 else 0.0)
     else:
         year_score = 0.3  # unknown
@@ -98,7 +131,9 @@ def score_match(paper_title, paper_authors, paper_year, cr_item):
     has_journal = bool(cr_item.get('container-title'))
     doi_sanity = 1.0 if has_journal else 0.5
 
-    confidence = (0.50 * title_sim + 0.30 * author_sim +
+    text_author_score = score_title_author_match(
+        paper_title, paper_authors, cr_title, cr_authors)
+    confidence = (0.80 * text_author_score +
                   0.10 * year_score + 0.10 * doi_sanity)
 
     return round(confidence, 3), cr_title, cr_year
@@ -217,7 +252,8 @@ def main():
             if not doi:
                 continue
             conf, cr_title, cr_year = score_match(
-                paper['title'], authors, year, item)
+                paper['title'], authors, year, item,
+                paper_published_date=paper['published_date'])
             cr_authors_str = '; '.join(
                 (a.get('family', '') + ', ' + a.get('given', '')).strip(', ')
                 for a in item.get('author', [])

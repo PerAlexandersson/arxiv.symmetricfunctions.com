@@ -36,6 +36,7 @@ import logging
 import pymysql
 from config import ADMIN_PASSWORD
 from db import get_db_connection
+from title_matching import normalize_title, summarize_author_list_for_display
 
 logger = logging.getLogger(__name__)
 
@@ -559,17 +560,22 @@ def retag_keyword(kid):
 
 # ── Retag ─────────────────────────────────────────────────────────────────────
 
+def _refetch_arxiv_paper(arxiv_id):
+    """Re-fetch a single paper from arXiv and return the fetch log."""
+    from fetch_arxiv import fetch_by_arxiv_id
+    import io, contextlib
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        fetch_by_arxiv_id(arxiv_id)
+    return output.getvalue()
+
+
 @admin.route('/paper/<path:arxiv_id>/refetch', methods=['POST'])
 @login_required
 def refetch_paper(arxiv_id):
     """Re-fetch a single paper from arXiv and update the DB."""
     try:
-        from fetch_arxiv import fetch_by_arxiv_id
-        import io, contextlib
-        output = io.StringIO()
-        with contextlib.redirect_stdout(output):
-            fetch_by_arxiv_id(arxiv_id)
-        return jsonify({'ok': True, 'log': output.getvalue()})
+        return jsonify({'ok': True, 'log': _refetch_arxiv_paper(arxiv_id)})
     except Exception as e:
         logger.exception("refetch_paper failed for %s", arxiv_id)
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -734,6 +740,27 @@ def _doi_counts(cursor):
     return {row['status']: row['cnt'] for row in cursor.fetchall()}
 
 
+def _attach_doi_display_fields(candidates):
+    """Prepare consistently formatted title/author/year display fields."""
+    for candidate in candidates:
+        candidate['paper_title_display'] = normalize_title(
+            candidate.get('paper_title') or '')
+        candidate['crossref_title_display'] = normalize_title(
+            candidate.get('crossref_title') or '')
+        paper_summary, paper_full = summarize_author_list_for_display(
+            candidate.get('paper_authors') or []
+        )
+        crossref_summary, crossref_full = summarize_author_list_for_display(
+            candidate.get('crossref_authors') or ''
+        )
+        candidate['paper_authors_display'] = paper_summary
+        candidate['paper_authors_full'] = paper_full
+        candidate['crossref_authors_display'] = crossref_summary
+        candidate['crossref_authors_full'] = crossref_full
+        published = candidate.get('published_date')
+        candidate['paper_year'] = published.year if hasattr(published, 'year') else None
+
+
 def _doi_candidates_page(cursor, show, page, per_page=50):
     """Fetch one page of DOI candidates with paper info + authors.
 
@@ -764,7 +791,7 @@ def _doi_candidates_page(cursor, show, page, per_page=50):
     """, params + [per_page, offset])
     candidates = cursor.fetchall()
 
-    # Get first 3 authors for each paper
+    # Get authors for each paper
     paper_ids = [c['paper_id'] for c in candidates]
     authors_map = {}
     if paper_ids:
@@ -780,7 +807,8 @@ def _doi_candidates_page(cursor, show, page, per_page=50):
             authors_map.setdefault(row['paper_id'], []).append(row['name'])
 
     for c in candidates:
-        c['paper_authors'] = authors_map.get(c['paper_id'], [])[:3]
+        c['paper_authors'] = authors_map.get(c['paper_id'], [])
+    _attach_doi_display_fields(candidates)
 
     return candidates, total, total_pages, page
 
@@ -821,10 +849,14 @@ def dois_tab():
                 'id': c['id'],
                 'arxiv_id': c['arxiv_id'],
                 'paper_title': c['paper_title'],
-                'paper_authors': c['paper_authors'],
-                'published_year': c['published_date'].year,
+                'paper_title_display': c['paper_title_display'],
+                'paper_authors_display': c['paper_authors_display'],
+                'paper_authors_full': c['paper_authors_full'],
+                'paper_year': c['paper_year'],
                 'crossref_title': c['crossref_title'],
-                'crossref_authors': c['crossref_authors'],
+                'crossref_title_display': c['crossref_title_display'],
+                'crossref_authors_display': c['crossref_authors_display'],
+                'crossref_authors_full': c['crossref_authors_full'],
                 'crossref_year': c['crossref_year'],
                 'doi': c['doi'],
                 'confidence': float(c['confidence']),
@@ -912,19 +944,40 @@ def run_doi_lookup():
 @admin.route('/dois/<int:paper_id>/manual', methods=['POST'])
 @login_required
 def manual_doi(paper_id):
-    """Manually assign a DOI to a paper."""
+    """Manually assign a DOI to a paper, then refresh arXiv metadata."""
     doi = request.form.get('doi', '').strip()
     if not doi:
         return jsonify({'ok': False, 'error': 'empty'}), 400
+    m = re.search(r'doi\.org/(.+)', doi, flags=re.I)
+    if m:
+        doi = m.group(1).strip()
+
     conn = get_db_connection()
     cursor = conn.cursor()
+    cursor.execute("SELECT arxiv_id FROM papers WHERE id = %s", (paper_id,))
+    paper = cursor.fetchone()
+    if not paper:
+        cursor.close()
+        return jsonify({'ok': False, 'error': 'paper not found'}), 404
+
     cursor.execute("""
         UPDATE papers SET doi = %s, doi_status = 'verified',
-               doi_confidence = 1.000 WHERE id = %s
+               doi_confidence = 1.000, doi_checked_at = NOW() WHERE id = %s
     """, (doi, paper_id))
     conn.commit()
     cursor.close()
-    return jsonify({'ok': True, 'doi': doi})
+
+    try:
+        log = _refetch_arxiv_paper(paper['arxiv_id'])
+        return jsonify({'ok': True, 'doi': doi, 'refetched': True, 'log': log})
+    except Exception as e:
+        logger.exception("manual DOI refetch failed for %s", paper['arxiv_id'])
+        return jsonify({
+            'ok': True,
+            'doi': doi,
+            'refetched': False,
+            'refetch_error': str(e),
+        })
 
 
 @admin.route('/dois/<int:paper_id>/skip', methods=['POST'])

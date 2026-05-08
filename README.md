@@ -348,6 +348,11 @@ Papers that arrive without a DOI can have one found automatically via the Crossr
 ./batch_doi_lookup.sh                      # 500 papers before 2023
 ./batch_doi_lookup.sh 500 0.90 2020-01-01  # custom: batch, threshold, start date
 
+# Merge production DOI review state into local without replacing
+# local-only DOI lookup results
+cd database && ./merge_prod_doi_state.sh          # dry run
+cd database && ./merge_prod_doi_state.sh --apply  # apply
+
 # Or directly
 cd src && source ../venv/bin/activate
 python3 doi_lookup.py --batch 50 --auto-approve 0.90 --to-date 2023-01-01

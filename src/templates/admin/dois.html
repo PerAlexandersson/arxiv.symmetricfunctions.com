@@ -45,10 +45,19 @@
   cursor: pointer; font-size: 0.82rem; font-family: inherit;
 }
 .toggle-advanced:hover { color: var(--c-text-main, #222); }
+.doi-controls,
+.doi-advanced {
+  display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.doi-controls { font-size: 0.88rem; }
+.doi-advanced { display: none; font-size: 0.85rem; }
 
 /* ── Tabs ── */
 .doi-tabs {
-  display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 2px solid var(--c-border, #ccc);
+  display: flex; gap: 0.25rem; flex-wrap: wrap;
+  margin-bottom: 1rem; border-bottom: 2px solid var(--c-border, #ccc);
+  padding-bottom: 0.25rem;
 }
 .doi-tabs a {
   padding: 0.4rem 1rem; font-size: 0.85rem; cursor: pointer;
@@ -73,13 +82,28 @@
   border-bottom: 2px solid var(--c-border, #ccc); padding: 0.4rem 0.6rem;
 }
 .doi-table td {
-  padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--c-border, #eee);
-  vertical-align: top; overflow: hidden; text-overflow: ellipsis;
+  padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--c-border, #eee);
+  vertical-align: top; overflow: visible;
 }
 .doi-table tr:hover td { background: var(--c-bg-alt, #f8f8f8); }
-.doi-title { font-size: 0.80rem; color: var(--c-text-sub, #555); }
-.doi-authors { font-size: 0.76rem; color: var(--c-text-muted, #888); }
-.doi-link { font-size: 0.76rem; word-break: break-all; }
+.doi-title {
+  display: block; font-size: 0.80rem; color: var(--c-text-sub, #555);
+  line-height: 1.4;
+}
+.doi-authors {
+  display: block; margin-top: 0.2rem; font-size: 0.76rem;
+  color: var(--c-text-muted, #888); line-height: 1.45;
+}
+.doi-link,
+.doi-meta-link {
+  display: inline-block; margin-top: 0.2rem;
+  font-size: 0.76rem; word-break: break-word;
+}
+.doi-meta-link {
+  color: var(--c-link, #0066cc);
+  text-decoration: none;
+}
+.doi-meta-link:hover { text-decoration: underline; }
 
 /* ── Confidence badge ── */
 .doi-conf {
@@ -130,6 +154,105 @@
   margin-top: 1rem; padding: 0.8rem; background: var(--c-bg-gray, #f5f5f5);
   border-radius: 4px; font-size: 0.82rem; white-space: pre-wrap; max-height: 20rem; overflow-y: auto;
 }
+
+@media (max-width: 720px) {
+  .doi-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.35rem;
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+  .doi-tabs a {
+    margin-bottom: 0;
+    border-bottom: 1px solid var(--c-border, #ccc);
+    border-radius: 4px;
+    text-align: center;
+    padding: 0.55rem 0.5rem;
+  }
+  .doi-table,
+  .doi-table tbody,
+  .doi-table tr,
+  .doi-table td {
+    display: block;
+    width: 100%;
+  }
+  .doi-table {
+    table-layout: auto;
+    border-collapse: separate;
+  }
+  .doi-table colgroup,
+  .doi-table thead {
+    display: none;
+  }
+  .doi-table tbody {
+    display: grid;
+    gap: 0.85rem;
+  }
+  .doi-table tr {
+    border: 1px solid var(--c-border, #ddd);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--c-bg-surface, #fff);
+  }
+  .doi-table td {
+    padding: 0.75rem 0.85rem;
+    border-bottom: none;
+  }
+  .doi-table td + td {
+    border-top: 1px solid var(--c-border, #eee);
+  }
+  .doi-table tr:hover td { background: transparent; }
+  .doi-actions { text-align: left; }
+  .doi-actions-inner {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 0.75rem;
+  }
+  .doi-action-buttons {
+    flex-direction: row;
+    gap: 0.5rem;
+    flex-shrink: 0;
+  }
+  .doi-action-buttons button {
+    width: 2.35rem;
+    height: 2.35rem;
+    font-size: 1rem;
+  }
+  .doi-done { text-align: left; }
+}
+
+@media (max-width: 480px) {
+  .doi-controls,
+  .doi-advanced {
+    align-items: stretch;
+  }
+  .doi-run-btn {
+    width: 100%;
+  }
+  .toggle-advanced {
+    width: 100%;
+    text-align: left;
+    padding: 0;
+  }
+  .doi-advanced label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    width: 100%;
+  }
+  .doi-advanced input[type="date"] {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .doi-actions-inner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
 </style>
 {% endblock %}
 
@@ -168,11 +291,11 @@
 </div>
 
 {# ── Lookup controls ── #}
-<div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap; margin-bottom:1rem; font-size:0.88rem;">
+<div class="doi-controls">
   <button class="doi-run-btn" id="fetch-btn" onclick="runLookup(this)">Fetch next 20</button>
   <button type="button" class="toggle-advanced" onclick="toggleAdvanced(this)">&#x25b8; Date range</button>
 </div>
-<div id="advanced-options" style="display:none; margin-bottom:1rem; font-size:0.85rem; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+<div id="advanced-options" class="doi-advanced">
   <label>From <input type="date" id="doi-from" value="{{ default_from }}" style="padding:0.2rem 0.4rem;"></label>
   <label>To <input type="date" id="doi-to" value="{{ default_to }}" style="padding:0.2rem 0.4rem;"></label>
   <button class="doi-run-btn" onclick="runLookup(this, true)">Run with date range</button>
@@ -208,14 +331,14 @@
     {% for c in candidates %}
     <tr id="row-{{ c.id }}">
       <td>
-        <a href="/paper/{{ c.arxiv_id }}" target="_blank">{{ c.arxiv_id }}</a><br>
-        <span class="doi-title" title="{{ c.paper_title }}">{{ c.paper_title[:80] }}{% if c.paper_title|length > 80 %}&hellip;{% endif %}</span><br>
-        <span class="doi-authors">{{ c.paper_authors|join(', ') }}{% if c.paper_authors|length == 3 %} et al.{% endif %} ({{ c.published_date.year }})</span>
+        <span class="doi-title" title="{{ c.paper_title }}">{{ c.paper_title_display[:80] }}{% if c.paper_title_display|length > 80 %}&hellip;{% endif %}</span><br>
+        <a class="doi-meta-link" href="/paper/{{ c.arxiv_id }}" target="_blank">arXiv: {{ c.arxiv_id }}</a><br>
+        <span class="doi-authors"{% if c.paper_authors_full %} title="{{ c.paper_authors_full }}"{% endif %}>{{ c.paper_authors_display }}{% if c.paper_year %} ({{ c.paper_year }}){% endif %}</span>
       </td>
       <td>
-        <span class="doi-title" title="{{ c.crossref_title }}">{{ c.crossref_title[:80] }}{% if c.crossref_title and c.crossref_title|length > 80 %}&hellip;{% endif %}</span><br>
-        <span class="doi-authors">{{ c.crossref_authors[:90] }}{% if c.crossref_authors and c.crossref_authors|length > 90 %}&hellip;{% endif %}{% if c.crossref_year %} ({{ c.crossref_year }}){% endif %}</span><br>
+        <span class="doi-title" title="{{ c.crossref_title }}">{{ c.crossref_title_display[:80] }}{% if c.crossref_title_display and c.crossref_title_display|length > 80 %}&hellip;{% endif %}</span><br>
         <a class="doi-link" href="https://doi.org/{{ c.doi }}" target="_blank" rel="noopener">{{ c.doi }}</a>
+        <span class="doi-authors"{% if c.crossref_authors_full %} title="{{ c.crossref_authors_full }}"{% endif %}>{{ c.crossref_authors_display }}{% if c.crossref_year %} ({{ c.crossref_year }}){% endif %}</span>
       </td>
       <td class="doi-actions" id="act-{{ c.id }}">
         <div class="doi-actions-inner">
@@ -275,6 +398,11 @@ function esc(s) {
   const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
 }
 
+function truncateText(text, maxLen) {
+  if (!text) return '';
+  return text.length > maxLen ? text.slice(0, maxLen) + '\u2026' : text;
+}
+
 /* ── Help modal ── */
 function openHelp()  { document.getElementById('help-overlay').style.display='block'; document.getElementById('help-popup').style.display='block'; }
 function closeHelp() { document.getElementById('help-overlay').style.display='none';  document.getElementById('help-popup').style.display='none'; }
@@ -283,7 +411,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHelp();
 /* ── Advanced toggle ── */
 function toggleAdvanced(btn) {
   const div = document.getElementById('advanced-options');
-  if (div.style.display === 'none') {
+  if (getComputedStyle(div).display === 'none') {
     div.style.display = 'flex';
     btn.innerHTML = '&#x25be; Date range';
   } else {
@@ -311,10 +439,9 @@ function renderRows(candidates) {
   tbody.innerHTML = candidates.map(c => {
     const confClass = c.confidence >= 0.90 ? 'doi-conf-high' : c.confidence >= 0.75 ? 'doi-conf-med' : 'doi-conf-low';
     const confPct = Math.round(c.confidence * 100);
-    const pTitle = c.paper_title.length > 80 ? c.paper_title.slice(0, 80) + '\u2026' : c.paper_title;
-    const crTitle = (c.crossref_title || '').length > 80 ? c.crossref_title.slice(0, 80) + '\u2026' : (c.crossref_title || '');
-    const crAuth = (c.crossref_authors || '').length > 90 ? c.crossref_authors.slice(0, 90) + '\u2026' : (c.crossref_authors || '');
-    const authors = esc(c.paper_authors.join(', ') + (c.paper_authors.length === 3 ? ' et al.' : ''));
+    const pTitle = truncateText(c.paper_title_display || '', 80);
+    const crTitle = truncateText(c.crossref_title_display || '', 80);
+    const paperYear = c.paper_year ? ' (' + c.paper_year + ')' : '';
     const yrSuffix = c.crossref_year ? ' (' + c.crossref_year + ')' : '';
 
     let actionHtml = '<div class="doi-actions-inner"><span class="doi-conf ' + confClass + '">' + confPct + '%</span>';
@@ -331,12 +458,16 @@ function renderRows(candidates) {
     actionHtml += '</div>';
 
     return '<tr id="row-' + c.id + '">' +
-      '<td><a href="/paper/' + esc(c.arxiv_id) + '" target="_blank">' + esc(c.arxiv_id) + '</a><br>' +
-        '<span class="doi-title" title="' + esc(c.paper_title) + '">' + esc(pTitle) + '</span><br>' +
-        '<span class="doi-authors">' + authors + ' (' + c.published_year + ')</span></td>' +
+      '<td><span class="doi-title" title="' + esc(c.paper_title) + '">' + esc(pTitle) + '</span><br>' +
+        '<a class="doi-meta-link" href="/paper/' + esc(c.arxiv_id) + '" target="_blank">arXiv: ' + esc(c.arxiv_id) + '</a><br>' +
+        '<span class="doi-authors"' + (c.paper_authors_full ? ' title="' + esc(c.paper_authors_full) + '"' : '') + '>' +
+          esc(c.paper_authors_display || '') + paperYear +
+        '</span></td>' +
       '<td><span class="doi-title" title="' + esc(c.crossref_title || '') + '">' + esc(crTitle) + '</span><br>' +
-        '<span class="doi-authors">' + esc(crAuth) + yrSuffix + '</span><br>' +
-        '<a class="doi-link" href="https://doi.org/' + encodeURI(c.doi) + '" target="_blank" rel="noopener">' + esc(c.doi) + '</a></td>' +
+        '<a class="doi-link" href="https://doi.org/' + encodeURI(c.doi) + '" target="_blank" rel="noopener">' + esc(c.doi) + '</a>' +
+        '<span class="doi-authors"' + (c.crossref_authors_full ? ' title="' + esc(c.crossref_authors_full) + '"' : '') + '>' +
+          esc(c.crossref_authors_display || '') + yrSuffix +
+        '</span></td>' +
       '<td class="doi-actions" id="act-' + c.id + '">' + actionHtml + '</td>' +
       '</tr>';
   }).join('');
