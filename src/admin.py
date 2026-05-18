@@ -36,6 +36,11 @@ import logging
 import pymysql
 from config import ADMIN_PASSWORD
 from db import get_db_connection
+from publication import (
+    normalize_doi,
+    parse_publication_input,
+    publication_venue_label,
+)
 from title_matching import normalize_title, summarize_author_list_for_display
 
 logger = logging.getLogger(__name__)
@@ -1038,12 +1043,9 @@ def manual_doi(paper_id):
     Keep this request fast and reliable: the paper page already exposes a
     separate "Re-fetch" action for refreshing arXiv metadata.
     """
-    doi = request.form.get('doi', '').strip()
+    doi = normalize_doi(request.form.get('doi', '').strip())
     if not doi:
         return jsonify({'ok': False, 'error': 'empty'}), 400
-    m = re.search(r'doi\.org/(.+)', doi, flags=re.I)
-    if m:
-        doi = m.group(1).strip()
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1055,7 +1057,10 @@ def manual_doi(paper_id):
 
     cursor.execute("""
         UPDATE papers SET doi = %s, doi_status = 'verified',
-               doi_confidence = 1.000, doi_checked_at = NOW() WHERE id = %s
+               doi_confidence = 1.000, doi_checked_at = NOW(),
+               publication_url = NULL, publication_venue_key = NULL,
+               publication_status = 'published'
+        WHERE id = %s
     """, (doi, paper_id))
     cursor.execute("""
         INSERT INTO doi_candidates
@@ -1072,10 +1077,111 @@ def manual_doi(paper_id):
     return jsonify({
         'ok': True,
         'doi': doi,
+        'publication_status': 'published',
         'saved': True,
         'message': 'DOI saved',
         'arxiv_id': paper['arxiv_id'],
     })
+
+
+@admin.route('/papers/<int:paper_id>/publication', methods=['POST'])
+@login_required
+def set_publication(paper_id):
+    """Set publication metadata from DOI, DOI-less URL, or arXiv-only status."""
+    mode = request.form.get('publication_mode', 'auto')
+    value = request.form.get('publication_value', '')
+    try:
+        parsed = parse_publication_input(mode, value)
+    except ValueError as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT arxiv_id FROM papers WHERE id = %s", (paper_id,))
+    paper = cursor.fetchone()
+    if not paper:
+        cursor.close()
+        return jsonify({'ok': False, 'error': 'paper not found'}), 404
+
+    if parsed['kind'] == 'doi':
+        doi = parsed['doi']
+        cursor.execute("""
+            UPDATE papers
+            SET doi = %s,
+                doi_status = 'verified',
+                doi_confidence = 1.000,
+                doi_checked_at = NOW(),
+                publication_url = NULL,
+                publication_venue_key = NULL,
+                publication_status = 'published'
+            WHERE id = %s
+        """, (doi, paper_id))
+        cursor.execute("""
+            INSERT INTO doi_candidates
+                (paper_id, doi, confidence, status, reviewed_at)
+            VALUES (%s, %s, 1.000, 'approved', NOW())
+            ON DUPLICATE KEY UPDATE
+                confidence = VALUES(confidence),
+                status = 'approved',
+                reviewed_at = NOW()
+        """, (paper_id, doi))
+        _mark_other_doi_candidates_rejected(cursor, paper_id, keep_doi=doi)
+    else:
+        cursor.execute("""
+            UPDATE papers
+            SET doi = NULL,
+                doi_status = %s,
+                doi_confidence = NULL,
+                doi_checked_at = CASE WHEN %s = 'skipped' THEN NOW() ELSE doi_checked_at END,
+                publication_url = %s,
+                publication_venue_key = %s,
+                publication_status = %s
+            WHERE id = %s
+        """, (
+            parsed['doi_status'],
+            parsed['doi_status'],
+            parsed['publication_url'],
+            parsed['publication_venue_key'],
+            parsed['publication_status'],
+            paper_id,
+        ))
+        if parsed['doi_status'] == 'skipped':
+            _mark_other_doi_candidates_rejected(cursor, paper_id)
+
+    conn.commit()
+    cursor.close()
+    return jsonify({
+        'ok': True,
+        'saved': True,
+        'arxiv_id': paper['arxiv_id'],
+        'kind': parsed['kind'],
+        'doi': parsed['doi'],
+        'publication_url': parsed['publication_url'],
+        'publication_status': parsed['publication_status'],
+        'publication_venue_key': parsed['publication_venue_key'],
+        'publication_venue_label': publication_venue_label(parsed['publication_venue_key']),
+    })
+
+
+@admin.route('/papers/<int:paper_id>/editor-note', methods=['POST'])
+@login_required
+def set_editor_note(paper_id):
+    """Set a public editor note for a paper."""
+    note = request.form.get('editor_note', '').strip() or None
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT arxiv_id FROM papers WHERE id = %s", (paper_id,))
+    paper = cursor.fetchone()
+    if not paper:
+        cursor.close()
+        return jsonify({'ok': False, 'error': 'paper not found'}), 404
+    cursor.execute(
+        "UPDATE papers SET editor_note = %s WHERE id = %s",
+        (note, paper_id),
+    )
+    conn.commit()
+    cursor.close()
+    return jsonify({'ok': True, 'saved': True, 'editor_note': note})
 
 
 @admin.route('/dois/<int:paper_id>/skip', methods=['POST'])

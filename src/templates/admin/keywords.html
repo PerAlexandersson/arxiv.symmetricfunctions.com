@@ -187,7 +187,16 @@ table.kw-table col.col-del      { width: 58px; }
   <button onclick="closeHelp()" style="padding:0.35rem 0.9rem; border:1px solid var(--c-border,#ccc); border-radius:3px; cursor:pointer; background:var(--c-bg-alt,#f5f5f5);">Close</button>
 </div>
 
-<h2 style="margin-top: 0;">Keywords</h2>
+<div class="help-popup" id="help-keyword-guide">
+  <h3>Keyword guide</h3>
+  <p>Use keywords for visible, filterable labels: mathematical topics, venues such as <em>fpsac</em>, and formats such as <em>translation</em>, <em>lecture notes</em>, and <em>extended abstract</em>.</p>
+  <p>Do not use keywords for publication state. <em>arXiv only</em>, DOI-less journals, and publication URLs belong in publication metadata on the paper page.</p>
+  <button onclick="closeHelp()" style="padding:0.35rem 0.9rem; border:1px solid var(--c-border,#ccc); border-radius:3px; cursor:pointer; background:var(--c-bg-alt,#f5f5f5);">Close</button>
+</div>
+
+<h2 style="margin-top: 0;">Keywords
+  <button class="help-btn" onclick="openHelp('help-keyword-guide')" title="Keyword guide">?</button>
+</h2>
 
 <form id="add-kw-form" method="post" action="{{ url_for('admin.add_keyword') }}"
       style="display:flex; gap:0.5rem; margin-bottom:1.2rem; max-width:420px;">

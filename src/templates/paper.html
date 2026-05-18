@@ -28,6 +28,12 @@
     </div>
     {% endif %}
 
+    {% if paper.editor_note %}
+    <div class="paper-meta">
+        <strong>Note:</strong> {{ paper.editor_note }}
+    </div>
+    {% endif %}
+
     {% if paper.journal_ref %}
     <div class="paper-meta">
         <strong>Journal:</strong> {{ paper.journal_ref }}
@@ -38,16 +44,34 @@
     <div class="paper-meta">
         <strong>DOI:</strong> <a href="https://doi.org/{{ paper.doi }}" target="_blank" rel="noopener noreferrer">{{ paper.doi }}</a>
     </div>
+    {% elif paper.publication_url %}
+    <div class="paper-meta">
+        <strong>Publication:</strong>
+        <a href="{{ paper.publication_url }}" target="_blank" rel="noopener noreferrer">
+            {{ paper.publication_venue_key | publication_venue_label or 'View publication' }}
+        </a>
+    </div>
+    {% elif paper.publication_status == 'arxiv_only' %}
+    <div class="paper-meta">
+        <strong>Publication:</strong> arXiv only
+    </div>
     {% endif %}
 
     {% if is_admin %}
-    <div class="paper-meta" id="doi-admin" style="margin-top:0.3rem;">
-      <form onsubmit="return setDoi(event)" style="display:inline-flex; align-items:center; gap:0.4rem;">
-        <input type="text" id="doi-input" placeholder="Enter DOI or DOI URL..."
-               value="{{ paper.doi or '' }}"
-               style="padding:0.2rem 0.5rem; font-size:0.88rem; border:1px solid var(--c-border); border-radius:3px; width:22rem;">
-        <button type="submit" id="doi-save-btn" style="padding:0.2rem 0.6rem; font-size:0.85rem; cursor:pointer;
-               border:1px solid var(--c-border); border-radius:3px; background:var(--c-bg-surface);">Set DOI</button>
+    <div class="paper-meta" id="publication-admin" style="margin-top:0.3rem;">
+      <form onsubmit="return setPublication(event)" style="display:flex; flex-wrap:wrap; align-items:center; gap:0.4rem;">
+        <select id="publication-mode" style="padding:0.2rem 0.4rem; font-size:0.88rem; border:1px solid var(--c-border); border-radius:3px;">
+          <option value="auto">Auto</option>
+          <option value="doi"{% if paper.doi %} selected{% endif %}>DOI</option>
+          <option value="publication_url"{% if paper.publication_url and paper.publication_status != 'known_no_doi' %} selected{% endif %}>Publication URL</option>
+          <option value="known_no_doi"{% if paper.publication_status == 'known_no_doi' %} selected{% endif %}>Known no-DOI venue</option>
+          <option value="arxiv_only"{% if paper.publication_status == 'arxiv_only' %} selected{% endif %}>arXiv only</option>
+        </select>
+        <input type="text" id="publication-value" placeholder="DOI, DOI URL, or publication URL..."
+               value="{{ paper.doi or paper.publication_url or '' }}"
+               style="padding:0.2rem 0.5rem; font-size:0.88rem; border:1px solid var(--c-border); border-radius:3px; width:min(30rem, 100%);">
+        <button type="submit" id="publication-save-btn" style="padding:0.2rem 0.6rem; font-size:0.85rem; cursor:pointer;
+               border:1px solid var(--c-border); border-radius:3px; background:var(--c-bg-surface);">Save publication</button>
         {% if not paper.doi %}
         <button type="button" id="skip-doi-btn" onclick="toggleSkipDoi({{ paper.id }})"
                 class="skip-doi-btn{% if paper.doi_status == 'skipped' %} skip-doi-active{% endif %}"
@@ -55,7 +79,14 @@
           {% if paper.doi_status == 'skipped' %}&#x2717; No DOI{% else %}No DOI{% endif %}
         </button>
         {% endif %}
-        <span id="doi-status" style="font-size:0.82rem;"></span>
+        <span id="publication-status" style="font-size:0.82rem;"></span>
+      </form>
+      <form onsubmit="return setEditorNote(event)" style="display:flex; align-items:flex-start; gap:0.4rem; margin-top:0.5rem;">
+        <textarea id="editor-note-input" placeholder="Public editor note..."
+                  style="padding:0.3rem 0.5rem; font-size:0.88rem; border:1px solid var(--c-border); border-radius:3px; min-height:2.3rem; width:min(38rem, 100%);">{{ paper.editor_note or '' }}</textarea>
+        <button type="submit" id="editor-note-save-btn" style="padding:0.25rem 0.6rem; font-size:0.85rem; cursor:pointer;
+               border:1px solid var(--c-border); border-radius:3px; background:var(--c-bg-surface);">Save note</button>
+        <span id="editor-note-status" style="font-size:0.82rem;"></span>
       </form>
     </div>
     {% endif %}
@@ -99,7 +130,7 @@
 
     <h3 style="margin-top: 2rem; margin-bottom: 1rem;">BibTeX</h3>
 
-    {% if paper.doi %}
+    {% if paper.doi or paper.publication_url %}
     <div id="tabs" style="border-bottom: 2px solid var(--c-border); margin-bottom: 1rem;">
         <button class="tab-button active" onclick="showTab('arxiv-tab')" id="arxiv-tab-btn"
                 style="padding: 0.5rem 1rem; margin-right: 0.5rem; background: none; border: none; border-bottom: 3px solid var(--c-link); cursor: pointer; font-weight: 600; color: var(--c-link);">
@@ -152,26 +183,55 @@
 {% block extra_js %}
 <script>
 {% if is_admin %}
-async function setDoi(e) {
+async function setPublication(e) {
   e.preventDefault();
-  let val = document.getElementById('doi-input').value.trim();
-  const status = document.getElementById('doi-status');
-  const saveBtn = document.getElementById('doi-save-btn');
-  if (!val) { status.textContent = 'empty'; return false; }
-  // Extract DOI from URL
-  const m = val.match(/doi\.org\/(.+)/i);
-  if (m) val = m[1];
+  const mode = document.getElementById('publication-mode').value;
+  const val = document.getElementById('publication-value').value.trim();
+  const status = document.getElementById('publication-status');
+  const saveBtn = document.getElementById('publication-save-btn');
+  if (!val && mode !== 'arxiv_only') { status.textContent = 'empty'; return false; }
   status.textContent = 'Saving…';
   status.style.color = 'var(--c-text-sub)';
   saveBtn.disabled = true;
   const fd = new FormData();
-  fd.append('doi', val);
+  fd.append('publication_mode', mode);
+  fd.append('publication_value', val);
   try {
-    const data = await csrfJsonFetch('/admin/dois/{{ paper.id }}/manual', fd);
+    const data = await csrfJsonFetch('/admin/papers/{{ paper.id }}/publication', fd);
     if (data.ok) {
       status.textContent = '\u2713 saved';
       status.style.color = 'green';
-      document.getElementById('doi-input').value = data.doi;
+      document.getElementById('publication-value').value = data.doi || data.publication_url || '';
+      setTimeout(() => window.location.reload(), 500);
+    } else {
+      status.textContent = data.error || 'Error';
+      status.style.color = 'red';
+      saveBtn.disabled = false;
+    }
+  } catch (e2) {
+    if (e2.message !== 'AUTH_REQUIRED') {
+      status.textContent = 'Failed';
+      status.style.color = 'red';
+    }
+    saveBtn.disabled = false;
+  }
+  return false;
+}
+
+async function setEditorNote(e) {
+  e.preventDefault();
+  const status = document.getElementById('editor-note-status');
+  const saveBtn = document.getElementById('editor-note-save-btn');
+  const fd = new FormData();
+  fd.append('editor_note', document.getElementById('editor-note-input').value.trim());
+  status.textContent = 'Saving…';
+  status.style.color = 'var(--c-text-sub)';
+  saveBtn.disabled = true;
+  try {
+    const data = await csrfJsonFetch('/admin/papers/{{ paper.id }}/editor-note', fd);
+    if (data.ok) {
+      status.textContent = '\u2713 saved';
+      status.style.color = 'green';
       setTimeout(() => window.location.reload(), 500);
     } else {
       status.textContent = data.error || 'Error';
@@ -243,6 +303,8 @@ async function refetchPaper(arxivId) {
 fetchBibtex('{{ paper.arxiv_id }}', 'arxiv-bibtex');
 {% if paper.doi %}
 fetchBibtex('{{ paper.arxiv_id }}', 'published-bibtex', '/api/doi-bibtex/');
+{% elif paper.publication_url %}
+fetchBibtex('{{ paper.arxiv_id }}', 'published-bibtex', '/api/publication-bibtex/');
 {% endif %}
 
 function copyBibtexContent(elementId) {

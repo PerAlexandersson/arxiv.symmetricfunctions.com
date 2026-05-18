@@ -19,6 +19,7 @@ import requests
 from config import DB_CONFIG, FLASK_CONFIG, FETCH_SECRET, validate_config
 from db import get_db_connection, close_db_connection, get_paper_authors, attach_authors, attach_keywords
 from datetime import datetime, date, timedelta
+from publication import publication_venue_label
 from utils import strip_accents, slugify, protect_capitals_for_bibtex, generate_bibtex_key, arxiv2bib
 
 logging.basicConfig(
@@ -93,6 +94,11 @@ def inject_current_user():
         ctx['watched_kw_phrases']    = frozenset()
         ctx['watched_author_names']  = frozenset()
     return ctx
+
+
+@app.template_filter('publication_venue_label')
+def publication_venue_label_filter(venue_key):
+    return publication_venue_label(venue_key)
 
 
 def _canonical_query_items():
@@ -316,7 +322,8 @@ def _build_index_page(cursor, page, per_page, stats):
     offset = (page - 1) * per_page
     cursor.execute("""
         SELECT id, arxiv_id, title, abstract, published_date, updated_date,
-               journal_ref, doi, comment, primary_category
+               journal_ref, doi, comment, primary_category,
+               publication_url, publication_venue_key, publication_status
         FROM papers
         ORDER BY published_date DESC, id DESC
         LIMIT %s OFFSET %s
@@ -482,6 +489,31 @@ def _custom_doi_bibtex(doi, paper_data):
     return '\n'.join(lines)
 
 
+def _custom_publication_bibtex(paper_data):
+    """Generate a published BibTeX entry for a DOI-less publication URL."""
+    year = (paper_data['published_date'].year
+            if hasattr(paper_data['published_date'], 'year')
+            else paper_data['published_date'])
+    bibtex_key = generate_bibtex_key(paper_data.get('authors', []), year, published=True)
+    author_str = ' and '.join(paper_data.get('authors', [])) if paper_data.get('authors') else 'Unknown'
+    protected_title = protect_capitals_for_bibtex(paper_data['title'])
+
+    fields = [
+        ('author', author_str),
+        ('title', protected_title),
+        ('year', year),
+        ('journal', paper_data.get('journal_ref')),
+        ('url', paper_data.get('publication_url')),
+    ]
+    lines = [f"@article{{{bibtex_key},"]
+    field_lines = [f"  {name} = {{{value}}}" for name, value in fields if value]
+    lines.extend(f"{line}," for line in field_lines[:-1])
+    if field_lines:
+        lines.append(field_lines[-1])
+    lines.append("}")
+    return '\n'.join(lines)
+
+
 def published_doi_bibtex(doi, paper_data=None):
     """Generate published BibTeX from DOI metadata, with local metadata fallback."""
     bibtex = _fetch_doi_bibtex(doi)
@@ -614,7 +646,8 @@ def index():
     # Get papers for current page
     cursor.execute("""
         SELECT id, arxiv_id, title, abstract, published_date, updated_date,
-               journal_ref, doi, comment, primary_category
+               journal_ref, doi, comment, primary_category,
+               publication_url, publication_venue_key, publication_status
         FROM papers
         ORDER BY published_date DESC, id DESC
         LIMIT %s OFFSET %s
@@ -646,7 +679,9 @@ def paper_detail(arxiv_id):
 
     cursor.execute("""
         SELECT id, arxiv_id, title, abstract, published_date, updated_date,
-               comment, journal_ref, doi, doi_status, primary_category
+               comment, journal_ref, doi, doi_status, primary_category,
+               publication_url, publication_venue_key, publication_status,
+               editor_note
         FROM papers
         WHERE arxiv_id = %s
     """, (arxiv_id,))
@@ -731,6 +766,36 @@ def doi_bibtex(arxiv_id):
         return bibtex, 200, {'Content-Type': 'text/plain; charset=utf-8'}
     else:
         return "Error generating DOI BibTeX", 500, {'Content-Type': 'text/plain; charset=utf-8'}
+
+
+@app.route('/api/publication-bibtex/<path:arxiv_id>')
+def publication_bibtex(arxiv_id):
+    """Generate published BibTeX for DOI or DOI-less publication metadata."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT id, arxiv_id, title, published_date, journal_ref, doi,
+               publication_url, publication_venue_key, publication_status
+        FROM papers
+        WHERE arxiv_id = %s
+    """, (arxiv_id,))
+
+    paper = cursor.fetchone()
+
+    if not paper or (not paper['doi'] and not paper['publication_url']):
+        abort(404)
+
+    paper['authors'] = get_paper_authors(cursor, paper['id'])
+    cursor.close()
+
+    if paper['doi']:
+        bibtex = published_doi_bibtex(paper['doi'], paper)
+    else:
+        bibtex = _custom_publication_bibtex(paper)
+    if bibtex:
+        return bibtex, 200, {'Content-Type': 'text/plain; charset=utf-8'}
+    return "Error generating publication BibTeX", 500, {'Content-Type': 'text/plain; charset=utf-8'}
 
 
 @app.route('/tools')
@@ -1153,6 +1218,7 @@ def search():
         cursor.execute(f"""
             SELECT p.id, p.arxiv_id, p.title, p.abstract,
                    p.published_date, p.updated_date, p.journal_ref, p.doi,
+                   p.publication_url, p.publication_venue_key, p.publication_status,
                    p.comment, p.primary_category,
                    ({author_condition}) AS author_match,
                    MATCH(p.title, p.abstract) AGAINST(%s IN BOOLEAN MODE) AS text_score,
@@ -1177,6 +1243,7 @@ def search():
         cursor.execute(f"""
             SELECT p.id, p.arxiv_id, p.title, p.abstract,
                    p.published_date, p.updated_date, p.journal_ref, p.doi,
+                   p.publication_url, p.publication_venue_key, p.publication_status,
                    p.comment, p.primary_category,
                    ({author_condition}) AS author_match,
                    CASE
@@ -1235,6 +1302,7 @@ def keyword_papers(phrase):
     cursor.execute("""
         SELECT p.id, p.arxiv_id, p.title, p.abstract,
                p.published_date, p.updated_date, p.journal_ref, p.doi,
+               p.publication_url, p.publication_venue_key, p.publication_status,
                p.comment, p.primary_category
         FROM paper_keywords pk
         JOIN papers p ON pk.paper_id = p.id
@@ -1336,6 +1404,7 @@ def category_papers(cat):
     cursor.execute("""
         SELECT p.id, p.arxiv_id, p.title, p.abstract,
                p.published_date, p.updated_date, p.journal_ref, p.doi,
+               p.publication_url, p.publication_venue_key, p.publication_status,
                p.comment, p.primary_category
         FROM paper_categories pc
         JOIN papers p ON pc.paper_id = p.id
@@ -1400,6 +1469,7 @@ def author_papers(author_slug):
     cursor.execute("""
         SELECT p.id, p.arxiv_id, p.title, p.abstract,
                p.published_date, p.updated_date, p.journal_ref, p.doi,
+               p.publication_url, p.publication_venue_key, p.publication_status,
                p.comment, p.primary_category
         FROM papers p
         JOIN paper_authors pa ON p.id = pa.paper_id
@@ -1511,7 +1581,8 @@ def papers_by_date(date_str):
 
     cursor.execute("""
         SELECT id, arxiv_id, title, abstract, published_date, updated_date,
-               journal_ref, doi, comment, primary_category
+               journal_ref, doi, comment, primary_category,
+               publication_url, publication_venue_key, publication_status
         FROM papers
         WHERE DATE(published_date) = %s
         ORDER BY id DESC

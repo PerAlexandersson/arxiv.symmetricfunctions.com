@@ -107,14 +107,29 @@
     </div>
 
     <details class="abstract-details" data-arxiv-id="{{ paper.arxiv_id }}">
-        <summary class="paper-title{% if paper.journal_ref or paper.doi %} published-paper{% endif %}{% if is_latest %} paper-title--new{% endif %}">{{ paper.title }}</summary>
+        {% set pub_url = paper.get('publication_url') %}
+        {% set pub_status = paper.get('publication_status') %}
+        {% set pub_venue_key = paper.get('publication_venue_key') %}
+        {% set has_publication = paper.journal_ref or paper.doi or pub_url or pub_status == 'arxiv_only' %}
+        <summary class="paper-title{% if has_publication %} published-paper{% endif %}{% if is_latest %} paper-title--new{% endif %}">{{ paper.title }}</summary>
 
-        {% if paper.journal_ref or paper.doi %}
+        {% if has_publication %}
         <div class="paper-publication">
-            Published in {{ paper.journal_ref }}
+            {% if pub_status == 'arxiv_only' %}
+                arXiv only
+            {% elif paper.journal_ref %}
+                Published in {{ paper.journal_ref }}
+            {% elif pub_venue_key %}
+                Published in {{ pub_venue_key | publication_venue_label }}
+            {% else %}
+                Published
+            {% endif %}
             {% if paper.doi %}
                 • <a href="https://doi.org/{{ paper.doi }}" target="_blank" rel="noopener">View Publication</a>
                 • <a href="#" onclick="copyDoiBibtex('{{ paper.arxiv_id }}'); return false;" title="Copy published BibTeX entry">BIB</a>
+            {% elif pub_url %}
+                • <a href="{{ pub_url }}" target="_blank" rel="noopener">View Publication</a>
+                • <a href="#" onclick="showBibtexModal('/api/publication-bibtex/{{ paper.arxiv_id }}', 'Published — arXiv:{{ paper.arxiv_id }}'); return false;" title="Copy published BibTeX entry">BIB</a>
             {% elif paper.journal_ref %}
                 • <a href="https://scholar.google.com/scholar?q={{ (paper.title + ' ' + paper.journal_ref) | urlencode }}" target="_blank" rel="noopener">Search Publication</a>
             {% endif %}

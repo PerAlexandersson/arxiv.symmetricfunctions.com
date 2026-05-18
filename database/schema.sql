@@ -55,6 +55,10 @@ CREATE TABLE papers (
     doi_status ENUM('arxiv','auto','verified','skipped') DEFAULT NULL, -- provenance (skipped = no DOI expected)
     doi_confidence DECIMAL(4,3) DEFAULT NULL,       -- match score (0-1)
     doi_checked_at TIMESTAMP NULL DEFAULT NULL,    -- last Crossref lookup
+    publication_url VARCHAR(512),                   -- DOI-less publication page
+    publication_venue_key VARCHAR(64),              -- known venue key, e.g. jis, slc, arxiv
+    publication_status ENUM('published','known_no_doi','arxiv_only') DEFAULT NULL,
+    editor_note TEXT,                               -- public admin/editor clarification
 
     -- Internal tracking
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -64,7 +68,9 @@ CREATE TABLE papers (
     INDEX idx_arxiv_id (arxiv_id),
     INDEX idx_published_date (published_date),
     INDEX idx_updated_date (updated_date),
-    INDEX idx_doi_status (doi_status)
+    INDEX idx_doi_status (doi_status),
+    INDEX idx_publication_status (publication_status),
+    INDEX idx_publication_venue_key (publication_venue_key)
 
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -271,6 +277,7 @@ CREATE TABLE math_words (
 CREATE TABLE paper_keywords (
     paper_id   INT NOT NULL,
     keyword_id INT NOT NULL,
+    source     ENUM('auto','manual','system') NOT NULL DEFAULT 'auto',
 
     PRIMARY KEY (paper_id, keyword_id),
     KEY idx_keyword_id (keyword_id),

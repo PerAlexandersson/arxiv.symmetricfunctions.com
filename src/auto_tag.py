@@ -71,10 +71,11 @@ def tag_papers(cursor, papers, phrase_to_id, max_ngram):
 
     paper_ids = [p[0] for p in papers]
 
-    # Clear existing tags for these papers so re-runs are clean
+    # Clear existing automatic tags for these papers so re-runs are clean.
+    # Manual/system keyword links are curated metadata and must survive retagging.
     placeholders = ','.join(['%s'] * len(paper_ids))
     cursor.execute(
-        f"DELETE FROM paper_keywords WHERE paper_id IN ({placeholders})",
+        f"DELETE FROM paper_keywords WHERE source = 'auto' AND paper_id IN ({placeholders})",
         paper_ids
     )
 
@@ -87,7 +88,10 @@ def tag_papers(cursor, papers, phrase_to_id, max_ngram):
 
     if rows_to_insert:
         cursor.executemany(
-            "INSERT IGNORE INTO paper_keywords (paper_id, keyword_id) VALUES (%s, %s)",
+            """
+            INSERT IGNORE INTO paper_keywords (paper_id, keyword_id, source)
+            VALUES (%s, %s, 'auto')
+            """,
             rows_to_insert
         )
 

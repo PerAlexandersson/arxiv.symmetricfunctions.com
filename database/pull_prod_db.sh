@@ -31,6 +31,8 @@ set +a
 LOCAL_DB_NAME="$DB_NAME"
 LOCAL_DB_USER="$DB_USER"
 LOCAL_DB_PASS="$DB_PASSWORD"
+LOCAL_DB_HOST="${DB_HOST:-localhost}"
+LOCAL_DB_PORT="${DB_PORT:-}"
 
 # ── Colors ────────────────────────────────────────────────────────────────────
 GREEN='\033[0;32m'
@@ -42,7 +44,7 @@ echo "========================================="
 echo "  Pull Production DB → Local"
 echo "========================================="
 echo "  Remote: $PROD_DB_NAME @ $REMOTE_HOST"
-echo "  Local:  $LOCAL_DB_NAME @ localhost"
+echo "  Local:  $LOCAL_DB_NAME @ $LOCAL_DB_HOST"
 echo ""
 echo -e "${RED}WARNING: This will REPLACE your local database!${NC}"
 read -p "Continue? [y/N] " confirm
@@ -65,7 +67,14 @@ DUMP_SIZE=$(du -sh "$DUMP_FILE" | cut -f1)
 echo "  Dump size: $DUMP_SIZE"
 
 echo -e "${YELLOW}Step 2: Importing into local database '$LOCAL_DB_NAME'...${NC}"
-MYSQL_PWD="$LOCAL_DB_PASS" mysql -u "$LOCAL_DB_USER" "$LOCAL_DB_NAME" < "$DUMP_FILE"
+MYSQL_ARGS=(-u "$LOCAL_DB_USER")
+if [[ -n "$LOCAL_DB_HOST" && "$LOCAL_DB_HOST" != "localhost" ]]; then
+    MYSQL_ARGS+=(-h "$LOCAL_DB_HOST")
+fi
+if [[ -n "$LOCAL_DB_PORT" ]]; then
+    MYSQL_ARGS+=(-P "$LOCAL_DB_PORT")
+fi
+MYSQL_PWD="$LOCAL_DB_PASS" mysql "${MYSQL_ARGS[@]}" "$LOCAL_DB_NAME" < "$DUMP_FILE"
 
 echo ""
 echo -e "${GREEN}=========================================${NC}"
