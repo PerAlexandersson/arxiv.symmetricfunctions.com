@@ -85,25 +85,23 @@
 {% if is_admin and symcat_suggestions %}
 <script>
 async function scApply(kid, anchor, btn) {
-  const csrf = document.querySelector('meta[name="csrf-token"]').content;
   const fd = new FormData();
   fd.append('field', 'url');
   fd.append('value', anchor);
   try {
-    const res = await fetch(`/admin/keywords/${kid}/inline`, {
-      method: 'POST',
-      headers: {'X-CSRFToken': csrf},
-      body: fd
-    });
-    const data = await res.json();
+    const data = await csrfJsonFetch(`/admin/keywords/${kid}/inline`, fd);
     if (data.ok) {
       const container = document.getElementById('sug-' + kid);
-      container.innerHTML = '<span class="sc-sug-applied">\u2713 ' + anchor + '</span>';
+      container.textContent = '';
+      const applied = document.createElement('span');
+      applied.className = 'sc-sug-applied';
+      applied.textContent = '\u2713 ' + anchor;
+      container.appendChild(applied);
     } else {
       btn.textContent = 'Error';
     }
   } catch(e) {
-    btn.textContent = 'Failed';
+    if (e.message !== 'AUTH_REQUIRED') btn.textContent = 'Failed';
   }
 }
 </script>

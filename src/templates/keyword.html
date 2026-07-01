@@ -6,10 +6,9 @@
 {% block content %}
 <h2 style="margin-top: 0;">
   {{ keyword.phrase }}
-  {% if keyword.url %}
-    <a href="{{ keyword.url | sf_url }}" target="_blank" rel="noopener"
-       style="font-size: 0.6em; font-weight: 400; margin-left: 0.6rem; vertical-align: middle;">↗ reference</a>
-  {% endif %}
+  <a href="{{ keyword.url | sf_url }}" target="_blank" rel="noopener"
+     id="kw-reference-link"
+     style="font-size: 0.6em; font-weight: 400; margin-left: 0.6rem; vertical-align: middle;{% if not keyword.url %} display:none;{% endif %}">↗ reference</a>
 </h2>
 
 <div class="stats">
@@ -202,14 +201,10 @@
 
 {% block extra_js %}
 <script>
-function toggleWatch(type, id, btn) {
-  const csrf = document.querySelector('meta[name="csrf-token"]').content;
-  fetch('/api/watch/' + type + '/' + id, {
-    method: 'POST',
-    headers: {'X-CSRFToken': csrf}
-  })
-  .then(r => r.json())
-  .then(data => {
+async function toggleWatch(type, id, btn) {
+  btn.disabled = true;
+  try {
+    const data = await csrfJsonFetch('/api/watch/' + type + '/' + id, {});
     if (data.watching) {
       btn.textContent = 'Watching';
       btn.classList.add('watching');
@@ -217,11 +212,48 @@ function toggleWatch(type, id, btn) {
       btn.textContent = 'Watch';
       btn.classList.remove('watching');
     }
-  });
+  } catch (e) {
+    if (e.message !== 'AUTH_REQUIRED') console.error('toggleWatch failed', e);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 {% if is_admin %}
 const _kid = {{ keyword.id }};
+
+function keywordReferenceHref(value) {
+  if (!value) return '';
+  if (/^https?:\/\//i.test(value)) return value;
+  return 'https://www.symmetricfunctions.com#' + encodeURIComponent(value);
+}
+
+function updateKeywordReferenceLink(value) {
+  const link = document.getElementById('kw-reference-link');
+  if (!link) return;
+  if (value) {
+    link.href = keywordReferenceHref(value);
+    link.style.display = '';
+  } else {
+    link.removeAttribute('href');
+    link.style.display = 'none';
+  }
+}
+
+function makeAliasChip(aliasId, aliasText, onDelete) {
+  const chip = document.createElement('span');
+  chip.className = 'alias-chip';
+  chip.id = 'alias-chip-' + aliasId;
+  const label = document.createElement('span');
+  label.textContent = aliasText;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.title = 'Remove';
+  button.textContent = '×';
+  button.addEventListener('click', onDelete);
+  chip.append(label, button);
+  return chip;
+}
 
 async function akwSetScore(input) {
   const prev = input.defaultValue;
@@ -241,7 +273,12 @@ async function akwSaveUrl(inp) {
   try {
     const res  = await csrfFetch(`/admin/keywords/${_kid}/inline`, fd);
     const data = await res.json();
-    if (data.ok) { inp.defaultValue = value; akwFlash(inp, true); location.reload(); }
+    if (data.ok) {
+      inp.value = data.value || '';
+      inp.defaultValue = data.value || '';
+      updateKeywordReferenceLink(data.value || '');
+      akwFlash(inp, true);
+    }
     else { akwFlash(inp, false); inp.value = inp.defaultValue; }
   } catch { akwFlash(inp, false); inp.value = inp.defaultValue; }
 }
@@ -281,10 +318,7 @@ async function akwAddAlias() {
     }
     const list = document.getElementById('akw-alias-list');
     const btn  = document.getElementById('akw-alias-btn');
-    const chip = document.createElement('span');
-    chip.className = 'alias-chip'; chip.id = 'alias-chip-' + data.id;
-    chip.innerHTML = `<span>${data.alias}</span>`
-      + `<button type="button" onclick="akwDelAlias(${data.id})" title="Remove">×</button>`;
+    const chip = makeAliasChip(data.id, data.alias, () => akwDelAlias(data.id));
     list.insertBefore(chip, btn);
     akwHideAliasInput();
   } catch { alert('Error adding alias.'); }
@@ -375,9 +409,13 @@ async function akwApplySug(anchor, btn) {
     if (data.ok) {
       document.getElementById('akw-url').value = anchor;
       document.getElementById('akw-url').defaultValue = anchor;
-      document.getElementById('akw-url-sug').innerHTML =
-        '<span class="sc-sug-applied">\u2713 ' + anchor + '</span>';
-      location.reload();
+      updateKeywordReferenceLink(data.value || anchor);
+      const sug = document.getElementById('akw-url-sug');
+      sug.textContent = '';
+      const applied = document.createElement('span');
+      applied.className = 'sc-sug-applied';
+      applied.textContent = '\u2713 ' + anchor;
+      sug.appendChild(applied);
     } else { btn.textContent = 'Error'; }
   } catch { btn.textContent = 'Failed'; }
 }

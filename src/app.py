@@ -20,6 +20,12 @@ from config import DB_CONFIG, FLASK_CONFIG, FETCH_SECRET, validate_config
 from db import get_db_connection, close_db_connection, get_paper_authors, attach_authors, attach_keywords
 from datetime import datetime, date, timedelta
 from publication import publication_venue_label
+from site_stats import (
+    ensure_site_stats,
+    get_site_stats,
+    index_cache_rebuild_due,
+    refresh_site_stats,
+)
 from utils import strip_accents, slugify, protect_capitals_for_bibtex, generate_bibtex_key, arxiv2bib
 
 logging.basicConfig(
@@ -316,6 +322,10 @@ def _resolve_paper_arxiv_id(cursor, value):
 # ── Index page data cache ─────────────────────────────────────────────────────
 # Pre-computed after each /fetch run; avoids DB queries for anonymous visitors.
 _index_cache = {}   # {page_num: {papers, page, total_pages, total, total_authors, latest_date}}
+_index_cache_version = None
+_index_cache_last_checked = None
+_index_cache_rebuild_after = None
+_INDEX_CACHE_CHECK_INTERVAL = timedelta(seconds=60)
 
 def _build_index_page(cursor, page, per_page, stats):
     """Query one page of papers and attach authors + keywords."""
@@ -343,24 +353,60 @@ def _build_index_page(cursor, page, per_page, stats):
 
 def rebuild_index_cache():
     """Pre-warm the index cache for pages 1-2. Call after data changes."""
-    global _index_cache
+    global _index_cache, _index_cache_version
+    global _index_cache_last_checked, _index_cache_rebuild_after
+    row = refresh_site_stats()
     conn = pymysql.connect(**DB_CONFIG, cursorclass=pymysql.cursors.DictCursor)
     cursor = conn.cursor()
-    cursor.execute("SELECT paper_count, author_count, latest_date FROM site_stats WHERE id = 1")
-    row = cursor.fetchone()
-    if not row:
+    try:
+        stats = {'total': row['paper_count'], 'total_authors': row['author_count'],
+                 'latest_date': row['latest_date']}
+        new_cache = {}
+        for pg in (1, 2):
+            new_cache[pg] = _build_index_page(cursor, pg, 20, stats)
+    finally:
         cursor.close()
         conn.close()
-        return
-    stats = {'total': row['paper_count'], 'total_authors': row['author_count'],
-             'latest_date': row['latest_date']}
-    new_cache = {}
-    for pg in (1, 2):
-        new_cache[pg] = _build_index_page(cursor, pg, 20, stats)
-    cursor.close()
-    conn.close()
     _index_cache = new_cache
+    _index_cache_version = row['updated_at']
+    _index_cache_last_checked = datetime.now()
+    _index_cache_rebuild_after = None
     logger.info("Index cache rebuilt (pages 1-2, %d papers)", stats['total'])
+
+
+def _index_cache_is_fresh():
+    """Return whether the in-process cache matches the persisted stats row."""
+    global _index_cache_last_checked, _index_cache_rebuild_after
+    if not _index_cache or _index_cache_version is None:
+        return False
+
+    now = datetime.now()
+    if _index_cache_rebuild_after and now >= _index_cache_rebuild_after:
+        return False
+
+    if (_index_cache_last_checked and
+            now - _index_cache_last_checked < _INDEX_CACHE_CHECK_INTERVAL):
+        return True
+
+    try:
+        stats = get_site_stats()
+    except Exception as e:
+        logger.warning("Could not check index cache freshness: %s", e)
+        _index_cache_last_checked = now
+        return True
+
+    _index_cache_last_checked = now
+    if not stats:
+        return False
+    _index_cache_rebuild_after = (
+        stats.get('cache_rebuild_after') if stats.get('cache_dirty_at') else None
+    )
+    if index_cache_rebuild_due(stats, now=now):
+        return False
+    return stats and stats.get('updated_at') == _index_cache_version
+
+
+app.extensions['rebuild_index_cache'] = rebuild_index_cache
 
 # Warm cache on startup
 try:
@@ -576,35 +622,6 @@ except pymysql.Error as e:
     logger.warning("ensure_author_slugs skipped (DB unavailable): %s", e)
 
 
-def ensure_site_stats():
-    """Create site_stats table and seed it if empty. Uses its own connection (runs at startup)."""
-    conn = pymysql.connect(**DB_CONFIG, cursorclass=pymysql.cursors.DictCursor)
-    cursor = conn.cursor()
-    try:
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS site_stats (
-                id           TINYINT  NOT NULL DEFAULT 1,
-                paper_count  INT      NOT NULL DEFAULT 0,
-                author_count INT      NOT NULL DEFAULT 0,
-                latest_date  DATE,
-                updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                PRIMARY KEY (id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-        """)
-        conn.commit()
-        cursor.execute("SELECT id FROM site_stats WHERE id = 1")
-        if not cursor.fetchone():
-            cursor.execute("""
-                INSERT INTO site_stats (id, paper_count, author_count, latest_date)
-                SELECT 1, COUNT(*), (SELECT COUNT(*) FROM authors), MAX(published_date)
-                FROM papers
-            """)
-            conn.commit()
-    finally:
-        cursor.close()
-        conn.close()
-
-
 try:
     ensure_site_stats()
 except pymysql.Error as e:
@@ -620,9 +637,15 @@ def index():
     per_page = 20
 
     # Serve from cache for anonymous visitors on pages 1-2
-    if not session.get('user_id') and page in _index_cache:
-        cached = _index_cache[page]
-        return render_template('index.html', **cached)
+    if not session.get('user_id') and page in (1, 2):
+        if page not in _index_cache or not _index_cache_is_fresh():
+            try:
+                rebuild_index_cache()
+            except Exception as e:
+                logger.warning("Could not refresh index cache: %s", e)
+        if page in _index_cache:
+            cached = _index_cache[page]
+            return render_template('index.html', **cached)
 
     offset = (page - 1) * per_page
 
@@ -1677,21 +1700,6 @@ def fetch_papers():
     output = io.StringIO()
     with contextlib.redirect_stdout(output):
         fetch_recent_papers(days=days)
-
-    # Refresh cached stats
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO site_stats (id, paper_count, author_count, latest_date)
-        SELECT 1, COUNT(*), (SELECT COUNT(*) FROM authors), MAX(published_date)
-        FROM papers
-        ON DUPLICATE KEY UPDATE
-            paper_count  = VALUES(paper_count),
-            author_count = VALUES(author_count),
-            latest_date  = VALUES(latest_date)
-    """)
-    conn.commit()
-    cursor.close()
 
     # Rebuild the index page cache with fresh data
     rebuild_index_cache()

@@ -20,6 +20,7 @@ from calendar import monthrange
 from datetime import datetime, timedelta
 import sys
 from config import DB_CONFIG, validate_config
+from site_stats import refresh_site_stats
 from utils import slugify
 
 # Max results per query
@@ -209,6 +210,18 @@ def _fetch_papers(query, max_results):
         conn.close()
 
 
+def _refresh_site_stats_after_fetch():
+    """Refresh persisted homepage counters after a successful fetch."""
+    try:
+        stats = refresh_site_stats()
+        print(
+            "  Site stats refreshed: "
+            f"{stats['paper_count']} papers, latest {stats['latest_date']}."
+        )
+    except Exception as e:
+        print(f"  WARNING: Could not refresh site stats: {e}", file=sys.stderr)
+
+
 def fetch_recent_papers(days=2):
     """Fetch papers from the last N days (new submissions and recent updates)."""
     print(f"Fetching papers from the last {days} days...")
@@ -220,6 +233,7 @@ def fetch_recent_papers(days=2):
     # Updates to older papers (journal refs, new versions, etc.)
     print("Checking for updates to older papers...")
     _fetch_papers(f"cat:math.CO AND lastUpdatedDate:{date_range}", MAX_RESULTS_RECENT)
+    _refresh_site_stats_after_fetch()
 
 
 def fetch_date_range(start_date_str, end_date_str):
@@ -229,6 +243,7 @@ def fetch_date_range(start_date_str, end_date_str):
     print(f"Fetching papers from {start_date_str} to {end_date_str}...")
     query = f"cat:math.CO AND submittedDate:[{start_date.strftime('%Y%m%d')}0000 TO {end_date.strftime('%Y%m%d')}2359]"
     _fetch_papers(query, MAX_RESULTS_BACKFILL)
+    _refresh_site_stats_after_fetch()
 
 
 def fetch_by_arxiv_id(arxiv_id):
@@ -252,6 +267,7 @@ def fetch_by_arxiv_id(arxiv_id):
         conn.commit()
         print(f"Successfully processed {arxiv_id}")
         _auto_tag_papers(conn, cursor, [(paper_id, paper.title, paper.summary)])
+        _refresh_site_stats_after_fetch()
     except StopIteration:
         print(f"Paper {arxiv_id} not found on arXiv")
     except Exception as e:

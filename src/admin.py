@@ -31,7 +31,7 @@ from datetime import date as date_type
 from urllib.parse import urlparse, urljoin
 
 from flask import (Blueprint, render_template, request, redirect,
-                   url_for, session, flash, abort, jsonify, g)
+                   url_for, session, flash, abort, jsonify, g, current_app)
 import logging
 import pymysql
 from config import ADMIN_PASSWORD
@@ -41,6 +41,7 @@ from publication import (
     parse_publication_input,
     publication_venue_label,
 )
+from site_stats import mark_index_cache_dirty
 from title_matching import normalize_title, summarize_author_list_for_display
 
 logger = logging.getLogger(__name__)
@@ -59,6 +60,14 @@ def _normalize_kw_url(url):
         return url
     m = _SF_URL_RE.match(url.strip())
     return m.group(1) if m else url
+
+
+def _mark_index_cache_dirty():
+    """Schedule a debounced rebuild of cached anonymous paper-card data."""
+    try:
+        mark_index_cache_dirty()
+    except Exception as e:
+        logger.warning("Could not mark index cache dirty: %s", e)
 
 # Simple module-level cache for the CSV
 _candidates_cache = None
@@ -135,6 +144,21 @@ def _phrase_status(phrase, useful, aliases_map, math, ignored):
     if phrase in ignored:
         return 'ignore'
     return 'unreviewed'
+
+
+def _candidate_review_counts(cursor):
+    """Return counts for candidate review statuses shown in the admin UI."""
+    cursor.execute("SELECT COUNT(*) AS n FROM keywords")
+    useful_count = cursor.fetchone()['n']
+    cursor.execute("SELECT COUNT(*) AS n FROM math_words")
+    math_count = cursor.fetchone()['n']
+    cursor.execute("SELECT COUNT(*) AS n FROM ignored_candidates")
+    ignored_count = cursor.fetchone()['n']
+    return {
+        'useful_count': useful_count,
+        'math_count': math_count,
+        'ignored_count': ignored_count,
+    }
 
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
@@ -236,6 +260,7 @@ def candidates():
 @login_required
 def mark_candidate():
     """Mark a candidate as useful / alias / math / ignore, or unmark it."""
+    wants_json = _wants_json_response()
     phrase = request.form.get('phrase', '').strip()
     status = request.form.get('status', '')   # useful | alias | math | ignore | unreviewed
     # keyword_phrase: corrected phrase (for useful) or the alias text (for alias)
@@ -244,6 +269,8 @@ def mark_candidate():
     alias_of = request.form.get('alias_of', '').strip()
 
     if not phrase:
+        if wants_json:
+            return jsonify({'ok': False, 'error': 'empty phrase'}), 400
         return redirect(request.referrer or url_for('admin.candidates'))
 
     conn = get_db_connection()
@@ -260,6 +287,10 @@ def mark_candidate():
     cursor.execute("DELETE FROM ignored_candidates WHERE phrase = %s", (phrase,))
     cursor.execute("DELETE FROM keyword_aliases    WHERE alias  = %s", (phrase,))
 
+    response_status = status
+    response_phrase = phrase
+    response_alias_of = None
+
     if status == 'useful':
         try:
             if existing_kw_id:
@@ -270,9 +301,14 @@ def mark_candidate():
                     "INSERT IGNORE INTO keywords (phrase, score) VALUES (%s, 5)",
                     (keyword_phrase,)
                 )
+            response_phrase = keyword_phrase
         except pymysql.IntegrityError:
-            flash(f'Could not save «{keyword_phrase}»: a keyword with that phrase already exists.')
+            conn.rollback()
             cursor.close()
+            msg = f'Could not save "{keyword_phrase}": a keyword with that phrase already exists.'
+            if wants_json:
+                return jsonify({'ok': False, 'error': msg}), 409
+            flash(msg)
             return redirect(request.referrer or url_for('admin.candidates'))
     elif status == 'alias' and alias_of:
         # Look up the canonical keyword
@@ -297,6 +333,8 @@ def mark_candidate():
                 "INSERT IGNORE INTO keyword_aliases (keyword_id, alias) VALUES (%s, %s)",
                 (canonical_id, keyword_phrase)
             )
+            response_phrase = keyword_phrase
+            response_alias_of = alias_of
         else:
             # Canonical not found — fall back to creating a new keyword
             if existing_kw_id:
@@ -307,6 +345,8 @@ def mark_candidate():
                     "INSERT IGNORE INTO keywords (phrase, score) VALUES (%s, 5)",
                     (keyword_phrase,)
                 )
+            response_status = 'useful'
+            response_phrase = keyword_phrase
     else:
         # math / ignore / unreviewed — delete the keyword if it existed
         if existing_kw_id:
@@ -318,7 +358,18 @@ def mark_candidate():
     # 'unreviewed' → already removed from all tables above
 
     conn.commit()
+    _mark_index_cache_dirty()
+    counts = _candidate_review_counts(cursor)
     cursor.close()
+    if wants_json:
+        return jsonify({
+            'ok': True,
+            'status': response_status,
+            'phrase': phrase,
+            'keyword_phrase': response_phrase,
+            'alias_of': response_alias_of,
+            **counts,
+        })
     return redirect(request.referrer or url_for('admin.candidates'))
 
 
@@ -389,6 +440,7 @@ def inline_edit(kid):
     try:
         cursor.execute(sql, (value, kid))
         conn.commit()
+        _mark_index_cache_dirty()
     except pymysql.IntegrityError:
         cursor.close()
         return jsonify({'ok': False, 'error': 'duplicate'}), 409
@@ -433,6 +485,7 @@ def add_alias(kid):
             (kid, alias)
         )
         conn.commit()
+        _mark_index_cache_dirty()
         aid = cursor.lastrowid
         cursor.close()
         return jsonify({'ok': True, 'id': aid, 'alias': alias, 'absorbed': bool(dup)})
@@ -489,6 +542,7 @@ def merge_keyword(kid):
     cursor.execute("INSERT IGNORE INTO keyword_aliases (keyword_id, alias) VALUES (%s, %s)",
                    (dst_id, src['phrase']))
     conn.commit()
+    _mark_index_cache_dirty()
     cursor.close();    return jsonify({'ok': True})
 
 
@@ -500,6 +554,7 @@ def set_score(kid):
     cursor = conn.cursor()
     cursor.execute("UPDATE keywords SET score=%s WHERE id=%s", (score, kid))
     conn.commit()
+    _mark_index_cache_dirty()
     cursor.close()
     return jsonify({'ok': True, 'score': score})
 
@@ -512,6 +567,7 @@ def delete_keyword(kid):
     cursor = conn.cursor()
     cursor.execute("DELETE FROM keywords WHERE id = %s", (kid,))
     conn.commit()
+    _mark_index_cache_dirty()
     cursor.close()
     return jsonify({'ok': True})
 
@@ -526,6 +582,7 @@ def bulk_delete():
         placeholders = ','.join(['%s'] * len(ids))
         cursor.execute(f"DELETE FROM keywords WHERE id IN ({placeholders})", ids)
         conn.commit()
+        _mark_index_cache_dirty()
         cursor.close()
     return jsonify({'ok': True, 'deleted': ids})
 
@@ -567,6 +624,7 @@ def retag_keyword(kid):
             "INSERT IGNORE INTO paper_keywords (paper_id, keyword_id) VALUES (%s, %s)", rows
         )
     conn.commit()
+    _mark_index_cache_dirty()
     cursor.close()
     return jsonify({'ok': True, 'count': len(rows)})
 
@@ -688,6 +746,7 @@ def retag():
             papers = [(r['id'], r['title'], r['abstract']) for r in cursor.fetchall()]
             n_tags = tag_papers(cursor, papers, phrase_to_id, max_ngram)
             conn.commit()
+            _mark_index_cache_dirty()
             result = {'papers': len(papers), 'tags': n_tags,
                       'from': from_date, 'to': to_date}
             if _wants_json_response():
@@ -720,6 +779,9 @@ def fetch():
                     days = int(request.form.get('days', 1))
                     from fetch_arxiv import fetch_recent_papers
                     fetch_recent_papers(days)
+            rebuild_index_cache = current_app.extensions.get('rebuild_index_cache')
+            if rebuild_index_cache:
+                rebuild_index_cache()
             result = {'log': buf.getvalue(), 'ok': True}
             if _wants_json_response():
                 return jsonify(result)
@@ -992,6 +1054,7 @@ def approve_doi(cid):
     """, (cid,))
     _mark_other_doi_candidates_rejected(cursor, cand['paper_id'], keep_doi=cand['doi'])
     conn.commit()
+    _mark_index_cache_dirty()
     counts = _doi_counts(cursor)
     cursor.close()
     return jsonify({'ok': True, 'doi': cand['doi'], 'counts': counts})
@@ -1029,6 +1092,7 @@ def run_doi_lookup():
         argv += ['--to-date', to_date or '2023-12-31']
         with contextlib.redirect_stdout(buf):
             doi_main(argv)
+        _mark_index_cache_dirty()
         return jsonify({'ok': True, 'log': buf.getvalue()})
     except Exception as e:
         logger.exception("DOI lookup failed")
@@ -1073,6 +1137,7 @@ def manual_doi(paper_id):
     """, (paper_id, doi))
     _mark_other_doi_candidates_rejected(cursor, paper_id, keep_doi=doi)
     conn.commit()
+    _mark_index_cache_dirty()
     cursor.close()
     return jsonify({
         'ok': True,
@@ -1149,6 +1214,7 @@ def set_publication(paper_id):
             _mark_other_doi_candidates_rejected(cursor, paper_id)
 
     conn.commit()
+    _mark_index_cache_dirty()
     cursor.close()
     return jsonify({
         'ok': True,

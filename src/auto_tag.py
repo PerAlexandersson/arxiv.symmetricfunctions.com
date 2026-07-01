@@ -21,6 +21,18 @@ from config import DB_CONFIG
 
 # Reuse tokenization from extract_keywords
 from extract_keywords import tokenize
+from site_stats import mark_index_cache_dirty
+
+
+def _mark_index_cache_dirty_after_tagging(count):
+    """Best-effort cache invalidation for command-line retagging."""
+    if count <= 0:
+        return
+    try:
+        mark_index_cache_dirty()
+        print("Homepage cache rebuild scheduled.")
+    except Exception as e:
+        print(f"Warning: could not schedule cache rebuild: {e}", file=sys.stderr)
 
 
 def load_keywords(cursor):
@@ -160,6 +172,7 @@ def main():
 
     cursor.close()
     conn.close()
+    _mark_index_cache_dirty_after_tagging(total)
     print(f"Done. {total_tags:,} keyword tags applied to {total:,} papers.")
 
 

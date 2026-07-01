@@ -28,11 +28,9 @@
     </div>
     {% endif %}
 
-    {% if paper.editor_note %}
-    <div class="paper-meta">
-        <strong>Note:</strong> {{ paper.editor_note }}
+    <div class="paper-meta" id="editor-note-meta"{% if not paper.editor_note %} style="display:none;"{% endif %}>
+        <strong>Note:</strong> <span id="editor-note-text">{{ paper.editor_note or '' }}</span>
     </div>
-    {% endif %}
 
     {% if paper.journal_ref %}
     <div class="paper-meta">
@@ -40,22 +38,20 @@
     </div>
     {% endif %}
 
-    {% if paper.doi %}
-    <div class="paper-meta">
-        <strong>DOI:</strong> <a href="https://doi.org/{{ paper.doi }}" target="_blank" rel="noopener noreferrer">{{ paper.doi }}</a>
+    <div class="paper-meta" id="publication-meta"{% if not (paper.doi or paper.publication_url or paper.publication_status == 'arxiv_only') %} style="display:none;"{% endif %}>
+        <strong id="publication-label">{% if paper.doi %}DOI:{% else %}Publication:{% endif %}</strong>
+        <span id="publication-display">
+        {% if paper.doi %}
+            <a href="https://doi.org/{{ paper.doi }}" target="_blank" rel="noopener noreferrer">{{ paper.doi }}</a>
+        {% elif paper.publication_url %}
+            <a href="{{ paper.publication_url }}" target="_blank" rel="noopener noreferrer">
+                {{ paper.publication_venue_key | publication_venue_label or 'View publication' }}
+            </a>
+        {% elif paper.publication_status == 'arxiv_only' %}
+            arXiv only
+        {% endif %}
+        </span>
     </div>
-    {% elif paper.publication_url %}
-    <div class="paper-meta">
-        <strong>Publication:</strong>
-        <a href="{{ paper.publication_url }}" target="_blank" rel="noopener noreferrer">
-            {{ paper.publication_venue_key | publication_venue_label or 'View publication' }}
-        </a>
-    </div>
-    {% elif paper.publication_status == 'arxiv_only' %}
-    <div class="paper-meta">
-        <strong>Publication:</strong> arXiv only
-    </div>
-    {% endif %}
 
     {% if is_admin %}
     <div class="paper-meta" id="publication-admin" style="margin-top:0.3rem;">
@@ -72,13 +68,12 @@
                style="padding:0.2rem 0.5rem; font-size:0.88rem; border:1px solid var(--c-border); border-radius:3px; width:min(30rem, 100%);">
         <button type="submit" id="publication-save-btn" style="padding:0.2rem 0.6rem; font-size:0.85rem; cursor:pointer;
                border:1px solid var(--c-border); border-radius:3px; background:var(--c-bg-surface);">Save publication</button>
-        {% if not paper.doi %}
         <button type="button" id="skip-doi-btn" onclick="toggleSkipDoi({{ paper.id }})"
                 class="skip-doi-btn{% if paper.doi_status == 'skipped' %} skip-doi-active{% endif %}"
-                title="{{ 'Paper marked as unlikely to get a DOI — click to undo' if paper.doi_status == 'skipped' else 'Mark as unlikely to ever get a DOI (skips future lookups)' }}">
+                title="{{ 'Paper marked as unlikely to get a DOI — click to undo' if paper.doi_status == 'skipped' else 'Mark as unlikely to ever get a DOI (skips future lookups)' }}"
+                style="{% if paper.doi %}display:none;{% endif %}">
           {% if paper.doi_status == 'skipped' %}&#x2717; No DOI{% else %}No DOI{% endif %}
         </button>
-        {% endif %}
         <span id="publication-status" style="font-size:0.82rem;"></span>
       </form>
       <form onsubmit="return setEditorNote(event)" style="display:flex; align-items:flex-start; gap:0.4rem; margin-top:0.5rem;">
@@ -130,8 +125,8 @@
 
     <h3 style="margin-top: 2rem; margin-bottom: 1rem;">BibTeX</h3>
 
-    {% if paper.doi or paper.publication_url %}
-    <div id="tabs" style="border-bottom: 2px solid var(--c-border); margin-bottom: 1rem;">
+    {% set has_published_bibtex = paper.doi or paper.publication_url %}
+    <div id="tabs" style="border-bottom: 2px solid var(--c-border); margin-bottom: 1rem;{% if not has_published_bibtex %} display:none;{% endif %}">
         <button class="tab-button active" onclick="showTab('arxiv-tab')" id="arxiv-tab-btn"
                 style="padding: 0.5rem 1rem; margin-right: 0.5rem; background: none; border: none; border-bottom: 3px solid var(--c-link); cursor: pointer; font-weight: 600; color: var(--c-link);">
             arXiv BibTeX
@@ -151,10 +146,6 @@
         <div class="bibtex" id="published-bibtex">Loading...</div>
         <button class="copy-btn" onclick="copyBibtexContent('published-bibtex')">Copy to Clipboard</button>
     </div>
-    {% else %}
-    <div class="bibtex" id="arxiv-bibtex">Loading...</div>
-    <button class="copy-btn" onclick="copyBibtexContent('arxiv-bibtex')">Copy to Clipboard</button>
-    {% endif %}
 </div>
 {% endblock %}
 
@@ -183,6 +174,80 @@
 {% block extra_js %}
 <script>
 {% if is_admin %}
+const PAPER_ARXIV_ID = {{ paper.arxiv_id | tojson }};
+
+function setPublishedBibtexAvailable(available, endpoint) {
+  const tabs = document.getElementById('tabs');
+  if (!tabs) return;
+  if (available) {
+    tabs.style.display = '';
+    if (endpoint) fetchBibtex(PAPER_ARXIV_ID, 'published-bibtex', endpoint);
+  } else {
+    tabs.style.display = 'none';
+    showTab('arxiv-tab');
+    const published = document.getElementById('published-bibtex');
+    if (published) published.textContent = '';
+  }
+}
+
+function updateSkipDoiButton(data) {
+  const btn = document.getElementById('skip-doi-btn');
+  if (!btn) return;
+  if (data.doi) {
+    btn.style.display = 'none';
+    return;
+  }
+  btn.style.display = '';
+  const skipped = ['known_no_doi', 'arxiv_only'].includes(data.publication_status);
+  btn.classList.toggle('skip-doi-active', skipped);
+  if (skipped) {
+    btn.innerHTML = '&#x2717; No DOI';
+    btn.title = 'Paper marked as unlikely to get a DOI \u2014 click to undo';
+  } else {
+    btn.textContent = 'No DOI';
+    btn.title = 'Mark as unlikely to ever get a DOI (skips future lookups)';
+  }
+}
+
+function updatePublicationDisplay(data) {
+  const meta = document.getElementById('publication-meta');
+  const label = document.getElementById('publication-label');
+  const display = document.getElementById('publication-display');
+  if (!meta || !label || !display) return;
+
+  display.textContent = '';
+  if (data.doi) {
+    label.textContent = 'DOI:';
+    const link = document.createElement('a');
+    link.href = 'https://doi.org/' + data.doi;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = data.doi;
+    display.appendChild(link);
+    meta.style.display = '';
+    setPublishedBibtexAvailable(true, '/api/doi-bibtex/');
+  } else if (data.publication_url) {
+    label.textContent = 'Publication:';
+    const link = document.createElement('a');
+    link.href = data.publication_url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = data.publication_venue_label || 'View publication';
+    display.appendChild(link);
+    meta.style.display = '';
+    setPublishedBibtexAvailable(true, '/api/publication-bibtex/');
+  } else if (data.publication_status === 'arxiv_only') {
+    label.textContent = 'Publication:';
+    display.textContent = 'arXiv only';
+    meta.style.display = '';
+    setPublishedBibtexAvailable(false);
+  } else {
+    meta.style.display = 'none';
+    setPublishedBibtexAvailable(false);
+  }
+  updateSkipDoiButton(data);
+}
+
 async function setPublication(e) {
   e.preventDefault();
   const mode = document.getElementById('publication-mode').value;
@@ -202,7 +267,8 @@ async function setPublication(e) {
       status.textContent = '\u2713 saved';
       status.style.color = 'green';
       document.getElementById('publication-value').value = data.doi || data.publication_url || '';
-      setTimeout(() => window.location.reload(), 500);
+      updatePublicationDisplay(data);
+      saveBtn.disabled = false;
     } else {
       status.textContent = data.error || 'Error';
       status.style.color = 'red';
@@ -232,7 +298,12 @@ async function setEditorNote(e) {
     if (data.ok) {
       status.textContent = '\u2713 saved';
       status.style.color = 'green';
-      setTimeout(() => window.location.reload(), 500);
+      const note = data.editor_note || '';
+      const noteMeta = document.getElementById('editor-note-meta');
+      const noteText = document.getElementById('editor-note-text');
+      if (noteText) noteText.textContent = note;
+      if (noteMeta) noteMeta.style.display = note ? '' : 'none';
+      saveBtn.disabled = false;
     } else {
       status.textContent = data.error || 'Error';
       status.style.color = 'red';
@@ -281,9 +352,9 @@ async function refetchPaper(arxivId) {
   try {
     const data = await csrfJsonFetch('/admin/paper/' + arxivId + '/refetch', {});
     if (data.ok) {
-      status.textContent = 'Done — reloading…';
+      status.textContent = 'Done. Reload to view latest metadata.';
       status.style.color = 'green';
-      setTimeout(() => window.location.reload(), 500);
+      btn.disabled = false;
     } else {
       status.textContent = 'Error: ' + (data.error || 'unknown');
       status.style.color = 'red';

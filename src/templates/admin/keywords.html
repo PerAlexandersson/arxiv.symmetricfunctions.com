@@ -425,6 +425,21 @@ function aliasKeydown(e, kid) {
   if (e.key === 'Escape') { hideAliasInput(kid); }
 }
 
+function makeAliasChip(kid, aliasId, aliasText) {
+  const chip = document.createElement('span');
+  chip.className = 'alias-chip';
+  chip.id = 'alias-chip-' + aliasId;
+  const label = document.createElement('span');
+  label.textContent = aliasText;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.title = 'Remove';
+  button.textContent = '×';
+  button.addEventListener('click', () => deleteAlias(kid, aliasId));
+  chip.append(label, button);
+  return chip;
+}
+
 async function addAlias(kid) {
   const inp      = document.getElementById('alias-input-' + kid);
   const alias    = inp.value.trim().toLowerCase();
@@ -451,10 +466,7 @@ async function addAlias(kid) {
     }
     const list = document.getElementById('aliases-' + kid);
     const btn  = document.getElementById('alias-btn-' + kid);
-    const chip = document.createElement('span');
-    chip.className = 'alias-chip'; chip.id = 'alias-chip-' + data.id;
-    chip.innerHTML = `<span>${data.alias}</span>`
-      + `<button type="button" onclick="deleteAlias(${kid},${data.id})" title="Remove">×</button>`;
+    const chip = makeAliasChip(kid, data.id, data.alias);
     list.insertBefore(chip, btn);
     hideAliasInput(kid);
   } catch { alert('Error adding alias.'); }

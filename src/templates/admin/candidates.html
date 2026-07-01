@@ -30,6 +30,30 @@ table.candidates td {
   vertical-align: middle;
 }
 table.candidates tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
+table.candidates tr.candidate-row--processed td {
+  transition: background-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+table.candidates tr.candidate-row--useful td {
+  background: #eef8ef;
+  box-shadow: inset 3px 0 0 #4f9d61;
+}
+table.candidates tr.candidate-row--math td {
+  background: #eef6ff;
+  box-shadow: inset 3px 0 0 #4b86c5;
+}
+table.candidates tr.candidate-row--ignore td {
+  background: #fff1f1;
+  box-shadow: inset 3px 0 0 #c86767;
+}
+table.candidates tr.candidate-row--alias td {
+  background: #f7effd;
+  box-shadow: inset 3px 0 0 #9b65c9;
+}
+table.candidates tr.candidate-row--saving td { opacity: 0.55; }
+table.candidates tr.candidate-row--error td {
+  box-shadow: inset 3px 0 0 #b00020;
+}
+table.candidates tr.candidate-row--processed:hover td { filter: brightness(0.985); }
 
 /* Phrase cell: looks like plain text, becomes an input on focus */
 .phrase-edit {
@@ -67,6 +91,10 @@ table.candidates tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
 .btn-undo    { background: none; color: var(--c-muted,#888); border-color: var(--c-border,#ccc); font-size: 0.75rem; }
 .btn-edit    { background: none; color: var(--c-link,#06c); border-color: var(--c-border,#ccc); font-size: 0.8rem; }
 .action-btns button:hover { filter: brightness(0.93); }
+.candidate-status-note {
+  color: var(--c-muted,#666);
+  font-size: 0.78rem;
+}
 
 .pagination { margin-top: 1.2rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 .pagination a, .pagination span {
@@ -210,9 +238,9 @@ table.candidates tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
 {# ── Stats ── #}
 <p class="stats">
   Showing <strong>{{ total }}</strong> {{ show }} candidates
-  &nbsp;·&nbsp; <span style="color:#1a6630">{{ useful_count }} useful</span>
-  &nbsp;·&nbsp; <span style="color:#004085">{{ math_count }} math</span>
-  &nbsp;·&nbsp; <span style="color:#721c24">{{ ignored_count }} ignored</span>
+  &nbsp;·&nbsp; <span style="color:#1a6630"><span id="useful-count">{{ useful_count }}</span> useful</span>
+  &nbsp;·&nbsp; <span style="color:#004085"><span id="math-count">{{ math_count }}</span> math</span>
+  &nbsp;·&nbsp; <span style="color:#721c24"><span id="ignored-count">{{ ignored_count }}</span> ignored</span>
   &nbsp;·&nbsp; page {{ page }}/{{ total_pages }}
 </p>
 
@@ -242,13 +270,14 @@ table.candidates tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
   </thead>
   <tbody>
   {% for c in candidates %}
-  <tr data-orig="{{ c.phrase }}">
+  <tr class="candidate-row{% if c.status != 'unreviewed' %} candidate-row--processed candidate-row--{{ c.status }}{% endif %}"
+      data-orig="{{ c.phrase }}" data-status="{{ c.status }}">
     <td>
       <input class="phrase-edit" type="text" value="{{ c.phrase }}" title="Click to edit before adding">
     </td>
     <td style="text-align:right">{{ c.paper_count }}</td>
     <td style="text-align:right">{{ c.word_count }}</td>
-    <td>
+    <td class="status-cell">
       {% if c.status == 'useful' %}
         <span class="badge badge-useful">useful</span>
       {% elif c.status == 'alias' %}
@@ -259,7 +288,7 @@ table.candidates tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
         <span class="badge badge-ignore">ignore</span>
       {% endif %}
     </td>
-    <td>
+    <td class="actions-cell">
       <div class="action-btns">
         {% if c.status in ('useful', 'alias') %}
           {% if c.status == 'useful' %}
@@ -345,6 +374,128 @@ function openHelp()  { document.getElementById('help-overlay').style.display='bl
 function closeHelp() { document.getElementById('help-overlay').style.display='none';  document.getElementById('help-popup').style.display='none'; }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHelp(); });
 
+const markCandidateUrl = {{ url_for('admin.mark_candidate')|tojson }};
+
+function htmlEscape(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[ch]));
+}
+
+function hiddenInput(name, value) {
+  return `<input type="hidden" name="${htmlEscape(name)}" value="${htmlEscape(value)}">`;
+}
+
+function statusBadgeHtml(status, aliasOf) {
+  if (status === 'useful') return '<span class="badge badge-useful">useful</span>';
+  if (status === 'math') return '<span class="badge badge-math">math</span>';
+  if (status === 'ignore') return '<span class="badge badge-ignore">ignore</span>';
+  if (status === 'alias') {
+    const alias = htmlEscape(aliasOf || '');
+    return `<span class="badge badge-alias" title="alias of: ${alias}">alias → ${alias}</span>`;
+  }
+  return '';
+}
+
+function markFormHtml(fields, buttonHtml, extraClass = '', style = 'display:contents') {
+  const inputs = Object.entries(fields).map(([name, value]) => hiddenInput(name, value)).join('');
+  return `<form method="post" action="${markCandidateUrl}" class="${extraClass}" style="${style}">
+    ${inputs}${buttonHtml}
+  </form>`;
+}
+
+function unreviewedActionsHtml(row) {
+  const phrase = row.dataset.orig || '';
+  const edited = row.querySelector('.phrase-edit')?.value.trim() || phrase;
+  return `
+    ${markFormHtml(
+      {phrase, keyword_phrase: edited, status: 'useful'},
+      '<button type="submit" class="btn-useful">Useful</button>',
+      'useful-form'
+    )}
+    <button type="button" class="btn-alias btn-edit" onclick="showAliasEdit(this)"
+            style="background:#e8d5f5; color:#5a1a8a; border-color:#c9aaec;">Alias →</button>
+    ${markFormHtml(
+      {phrase, status: 'alias', keyword_phrase: edited},
+      `<input type="text" name="alias_of" placeholder="canonical keyword…" list="kw-list"
+              style="padding:0.2rem 0.4rem; font-size:0.85rem; font-family:monospace;
+                     border:1px solid var(--c-border,#ccc); border-radius:3px;
+                     background:var(--c-bg-surface,#fff); color:var(--c-text-main,#000); min-width:14em;">
+       <button type="submit" class="btn-useful" style="white-space:nowrap">Add ✓</button>
+       <button type="button" class="btn-undo" onclick="hideAliasEdit(this)">✕</button>`,
+      'alias-form',
+      'display:none; align-items:center; gap:0.3rem; flex-wrap:wrap;'
+    )}
+    ${markFormHtml(
+      {phrase, status: 'math'},
+      '<button type="submit" class="btn-math">Math</button>'
+    )}
+    ${markFormHtml(
+      {phrase, status: 'ignore'},
+      '<button type="submit" class="btn-ignore">Ignore</button>'
+    )}
+  `;
+}
+
+function processedActionsHtml(status, phrase) {
+  let html = '';
+  if (status === 'useful') {
+    html += `<a href="{{ url_for('admin.keywords') }}" class="btn-edit"
+               style="padding:0.2rem 0.55rem; font-size:0.8rem; border:1px solid var(--c-border,#ccc); border-radius:3px; text-decoration:none;">Edit ↗</a>`;
+  }
+  html += markFormHtml(
+    {phrase, status: 'unreviewed'},
+    '<button type="submit" class="btn-undo">✕ unmark</button>'
+  );
+  return html;
+}
+
+function updateCandidateCounts(data) {
+  const useful = document.getElementById('useful-count');
+  const math = document.getElementById('math-count');
+  const ignored = document.getElementById('ignored-count');
+  if (useful && data.useful_count !== undefined) useful.textContent = data.useful_count;
+  if (math && data.math_count !== undefined) math.textContent = data.math_count;
+  if (ignored && data.ignored_count !== undefined) ignored.textContent = data.ignored_count;
+}
+
+function updateCandidateRow(row, data) {
+  const status = data.status || 'unreviewed';
+  const effectivePhrase = data.keyword_phrase || data.phrase || row.dataset.orig || '';
+  const unmarkPhrase = (status === 'useful' || status === 'alias')
+    ? effectivePhrase
+    : (data.phrase || row.dataset.orig || effectivePhrase);
+
+  row.dataset.status = status;
+  row.dataset.currentPhrase = effectivePhrase;
+  row.classList.remove(
+    'candidate-row--processed',
+    'candidate-row--useful',
+    'candidate-row--math',
+    'candidate-row--ignore',
+    'candidate-row--alias',
+    'candidate-row--error'
+  );
+  if (status !== 'unreviewed') {
+    row.classList.add('candidate-row--processed', `candidate-row--${status}`);
+  }
+
+  const phraseInput = row.querySelector('.phrase-edit');
+  if (phraseInput && (status === 'useful' || status === 'alias')) {
+    phraseInput.value = effectivePhrase;
+  }
+
+  const statusCell = row.querySelector('.status-cell');
+  if (statusCell) statusCell.innerHTML = statusBadgeHtml(status, data.alias_of);
+
+  const actions = row.querySelector('.actions-cell .action-btns');
+  if (actions) {
+    actions.innerHTML = status === 'unreviewed'
+      ? unreviewedActionsHtml(row)
+      : processedActionsHtml(status, unmarkPhrase);
+  }
+}
+
 // Keep keyword_phrase in sync with the editable phrase cell
 document.querySelectorAll('tr[data-orig]').forEach(row => {
   const phraseInput = row.querySelector('.phrase-edit');
@@ -374,5 +525,42 @@ function hideAliasEdit(btn) {
   cell.querySelector('.alias-form').style.display = 'none';
   cell.querySelector('.btn-alias').style.display = '';
 }
+
+document.querySelector('table.candidates')?.addEventListener('submit', async event => {
+  const form = event.target;
+  if (!form.action.endsWith(markCandidateUrl)) return;
+
+  event.preventDefault();
+  const row = form.closest('tr[data-orig]');
+  if (!row) return;
+
+  const fd = new FormData(form);
+  const phraseInput = row.querySelector('.phrase-edit');
+  if (phraseInput && (form.classList.contains('useful-form') || form.classList.contains('alias-form'))) {
+    fd.set('keyword_phrase', phraseInput.value.trim());
+  }
+  if (form.classList.contains('alias-form') && !(fd.get('alias_of') || '').trim()) {
+    form.querySelector('input[name=alias_of]')?.focus();
+    return;
+  }
+
+  row.classList.add('candidate-row--saving');
+  row.querySelectorAll('button').forEach(btn => { btn.disabled = true; });
+
+  try {
+    const data = await csrfJsonFetch(form.action, fd);
+    if (!data.ok) throw new Error(data.error || 'Request failed');
+    updateCandidateCounts(data);
+    updateCandidateRow(row, data);
+  } catch (err) {
+    if (err.message !== 'AUTH_REQUIRED') {
+      row.classList.add('candidate-row--error');
+      alert(err.message || 'Could not update candidate.');
+    }
+  } finally {
+    row.classList.remove('candidate-row--saving');
+    row.querySelectorAll('button').forEach(btn => { btn.disabled = false; });
+  }
+});
 </script>
 {% endblock %}

@@ -27,10 +27,22 @@ from title_matching import (
     normalize_title as _normalize,
     score_title_author_match,
 )
+from site_stats import mark_index_cache_dirty
 
 CROSSREF_API = "https://api.crossref.org/works"
 USER_AGENT = "arxiv-symmetricfunctions/1.0 (mailto:per.alexandersson@math.su.se)"
 REQUEST_DELAY = 0.5  # seconds between Crossref requests
+
+
+def _mark_index_cache_dirty_after_doi_changes(count):
+    """Best-effort cache invalidation after visible DOI metadata changes."""
+    if count <= 0:
+        return
+    try:
+        mark_index_cache_dirty()
+        print("Homepage cache rebuild scheduled.")
+    except Exception as e:
+        print(f"Warning: could not schedule cache rebuild: {e}", file=sys.stderr)
 
 
 def _crossref_date_parts(cr_item, include_created=True):
@@ -318,6 +330,9 @@ def main(argv=None):
 
     cursor.close()
     conn.close()
+
+    if not args.dry_run:
+        _mark_index_cache_dirty_after_doi_changes(stats['auto_approved'])
 
     print(f"\nDone. Queried {stats['queried']}, found {stats['found']} "
           f"({stats['auto_approved']} auto-approved), "

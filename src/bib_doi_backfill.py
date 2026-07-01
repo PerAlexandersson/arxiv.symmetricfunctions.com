@@ -19,6 +19,18 @@ import pymysql
 from config import DB_CONFIG
 from doi_lookup import (query_crossref, score_match, _last_name,
                         get_paper_authors, REQUEST_DELAY)
+from site_stats import mark_index_cache_dirty
+
+
+def _mark_index_cache_dirty_after_doi_changes(count):
+    """Best-effort cache invalidation after visible DOI metadata changes."""
+    if count <= 0:
+        return
+    try:
+        mark_index_cache_dirty()
+        print("Homepage cache rebuild scheduled.")
+    except Exception as e:
+        print(f"Warning: could not schedule cache rebuild: {e}", file=sys.stderr)
 
 
 def extract_arxiv_ids(bib_path):
@@ -198,6 +210,9 @@ def main():
         conn.commit()
     cursor.close()
     conn.close()
+
+    if not args.dry_run:
+        _mark_index_cache_dirty_after_doi_changes(doi_from_bib + doi_from_crossref)
 
     print(f"\n{'=' * 50}")
     print(f"Total arXiv IDs:       {len(arxiv_ids)}")

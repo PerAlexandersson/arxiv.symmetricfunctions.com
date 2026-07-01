@@ -235,7 +235,11 @@ async function scApply(kid, anchor, btn) {
     const data = await csrfJsonFetch(`/admin/keywords/${kid}/inline`, fd);
     if (data.ok) {
       const container = document.getElementById('sug-' + kid);
-      container.innerHTML = '<span class="sc-sug-applied">\u2713 ' + anchor + '</span>';
+      container.textContent = '';
+      const applied = document.createElement('span');
+      applied.className = 'sc-sug-applied';
+      applied.textContent = '\u2713 ' + anchor;
+      container.appendChild(applied);
     } else {
       btn.textContent = 'Error';
     }
