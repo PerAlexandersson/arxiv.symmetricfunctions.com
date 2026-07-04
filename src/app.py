@@ -6,7 +6,7 @@ Main web interface for browsing arXiv papers.
 """
 
 from flask import Flask, render_template, request, jsonify, abort, redirect, url_for, session
-from urllib.parse import unquote, urlparse, urlencode
+from urllib.parse import unquote, urlencode
 import io
 import contextlib
 import calendar
@@ -26,7 +26,16 @@ from site_stats import (
     index_cache_rebuild_due,
     refresh_site_stats,
 )
-from utils import strip_accents, slugify, protect_capitals_for_bibtex, generate_bibtex_key, arxiv2bib
+from utils import (
+    strip_accents,
+    slugify,
+    protect_capitals_for_bibtex,
+    generate_bibtex_key,
+    arxiv2bib,
+    bibtex_keys_for_authors_year,
+    extract_arxiv_id,
+    parse_bibtex_search_key,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -240,51 +249,9 @@ def _sf_url(value):
 app.jinja_env.filters['sf_url'] = _sf_url
 
 
-_ARXIV_ID_PATTERNS = (
-    re.compile(r'^\d{4}\.\d{4,5}(?:v\d+)?$', re.IGNORECASE),
-    re.compile(r'^[a-z.-]+/\d{7}(?:v\d+)?$', re.IGNORECASE),
-)
-
-
 def _extract_arxiv_id(value):
-    """Return a normalized arXiv ID from a raw ID or an arXiv URL."""
-    if not value:
-        return None
-
-    candidate = value.strip()
-    if not candidate:
-        return None
-
-    if candidate.lower().startswith('arxiv:'):
-        candidate = candidate.split(':', 1)[1].strip()
-    elif candidate.lower().startswith(('arxiv.org/', 'www.arxiv.org/', 'export.arxiv.org/')):
-        candidate = 'https://' + candidate
-    elif candidate.startswith('//'):
-        candidate = 'https:' + candidate
-
-    parsed = urlparse(candidate)
-    hostname = (parsed.netloc or '').lower()
-
-    if hostname.endswith('arxiv.org'):
-        path = parsed.path.lstrip('/')
-        if path.startswith('abs/'):
-            candidate = path[4:]
-        elif path.startswith('pdf/'):
-            candidate = path[4:]
-        else:
-            return None
-    elif parsed.scheme and parsed.netloc:
-        return None
-
-    candidate = candidate.strip().strip('/')
-    if candidate.lower().endswith('.pdf'):
-        candidate = candidate[:-4]
-
-    for pattern in _ARXIV_ID_PATTERNS:
-        if pattern.fullmatch(candidate):
-            return candidate
-
-    return None
+    """Compatibility wrapper for older app-local call sites."""
+    return extract_arxiv_id(value)
 
 
 def _resolve_paper_arxiv_id(cursor, value):
@@ -1089,6 +1056,48 @@ def _author_search_condition(author_terms):
     """, params
 
 
+def _latest_search_date(cursor):
+    cursor.execute("SELECT latest_date FROM site_stats WHERE id = 1")
+    row = cursor.fetchone()
+    return row['latest_date'] if row else None
+
+
+def _papers_matching_bibtex_key(cursor, query):
+    """Return papers whose generated arXiv or publication BibTeX key matches."""
+    parsed_key = parse_bibtex_search_key(query)
+    if not parsed_key:
+        return None
+
+    year = parsed_key['year']
+    cursor.execute("""
+        SELECT p.id, p.arxiv_id, p.title, p.abstract,
+               p.published_date, p.updated_date, p.journal_ref, p.doi,
+               p.publication_url, p.publication_venue_key, p.publication_status,
+               p.comment, p.primary_category,
+               auth.authors_str
+        FROM papers p
+        LEFT JOIN (
+            SELECT pa.paper_id,
+                   GROUP_CONCAT(a.name ORDER BY pa.author_order SEPARATOR '\t') AS authors_str
+            FROM paper_authors pa
+            JOIN authors a ON pa.author_id = a.id
+            GROUP BY pa.paper_id
+        ) auth ON p.id = auth.paper_id
+        WHERE p.published_date >= %s
+          AND p.published_date < %s
+        ORDER BY p.published_date DESC, p.id DESC
+    """, (date(year, 1, 1), date(year + 1, 1, 1)))
+
+    matches = []
+    for paper in cursor.fetchall():
+        authors = [a for a in (paper.pop('authors_str') or '').split('\t') if a]
+        keys = bibtex_keys_for_authors_year(authors, year)
+        if parsed_key['key_lower'] in keys:
+            paper['authors'] = authors
+            matches.append(paper)
+    return matches
+
+
 def _cors_json(payload, status=200, max_age=3600):
     resp = jsonify(payload)
     resp.status_code = status
@@ -1165,7 +1174,7 @@ def oeis_search_proxy():
 
 @app.route('/search')
 def search():
-    """Search papers by title, abstract, author, or direct arXiv identifier."""
+    """Search papers by title, abstract, author, BibTeX key, or arXiv ID."""
     query = request.args.get('q', '').strip()[:500]  # cap at 500 chars
     sort  = request.args.get('sort', 'relevance')  # 'relevance' or 'date'
     if sort not in ('relevance', 'date'):
@@ -1206,10 +1215,25 @@ def search():
         cursor.close()
         return redirect(url_for('keyword_papers', phrase=keyword['phrase']))
 
-    # 4. Full-text / LIKE search on titles and abstracts
-    cursor.execute("SELECT latest_date FROM site_stats WHERE id = 1")
-    row = cursor.fetchone()
-    latest_date = row['latest_date'] if row else None
+    # 4. Exact generated BibTeX key match
+    bibtex_matches = _papers_matching_bibtex_key(cursor, query)
+    if bibtex_matches:
+        total = len(bibtex_matches)
+        papers = bibtex_matches[offset:offset + per_page]
+        attach_keywords(cursor, papers)
+        latest_date = _latest_search_date(cursor)
+        cursor.close()
+        return render_template('search.html',
+                               papers=papers,
+                               query=query,
+                               sort=sort,
+                               page=page,
+                               total_pages=(total + per_page - 1) // per_page,
+                               total=total,
+                               latest_date=latest_date)
+
+    # 5. Full-text / LIKE search on titles and abstracts
+    latest_date = _latest_search_date(cursor)
 
     kw_subquery = """
         (SELECT pk.paper_id, COALESCE(SUM(k.score), 0) AS kw_score

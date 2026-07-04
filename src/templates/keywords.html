@@ -1,41 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Keywords — arXiv Combinatorics{% endblock %}
 
-{% block extra_css %}
-<style>
-.kw-cloud {
-  line-height: 2.4;
-  word-spacing: 0.1rem;
-  margin-top: 1rem;
-}
-.sc-panel {
-  margin-top: 2rem; padding: 1rem; border: 1px solid var(--c-border, #ccc);
-  border-radius: 6px; background: var(--c-bg-alt, #f9f9f9);
-}
-.sc-panel h3 { margin: 0 0 0.75rem; font-size: 1rem; }
-.sc-panel-item {
-  display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem;
-  padding: 0.3rem 0; border-bottom: 1px solid var(--c-border, #eee);
-}
-.sc-panel-item:last-child { border-bottom: none; }
-.sc-panel-phrase { font-weight: 600; min-width: 10rem; }
-.sc-sug {
-  display: flex; flex-wrap: wrap; gap: 0.3rem;
-}
-.sc-sug-btn {
-  display: inline-flex; align-items: center; gap: 0.3rem;
-  padding: 0.15rem 0.5rem; font-size: 0.78rem; cursor: pointer;
-  background: var(--c-bg-surface, #fff); border: 1px solid var(--c-border, #ccc);
-  border-radius: 3px; color: var(--c-text-sub, #555); font-family: inherit;
-}
-.sc-sug-btn:hover { border-color: var(--c-accent, #2a6); color: var(--c-accent, #2a6); }
-.sc-sug-btn .sc-sug-match { font-size: 0.7rem; color: var(--c-text-muted, #999); }
-.sc-sug-applied { font-size: 0.78rem; color: #4a4; font-weight: 600; }
-</style>
-{% endblock %}
-
 {% block content %}
-<h2 style="margin-top:0">Keywords <span style="font-weight:300; font-size:0.8em">({{ keywords|length }})</span></h2>
+<h2 class="page-title">Keywords <span class="page-title__meta">({{ keywords|length }})</span></h2>
 
 {% if keywords %}
 <div class="kw-cloud">
@@ -58,7 +25,7 @@
   {% endfor %}
 </div>
 {% else %}
-<p style="color:var(--c-text-muted)">No keywords yet.</p>
+<p class="empty-note">No keywords yet.</p>
 {% endif %}
 
 {% if is_admin and symcat_suggestions %}
@@ -69,7 +36,7 @@
     <span class="sc-panel-phrase">{{ item.phrase }}</span>
     <div class="sc-sug" id="sug-{{ item.id }}">
       {% for key, label, match in item.suggestions %}
-      <button class="sc-sug-btn" onclick="scApply({{ item.id }}, '{{ key }}', this)"
+      <button class="sc-sug-btn" data-sc-apply data-kid="{{ item.id }}" data-anchor="{{ key }}"
               title="{{ label.title }} ({{ label.page }}.htm)">
         {{ key }} <span class="sc-sug-match">{{ match }}</span>
       </button>
@@ -82,28 +49,7 @@
 {% endblock %}
 
 {% block extra_js %}
-{% if is_admin and symcat_suggestions %}
-<script>
-async function scApply(kid, anchor, btn) {
-  const fd = new FormData();
-  fd.append('field', 'url');
-  fd.append('value', anchor);
-  try {
-    const data = await csrfJsonFetch(`/admin/keywords/${kid}/inline`, fd);
-    if (data.ok) {
-      const container = document.getElementById('sug-' + kid);
-      container.textContent = '';
-      const applied = document.createElement('span');
-      applied.className = 'sc-sug-applied';
-      applied.textContent = '\u2713 ' + anchor;
-      container.appendChild(applied);
-    } else {
-      btn.textContent = 'Error';
-    }
-  } catch(e) {
-    if (e.message !== 'AUTH_REQUIRED') btn.textContent = 'Failed';
-  }
-}
-</script>
+{% if is_admin %}
+<script src="{{ url_for('static', filename='keywords-admin.js') }}?v=1"></script>
 {% endif %}
 {% endblock %}

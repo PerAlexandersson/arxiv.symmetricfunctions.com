@@ -4,14 +4,14 @@
 <h2>Admin Login</h2>
 {% with messages = get_flashed_messages() %}
   {% if messages %}
-    <p style="color: var(--c-error, #c00)">{{ messages[0] }}</p>
+    <p class="flash-error">{{ messages[0] }}</p>
   {% endif %}
 {% endwith %}
-<form method="post" style="max-width: 300px; margin-top: 1rem;">
+<form method="post" class="admin-form admin-login-form">
   <label>Password<br>
-    <input type="password" name="password" autofocus style="width: 100%; margin-top: 0.3rem; padding: 0.4rem;">
+    <input type="password" name="password" autofocus class="form-control admin-login-password">
   </label>
   <br><br>
-  <button type="submit">Log in</button>
+  <button type="submit" class="admin-primary-btn">Log in</button>
 </form>
 {% endblock %}

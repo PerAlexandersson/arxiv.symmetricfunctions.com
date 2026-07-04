@@ -22,7 +22,12 @@
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32.png') }}">
     <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='favicon-192.png') }}">
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='favicon-180.png') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=9">
+    <link rel="stylesheet" href="{{ url_for('static', filename='layout.css') }}?v=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='shared.css') }}?v=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='pages.css') }}?v=1">
+    {% if request.endpoint and request.endpoint.startswith('admin.') %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}?v=1">
+    {% endif %}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;700&display=swap" rel="stylesheet">
@@ -67,7 +72,7 @@
     </script>
 
     <!-- Utility functions -->
-    <script src="{{ url_for('static', filename='utils.js') }}?v=4"></script>
+    <script src="{{ url_for('static', filename='utils.js') }}?v=9"></script>
 
     {% block extra_css %}{% endblock %}
 </head>
@@ -108,7 +113,7 @@
                   <!-- User section: grayed out when not signed in -->
                   {% if current_user %}
                   {% if is_admin %}
-                  <a href="{{ url_for('admin.candidates') }}" class="nav-icon-btn" title="Admin" aria-label="Admin" style="color: #c2840a">
+                  <a href="{{ url_for('admin.candidates') }}" class="nav-icon-btn nav-icon-admin" title="Admin" aria-label="Admin">
                     <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z"/><path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z"/><path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z"/></svg>
                   </a>
                   {% endif %}
@@ -118,7 +123,7 @@
                   <a href="{{ url_for('lists.my_lists') }}" class="nav-icon-btn" title="My Lists" aria-label="My Lists">
                     <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z"/></svg>
                   </a>
-                  <button class="nav-icon-btn" id="dark-mode-toggle" onclick="toggleDarkMode()" aria-label="Toggle dark mode" title="Toggle dark mode">
+                  <button class="nav-icon-btn" id="dark-mode-toggle" data-action="toggle-dark-mode" aria-label="Toggle dark mode" title="Toggle dark mode">
                     <svg class="icon-moon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
                     <svg class="icon-sun"  viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"/></svg>
                   </button>
@@ -132,7 +137,7 @@
                   <span class="nav-icon-btn nav-icon-disabled" title="My Papers (sign in required)">
                     <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/></svg>
                   </span>
-                  <button class="nav-icon-btn" id="dark-mode-toggle" onclick="toggleDarkMode()" aria-label="Toggle dark mode" title="Toggle dark mode">
+                  <button class="nav-icon-btn" id="dark-mode-toggle" data-action="toggle-dark-mode" aria-label="Toggle dark mode" title="Toggle dark mode">
                     <svg class="icon-moon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
                     <svg class="icon-sun"  viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"/></svg>
                   </button>
@@ -144,7 +149,7 @@
             </p>
 
             <form action="/search" method="get" class="search-form" role="search" aria-label="Search papers">
-                <input type="text" id="search-input" name="q" placeholder="Search by title, author, abstract, or arXiv ID..." value="{{ request.args.get('q', '') }}" aria-label="Search by title, author, abstract, or arXiv ID">
+                <input type="text" id="search-input" name="q" placeholder="Search by title, author, BibTeX key, or arXiv URL..." value="{{ request.args.get('q', '') }}" aria-label="Search by title, author, BibTeX key, or arXiv URL">
                 <button type="submit">Search</button>
             </form>
         </div>
@@ -166,14 +171,14 @@
     </footer>
 
     <!-- BibTeX modal (shared across all pages) -->
-    <div id="bibtex-modal" class="bib-modal-backdrop" style="display:none" role="dialog" aria-modal="true" aria-labelledby="bib-modal-title">
+    <div id="bibtex-modal" class="bib-modal-backdrop" style="display:none" role="dialog" aria-modal="true" aria-labelledby="bib-modal-title" hidden>
       <div class="bib-modal-box">
         <div class="bib-modal-header">
           <span id="bib-modal-title" class="bib-modal-title">BibTeX</span>
-          <button class="bib-modal-close" onclick="closeBibtexModal()" aria-label="Close">&times;</button>
+          <button class="bib-modal-close" data-action="close-bibtex-modal" aria-label="Close">&times;</button>
         </div>
         <div class="bib-modal-actions">
-          <button class="btn-new-list" onclick="copyBibtexModal()">Copy all</button>
+          <button class="btn-new-list" data-action="copy-bibtex-modal">Copy all</button>
           <span id="bib-modal-status" class="bib-modal-status"></span>
         </div>
         <textarea id="bib-modal-text" class="bib-modal-textarea" readonly spellcheck="false"></textarea>

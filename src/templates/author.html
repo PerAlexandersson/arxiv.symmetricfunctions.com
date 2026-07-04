@@ -1,20 +1,15 @@
 {% extends "base.html" %}
-{% from '_macros.html' import render_paper, render_pagination with context %}
+{% from '_macros.html' import render_paper, render_pagination, watch_button with context %}
 
 {% block title %}{{ author.name }} - arXiv Combinatorics{% endblock %}
 
 {% block content %}
-<h2>Papers by {{ author.name }}</h2>
+<h2 class="page-title">Papers by {{ author.name }}</h2>
 
 <div class="stats">
     {{ total }} paper(s) by this author
-    · <a href="#" onclick="copyAuthorBibtex('{{ author.slug }}', '{{ author.name | e }}'); return false;">All BibTeX</a>
-    {% if current_user %}
-    · <button id="watch-btn" class="watch-btn {% if watching %}watching{% endif %}"
-              onclick="toggleWatch('author', {{ author.id }}, this)">
-        {% if watching %}Watching{% else %}Watch{% endif %}
-      </button>
-    {% endif %}
+    · <a href="#" data-action="copy-author-bibtex" data-author-slug="{{ author.slug }}" data-author-name="{{ author.name }}">All BibTeX</a>
+    {{ watch_button('author', author.id, watching) }}
 </div>
 
 {% if papers %}
@@ -25,38 +20,4 @@
 {% else %}
     <p>No papers found for this author.</p>
 {% endif %}
-{% endblock %}
-
-{% block extra_css %}
-<style>
-.watch-btn {
-  background: none; border: 1px solid var(--c-border); border-radius: 4px;
-  color: var(--c-text-sub); cursor: pointer; font-size: 0.85em;
-  padding: 2px 10px; vertical-align: middle;
-}
-.watch-btn:hover { color: var(--c-link); border-color: var(--c-link); }
-.watch-btn.watching { background: var(--c-link); color: #fff; border-color: var(--c-link); }
-</style>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-async function toggleWatch(type, id, btn) {
-  btn.disabled = true;
-  try {
-    const data = await csrfJsonFetch('/api/watch/' + type + '/' + id, {});
-    if (data.watching) {
-      btn.textContent = 'Watching';
-      btn.classList.add('watching');
-    } else {
-      btn.textContent = 'Watch';
-      btn.classList.remove('watching');
-    }
-  } catch (e) {
-    if (e.message !== 'AUTH_REQUIRED') console.error('toggleWatch failed', e);
-  } finally {
-    btn.disabled = false;
-  }
-}
-</script>
 {% endblock %}

@@ -27,7 +27,8 @@ import csv
 import hmac
 import re
 import functools
-from datetime import date as date_type
+from datetime import date as date_type, datetime
+from pathlib import Path
 from urllib.parse import urlparse, urljoin
 
 from flask import (Blueprint, render_template, request, redirect,
@@ -68,6 +69,69 @@ def _mark_index_cache_dirty():
         mark_index_cache_dirty()
     except Exception as e:
         logger.warning("Could not mark index cache dirty: %s", e)
+
+
+def _cron_log_path():
+    """Return the configured cron log path used by cron_update.sh."""
+    explicit = os.environ.get('ARXIV_CRON_LOG')
+    if explicit:
+        return Path(explicit).expanduser()
+    log_dir = os.environ.get('ARXIV_CRON_LOG_DIR')
+    base = Path(log_dir).expanduser() if log_dir else Path.home() / 'logs'
+    return base / 'arxiv-update.log'
+
+
+def _tail_text_file(path, max_lines=200, max_bytes=200_000):
+    """Return the last max_lines of a text file without reading huge logs."""
+    try:
+        with path.open('rb') as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            f.seek(max(0, size - max_bytes), os.SEEK_SET)
+            data = f.read().decode('utf-8', errors='replace')
+    except FileNotFoundError:
+        return ''
+    lines = data.splitlines()
+    return '\n'.join(lines[-max_lines:])
+
+
+def _cron_log_summary(log_text):
+    """Extract a compact run summary from cron_update.sh log lines."""
+    lines = log_text.splitlines()
+    last_start = None
+    last_start_idx = None
+    last_complete = None
+    last_complete_idx = None
+    last_skip = None
+    for idx, line in enumerate(lines):
+        if 'Starting scheduled arXiv update' in line:
+            last_start = line
+            last_start_idx = idx
+        elif 'Scheduled arXiv update complete' in line:
+            last_complete = line
+            last_complete_idx = idx
+        elif 'Previous update still running' in line:
+            last_skip = line
+
+    if not lines:
+        status = 'No log yet'
+    elif last_complete and (
+        last_start_idx is None or last_complete_idx >= last_start_idx
+    ):
+        status = 'Last run completed'
+    elif last_start:
+        status = 'Last run started; no completion line in tail'
+    elif last_skip:
+        status = 'Last recorded run skipped because another run was active'
+    else:
+        status = 'Log found'
+
+    return {
+        'status': status,
+        'last_start': last_start,
+        'last_complete': last_complete,
+        'last_skip': last_skip,
+    }
 
 # Simple module-level cache for the CSV
 _candidates_cache = None
@@ -791,6 +855,35 @@ def fetch():
                 return jsonify(result), 500
 
     return render_template('admin/fetch.html', today=today, result=result)
+
+
+@admin.route('/cron')
+@login_required
+def cron():
+    """Read-only status view for the scheduled fetch/DOI cron wrapper."""
+    max_lines = request.args.get('lines', 200, type=int)
+    max_lines = min(max(max_lines or 200, 20), 1000)
+    log_path = _cron_log_path()
+    log_text = _tail_text_file(log_path, max_lines=max_lines)
+    exists = log_path.exists()
+    stat = log_path.stat() if exists else None
+    summary = _cron_log_summary(log_text)
+    cron = {
+        'path': str(log_path),
+        'exists': exists,
+        'size': stat.st_size if stat else None,
+        'mtime': (
+            datetime.fromtimestamp(stat.st_mtime).isoformat(sep=' ', timespec='seconds')
+            if stat else None
+        ),
+        **summary,
+    }
+    return render_template(
+        'admin/cron.html',
+        cron=cron,
+        log_text=log_text,
+        max_lines=max_lines,
+    )
 
 
 @admin.route('/symcat')

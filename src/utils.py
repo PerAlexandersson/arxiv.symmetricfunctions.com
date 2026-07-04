@@ -2,6 +2,7 @@
 
 import re
 import unicodedata
+from urllib.parse import unquote, urlparse
 
 
 def strip_accents(text):
@@ -56,6 +57,99 @@ def generate_bibtex_key(authors, year, published=False):
             last_names.append(last_name)
         return f"{''.join(last_names)}{year}{suffix}"
     return f"arxiv{year}{suffix}"
+
+
+_ARXIV_ID_PATTERNS = (
+    re.compile(r'^\d{4}\.\d{4,5}(?:v\d+)?$', re.IGNORECASE),
+    re.compile(r'^[a-z.-]+/\d{7}(?:v\d+)?$', re.IGNORECASE),
+)
+_ARXIV_ID_SEARCH_RE = re.compile(
+    r'(?<![A-Za-z0-9./-])'
+    r'((?:\d{4}\.\d{4,5}|[a-z.-]+/\d{7})(?:v\d+)?)'
+    r'(?![A-Za-z0-9./-])',
+    re.IGNORECASE,
+)
+
+
+def extract_arxiv_id(value):
+    """Return a normalized arXiv ID from a raw ID, arXiv label, or arXiv URL."""
+    if not value:
+        return None
+
+    candidate = str(value).strip()
+    if not candidate:
+        return None
+
+    candidate = candidate.strip('<>()[]{}').strip('\'"')
+    candidate = candidate.rstrip('.,;')
+
+    if candidate.lower().startswith('arxiv:'):
+        candidate = candidate.split(':', 1)[1].strip()
+    elif candidate.lower().startswith(('arxiv.org/', 'www.arxiv.org/', 'export.arxiv.org/')):
+        candidate = 'https://' + candidate
+    elif candidate.startswith('//'):
+        candidate = 'https:' + candidate
+
+    parsed = urlparse(candidate)
+    hostname = (parsed.netloc or '').lower()
+
+    if hostname.endswith('arxiv.org'):
+        path = unquote(parsed.path).lstrip('/')
+        parts = path.split('/', 1)
+        if parts and parts[0] in {'abs', 'pdf', 'html', 'e-print', 'format'}:
+            candidate = parts[1] if len(parts) > 1 else ''
+        else:
+            candidate = path
+    elif parsed.scheme and parsed.netloc:
+        return None
+
+    candidate = candidate.strip().strip('/')
+    if candidate.lower().endswith('.pdf'):
+        candidate = candidate[:-4]
+    candidate = candidate.rstrip('.,;')
+
+    for pattern in _ARXIV_ID_PATTERNS:
+        if pattern.fullmatch(candidate):
+            return candidate
+
+    match = _ARXIV_ID_SEARCH_RE.search(candidate)
+    return match.group(1) if match else None
+
+
+_BIBTEX_KEY_SEARCH_RE = re.compile(r'^\s*([A-Za-z0-9]+?)([12]\d{3})(x?)\s*$')
+
+
+def parse_bibtex_search_key(value):
+    """Return normalized BibTeX search key info, or None for non-key searches."""
+    if not value:
+        return None
+
+    key = str(value).strip()
+    entry_match = re.match(r'@\w+\s*\{\s*([^,\s]+)', key)
+    if entry_match:
+        key = entry_match.group(1)
+
+    match = _BIBTEX_KEY_SEARCH_RE.fullmatch(key)
+    if not match:
+        return None
+
+    author_part, year, suffix = match.groups()
+    if author_part.lower() != 'arxiv' and len(author_part) < 2:
+        return None
+
+    return {
+        'key': f'{author_part}{year}{suffix}',
+        'key_lower': f'{author_part}{year}{suffix}'.lower(),
+        'year': int(year),
+    }
+
+
+def bibtex_keys_for_authors_year(authors, year):
+    """Return possible generated keys for a paper's arXiv and published entries."""
+    return {
+        generate_bibtex_key(authors, year, published=False).lower(),
+        generate_bibtex_key(authors, year, published=True).lower(),
+    }
 
 
 def arxiv2bib(paper_data):

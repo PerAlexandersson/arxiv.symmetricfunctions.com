@@ -1,0 +1,587 @@
+/* Shared page components */
+.browse-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.api-details {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--c-text-sub);
+}
+
+.api-details summary {
+  cursor: pointer;
+}
+
+.api-details p {
+  margin: 0.5rem 0 0;
+}
+
+.tools-container {
+  max-width: 800px;
+}
+
+.tool-form {
+  margin-top: 2rem;
+}
+
+.tool-input {
+  width: 100%;
+  padding: 0.75rem;
+  font-size: 1rem;
+}
+
+.checkbox-row {
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.primary-btn {
+  margin-top: 1rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--c-link);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.primary-btn:hover {
+  background: var(--c-link-dark);
+}
+
+.result-panel {
+  margin-top: 2rem;
+}
+
+.notice-box {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.8rem;
+  background: #fff8e1;
+  border: 1px solid #ffe082;
+  border-radius: 4px;
+  color: #6d4c00;
+  font-size: 0.88rem;
+}
+
+.error-box {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #fee;
+  border: 1px solid #fcc;
+  border-radius: 4px;
+  color: #c00;
+}
+
+:root.dark .notice-box {
+  background: hsl(45, 42%, 17%);
+  border-color: hsl(43, 40%, 34%);
+  color: hsl(43, 76%, 78%);
+}
+
+:root.dark .error-box {
+  background: hsl(0, 37%, 17%);
+  border-color: hsl(0, 36%, 33%);
+  color: hsl(0, 78%, 78%);
+}
+
+
+/* Calendar Browse View */
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.2rem;
+  margin-top: 2rem;
+}
+
+.month-widget {
+  background: var(--c-bg-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.month-header {
+  background: var(--c-brand);
+  color: white;
+  padding: 0.6rem;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.95rem;
+  font-family: system-ui, sans-serif;
+}
+
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  background: var(--c-border);
+  padding: 2px;
+}
+
+.weekday-header {
+  background: var(--c-bg-header);
+  padding: 0.4rem 0.2rem;
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--c-text-sub);
+  font-family: system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.calendar-day {
+  background: var(--c-bg-surface);
+  padding: 0.4rem 0.2rem;
+  min-height: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  font-size: 0.85rem;
+  transition: all 0.15s;
+  color: var(--c-text-sub);
+}
+
+.calendar-day.empty {
+  background: var(--c-bg-header);
+  opacity: 0.5;
+}
+
+.calendar-day.has-papers {
+  cursor: pointer;
+  text-decoration: none;
+  color: var(--c-text-main);
+  font-weight: 600;
+}
+
+.calendar-day.has-papers:hover {
+  background: var(--c-bg-hover);
+}
+
+.day-number {
+  position: absolute;
+  top: 0.1rem;
+  left: 0.2rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--c-link);
+  line-height: 1;
+}
+
+.paper-count {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--c-text-main);
+  line-height: 1;
+  font-family: system-ui, sans-serif;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .container {
+    padding: 0 1rem;
+  }
+
+  header {
+    padding: 1.2rem 0;
+  }
+
+  .site-title {
+    font-size: 1.8rem;
+  }
+
+  .site-subtitle {
+    font-size: 1rem;
+  }
+
+  main {
+    padding: 1rem;
+    margin: 1rem 0;
+  }
+
+  .search-form {
+    flex-direction: column;
+    margin: 1.2rem 0;
+  }
+
+  .search-form input[type="text"],
+  .search-form button {
+    min-height: 2.75rem;
+  }
+
+  /* Stack paper row on mobile: authors above, date+links below */
+  .paper-authors-row {
+    flex-wrap: wrap;
+  }
+
+  .paper-authors {
+    order: 1;
+    flex-basis: 100%;
+    margin-bottom: 0.2rem;
+  }
+
+  .paper-date {
+    order: 2;
+  }
+
+  .paper-watch-indicator {
+    order: 2;
+  }
+
+  .paper-links {
+    order: 3;
+    flex-wrap: wrap;
+    margin-left: auto;
+  }
+
+  .paper-links a {
+    min-height: 2.75rem;
+    padding: 0.4rem 0.3rem;
+    font-size: 0.8rem;
+  }
+
+  .paper-links .bullet {
+    line-height: 2.75rem;
+  }
+
+  /* Pagination touch targets */
+  .pagination a, .pagination .current {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 0.85rem;
+  }
+
+  /* Nav icons: wrap on mobile */
+  .nav-icons {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-left: 0;
+    vertical-align: middle;
+  }
+
+  .nav-sep {
+    display: none;
+  }
+
+  /* Browse header stacking */
+  .browse-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  /* Calendar */
+  .calendar-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .month-grid {
+    gap: 1px;
+  }
+
+  .calendar-day {
+    min-height: 2.75rem;
+    padding: 0.3rem 0.15rem;
+    font-size: 0.8rem;
+  }
+
+  .day-number {
+    font-size: 0.65rem;
+    top: 0.1rem;
+    left: 0.15rem;
+  }
+
+  .paper-count {
+    font-size: 1.1rem;
+  }
+
+  /* Paper detail page links */
+  .paper-detail-links {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .paper-detail-links a {
+    min-height: 2.75rem;
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1000px) {
+  .calendar-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.2rem;
+  }
+}
+
+@media (min-width: 1001px) and (max-width: 1300px) {
+  .calendar-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }
+}
+
+/* Nav subtitle links */
+.site-subtitle a {
+  color: var(--c-link);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--c-link);
+}
+
+/* Nav icon buttons */
+.nav-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: 0.6rem;
+  vertical-align: middle;
+}
+
+.nav-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: var(--c-text-sub);
+  cursor: pointer;
+  padding: 0.25rem;
+  text-decoration: none !important;
+  border-bottom: none !important;
+  transition: background 0.15s, color 0.15s;
+  font-size: inherit;
+}
+.nav-icon-btn:hover {
+  background: var(--c-bg-gray);
+  color: var(--c-brand);
+  text-decoration: none;
+}
+.nav-icon-btn svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  display: block;
+  flex-shrink: 0;
+}
+
+/* Sun/moon icon: show active mode (sun in light, moon in dark) */
+.nav-icon-btn svg.icon-moon { display: none; }
+.nav-icon-btn svg.icon-sun  { display: block; }
+:root.dark .nav-icon-btn svg.icon-sun  { display: none; }
+:root.dark .nav-icon-btn svg.icon-moon { display: block; }
+
+/* Signed-in username: small, muted, slightly offset */
+.nav-username {
+  font-size: 0.72rem;
+  color: var(--c-text-muted);
+  margin-left: 0.1rem;
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* Primary nav icons: colored blue */
+.nav-icon-primary {
+  color: var(--c-link) !important;
+}
+.nav-icon-primary:hover {
+  color: var(--c-brand) !important;
+}
+
+.nav-icon-admin {
+  color: #c2840a;
+}
+
+.nav-icon-admin:hover {
+  color: var(--c-brand);
+}
+
+/* Disabled nav icons (spans): grayed out, not interactive */
+span.nav-icon-btn.nav-icon-disabled {
+  opacity: 0.3;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Disabled paper icons (links to login): grayed out but still clickable */
+a.paper-icon-btn.nav-icon-disabled {
+  opacity: 0.3;
+  cursor: pointer;
+}
+a.paper-icon-btn.nav-icon-disabled:hover {
+  opacity: 0.55;
+  background: var(--c-bg-gray);
+}
+
+/* Separator between icon groups */
+.nav-sep {
+  display: inline-block;
+  width: 1px;
+  height: 1.2rem;
+  background: var(--c-border);
+  margin: 0 0.15rem;
+  vertical-align: middle;
+}
+
+/* Ko-fi support button */
+.nav-kofi { color: #f48525 !important; }
+.nav-kofi:hover { color: #d4711a !important; background: var(--c-bg-gray); }
+.nav-kofi svg { width: 1.375rem; height: 1.375rem; }
+
+/* "Logged in as" line below site title */
+.site-logged-in {
+  font-size: 0.78rem;
+  color: var(--c-text-muted);
+  margin: -0.6rem 0 0.4rem;
+  font-family: 'Raleway', system-ui, sans-serif;
+  font-weight: 300;
+}
+.site-logged-in a {
+  color: var(--c-text-muted);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--c-border);
+}
+.site-logged-in a:hover {
+  color: var(--c-link);
+  border-bottom-color: var(--c-link);
+}
+
+/* ============================================================================
+   BibTeX modal
+   ============================================================================ */
+.bib-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+body.modal-open { overflow: hidden; }
+
+.bib-modal-box {
+  background: var(--c-bg-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 10px;
+  width: 100%;
+  max-width: 720px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  overflow: hidden;
+}
+.bib-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--c-border);
+  flex-shrink: 0;
+}
+.bib-modal-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--c-text-main);
+}
+.bib-modal-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.3rem;
+  color: var(--c-text-muted);
+  line-height: 1;
+  padding: 0 0.2rem;
+  font-family: inherit;
+}
+.bib-modal-close:hover { color: var(--c-text-main); }
+.bib-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--c-border);
+  flex-shrink: 0;
+}
+.bib-modal-status {
+  font-size: 0.8rem;
+  color: var(--c-link);
+}
+.bib-modal-textarea {
+  flex: 1;
+  width: 100%;
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  padding: 0.75rem 1rem;
+  background: var(--c-bg-body);
+  color: var(--c-text-main);
+  min-height: 300px;
+}
+
+/* ============================================================================
+   Paper icon buttons (star / save / remove) in paper-links row
+   ============================================================================ */
+.paper-icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--c-text-muted);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  transition: color 0.15s;
+}
+.paper-icon-btn:hover { color: var(--c-brand); }
+.paper-icon-btn svg   { width: 0.8rem; height: 0.8rem; }
+.paper-icon-btn.star-btn.starred { color: var(--c-brand); }
+.paper-icon-btn.save-btn.saved   { color: var(--c-link); }
+.paper-icon-btn.remove-btn:hover { color: #c0392b; }
+
+/* Save-to-list dropdown */
+.save-dropdown {
+  position: absolute;
+  background: var(--c-bg-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  padding: 0.25rem 0;
+  min-width: 160px;
+  z-index: 200;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+}
+.save-dropdown-item {
+  padding: 0.45rem 0.85rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--c-text-main);
+  white-space: nowrap;
+}
+.save-dropdown-item:hover { background: var(--c-bg-gray); color: var(--c-brand); }
+.save-dropdown-new       { color: var(--c-link); border-top: 1px solid var(--c-border); }
+.save-dropdown-empty     { color: var(--c-text-muted); cursor: default; }
+

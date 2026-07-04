@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Cron Status — Admin{% endblock %}
+
+{% block content %}
+{% include 'admin/_nav.html' %}
+
+<h2 class="page-title">Cron Status</h2>
+<p class="admin-note">
+  Scheduled update wrapper: <code>cron_update.sh</code>. It fetches recent
+  arXiv papers and then runs DOI discovery.
+</p>
+
+<div class="cron-status-grid">
+  <div class="cron-status-item">
+    <span class="cron-status-label">Status</span>
+    <strong>{{ cron.status }}</strong>
+  </div>
+  <div class="cron-status-item">
+    <span class="cron-status-label">Log file</span>
+    <code>{{ cron.path }}</code>
+  </div>
+  <div class="cron-status-item">
+    <span class="cron-status-label">Updated</span>
+    <strong>{{ cron.mtime or 'not found' }}</strong>
+  </div>
+  <div class="cron-status-item">
+    <span class="cron-status-label">Size</span>
+    <strong>{% if cron.size is not none %}{{ cron.size }} bytes{% else %}not found{% endif %}</strong>
+  </div>
+</div>
+
+{% if cron.last_start or cron.last_complete or cron.last_skip %}
+<div class="cron-status-grid cron-status-grid--compact">
+  {% if cron.last_start %}
+  <div class="cron-status-item">
+    <span class="cron-status-label">Last start</span>
+    <code>{{ cron.last_start }}</code>
+  </div>
+  {% endif %}
+  {% if cron.last_complete %}
+  <div class="cron-status-item">
+    <span class="cron-status-label">Last completion</span>
+    <code>{{ cron.last_complete }}</code>
+  </div>
+  {% endif %}
+  {% if cron.last_skip %}
+  <div class="cron-status-item">
+    <span class="cron-status-label">Last skip</span>
+    <code>{{ cron.last_skip }}</code>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<form class="admin-form cron-lines-form" method="get">
+  <div class="admin-form-row">
+    <div class="admin-field">
+      <label for="lines">Log lines</label>
+      <input type="number" id="lines" name="lines" value="{{ max_lines }}"
+             min="20" max="1000" class="admin-input-narrow">
+    </div>
+    <button type="submit" class="admin-primary-btn">Refresh</button>
+  </div>
+</form>
+
+{% if log_text %}
+<pre class="cron-log">{{ log_text }}</pre>
+{% else %}
+<p class="empty-note">No cron log found yet.</p>
+{% endif %}
+{% endblock %}

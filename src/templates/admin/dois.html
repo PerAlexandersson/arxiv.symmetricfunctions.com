@@ -1,287 +1,13 @@
 {% extends "base.html" %}
 {% block title %}DOI Discovery — Admin{% endblock %}
 
-{% block extra_css %}
-<style>
-/* ── Header ── */
-.doi-header {
-  display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
-  margin-bottom: 1rem;
-}
-.doi-header h2 { margin: 0; }
 
-/* ── Help button (same pattern as candidates) ── */
-.help-btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 1.3em; height: 1.3em; border-radius: 50%;
-  border: 1px solid var(--c-border, #ccc); background: var(--c-bg-alt, #f5f5f5);
-  color: var(--c-muted, #666); font-size: 0.75rem; font-weight: bold;
-  cursor: pointer; vertical-align: middle; margin-left: 0.3rem;
-  text-decoration: none; position: relative;
-}
-.help-popup {
-  display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  background: var(--c-bg-surface, #fff); border: 1px solid var(--c-border, #ccc);
-  border-radius: 6px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-  padding: 1.4rem 1.6rem; max-width: 520px; width: 90vw;
-  font-size: 0.88rem; line-height: 1.55; z-index: 1000;
-}
-.help-popup h3 { margin: 0 0 0.8rem; font-size: 1rem; }
-.help-popup ol { margin: 0.5rem 0 0.8rem; padding-left: 1.3rem; }
-.help-popup li { margin-bottom: 0.4rem; }
-.help-overlay {
-  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 999;
-}
-
-/* ── Lookup controls ── */
-.doi-run-btn {
-  padding: 0.35rem 0.9rem; font-size: 0.85rem; cursor: pointer;
-  background: var(--c-accent, #2a6); color: #fff;
-  border: none; border-radius: 4px; font-family: inherit;
-}
-.doi-run-btn:disabled { opacity: 0.5; cursor: default; }
-.toggle-advanced {
-  background: none; border: none; color: var(--c-text-muted, #888);
-  cursor: pointer; font-size: 0.82rem; font-family: inherit;
-}
-.toggle-advanced:hover { color: var(--c-text-main, #222); }
-.doi-controls,
-.doi-advanced {
-  display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
-  margin-bottom: 1rem;
-}
-.doi-controls { font-size: 0.88rem; }
-.doi-advanced { display: none; font-size: 0.85rem; }
-
-/* ── Tabs ── */
-.doi-tabs {
-  display: flex; gap: 0.25rem; flex-wrap: wrap;
-  margin-bottom: 1rem; border-bottom: 2px solid var(--c-border, #ccc);
-  padding-bottom: 0.25rem;
-}
-.doi-tabs a {
-  padding: 0.4rem 1rem; font-size: 0.85rem; cursor: pointer;
-  background: transparent; border: 1px solid transparent; border-bottom: none;
-  border-radius: 4px 4px 0 0; margin-bottom: -2px;
-  color: var(--c-text-sub, #555); text-decoration: none; white-space: nowrap;
-}
-.doi-tabs a:hover { background: var(--c-bg-gray, #eee); }
-.doi-tabs a.active {
-  background: var(--c-bg-surface, #fff); font-weight: 600;
-  color: var(--c-text-main, #222); border-color: var(--c-border, #ccc);
-}
-
-/* ── Table ── */
-.doi-table {
-  width: 100%; border-collapse: collapse; font-size: 0.88rem;
-  table-layout: fixed;
-}
-.doi-table th {
-  text-align: left; font-size: 0.75rem; text-transform: uppercase;
-  letter-spacing: 0.04em; color: var(--c-text-muted, #888);
-  border-bottom: 2px solid var(--c-border, #ccc); padding: 0.4rem 0.6rem;
-}
-.doi-table td {
-  padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--c-border, #eee);
-  vertical-align: top; overflow: visible;
-}
-.doi-table tr:hover td { background: var(--c-bg-alt, #f8f8f8); }
-.doi-title {
-  display: block; font-size: 0.80rem; color: var(--c-text-sub, #555);
-  line-height: 1.4;
-}
-.doi-authors {
-  display: block; margin-top: 0.2rem; font-size: 0.76rem;
-  color: var(--c-text-muted, #888); line-height: 1.45;
-}
-.doi-link,
-.doi-meta-link {
-  display: inline-block; margin-top: 0.2rem;
-  font-size: 0.76rem; word-break: break-word;
-}
-.doi-meta-link {
-  color: var(--c-link, #0066cc);
-  text-decoration: none;
-}
-.doi-meta-link:hover { text-decoration: underline; }
-.doi-warning {
-  margin-top: 0.45rem;
-  padding: 0.45rem 0.55rem;
-  border: 1px solid #d39e00;
-  border-radius: 6px;
-  background: #fff3cd;
-  color: #7a4f01;
-  font-size: 0.76rem;
-  line-height: 1.45;
-}
-.doi-warning strong {
-  color: #6a2600;
-}
-.doi-warning-links {
-  display: inline;
-}
-.doi-warning-link {
-  color: inherit;
-  font-weight: 600;
-  text-decoration: underline;
-}
-
-/* ── Confidence badge ── */
-.doi-conf {
-  display: inline-block; padding: 0.1rem 0.5rem; border-radius: 3px;
-  font-weight: 600; font-size: 0.80rem;
-}
-.doi-conf-high { background: #d4edda; color: #155724; }
-.doi-conf-med  { background: #fff3cd; color: #856404; }
-.doi-conf-low  { background: #ffe0cc; color: #8a4500; }
-
-/* ── Actions column ── */
-.doi-actions {
-  text-align: center;
-}
-.doi-actions-inner {
-  display: inline-flex; flex-direction: column; align-items: center; gap: 0.25rem;
-}
-.doi-action-buttons {
-  display: flex; flex-direction: column; gap: 0.25rem;
-}
-.doi-action-buttons button {
-  width: 2rem; height: 2rem;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: 0.9rem; padding: 0; cursor: pointer;
-  border: 1px solid var(--c-border, #ccc); border-radius: 4px;
-  background: var(--c-bg-surface, #fff); font-family: inherit;
-}
-.doi-action-buttons .approve-btn { color: #155724; border-color: #155724; }
-.doi-action-buttons .approve-btn:hover { background: #d4edda; }
-.doi-action-buttons .reject-btn { color: #721c24; border-color: #721c24; }
-.doi-action-buttons .reject-btn:hover { background: #f8d7da; }
-.doi-done { font-size: 0.80rem; font-weight: 600; text-align: center; }
-.doi-done-ok { color: #155724; }
-.doi-done-no { color: #721c24; }
-
-/* ── Pagination ── */
-.pagination { margin-top: 1rem; display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
-.pagination a, .pagination span {
-  padding: 0.25rem 0.6rem; border: 1px solid var(--c-border, #ccc); border-radius: 3px; font-size: 0.82rem;
-  text-decoration: none;
-}
-.pagination a { color: var(--c-link, #0066cc); cursor: pointer; }
-.pagination a:hover { background: var(--c-bg-alt, #f5f5f5); }
-.pagination .current { background: var(--c-link, #0066cc); color: #fff; border-color: var(--c-link, #0066cc); }
-
-/* ── Log ── */
-.doi-log {
-  margin-top: 1rem; padding: 0.8rem; background: var(--c-bg-gray, #f5f5f5);
-  border-radius: 4px; font-size: 0.82rem; white-space: pre-wrap; max-height: 20rem; overflow-y: auto;
-}
-
-@media (max-width: 720px) {
-  .doi-tabs {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.35rem;
-    border-bottom: none;
-    padding-bottom: 0;
-  }
-  .doi-tabs a {
-    margin-bottom: 0;
-    border-bottom: 1px solid var(--c-border, #ccc);
-    border-radius: 4px;
-    text-align: center;
-    padding: 0.55rem 0.5rem;
-  }
-  .doi-table,
-  .doi-table tbody,
-  .doi-table tr,
-  .doi-table td {
-    display: block;
-    width: 100%;
-  }
-  .doi-table {
-    table-layout: auto;
-    border-collapse: separate;
-  }
-  .doi-table colgroup,
-  .doi-table thead {
-    display: none;
-  }
-  .doi-table tbody {
-    display: grid;
-    gap: 0.85rem;
-  }
-  .doi-table tr {
-    border: 1px solid var(--c-border, #ddd);
-    border-radius: 10px;
-    overflow: hidden;
-    background: var(--c-bg-surface, #fff);
-  }
-  .doi-table td {
-    padding: 0.75rem 0.85rem;
-    border-bottom: none;
-  }
-  .doi-table td + td {
-    border-top: 1px solid var(--c-border, #eee);
-  }
-  .doi-table tr:hover td { background: transparent; }
-  .doi-actions { text-align: left; }
-  .doi-actions-inner {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    gap: 0.75rem;
-  }
-  .doi-action-buttons {
-    flex-direction: row;
-    gap: 0.5rem;
-    flex-shrink: 0;
-  }
-  .doi-action-buttons button {
-    width: 2.35rem;
-    height: 2.35rem;
-    font-size: 1rem;
-  }
-  .doi-done { text-align: left; }
-}
-
-@media (max-width: 480px) {
-  .doi-controls,
-  .doi-advanced {
-    align-items: stretch;
-  }
-  .doi-run-btn {
-    width: 100%;
-  }
-  .toggle-advanced {
-    width: 100%;
-    text-align: left;
-    padding: 0;
-  }
-  .doi-advanced label {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    width: 100%;
-  }
-  .doi-advanced input[type="date"] {
-    width: 100%;
-    box-sizing: border-box;
-  }
-  .doi-actions-inner {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-}
-</style>
-{% endblock %}
 
 {% block content %}
 {% include 'admin/_nav.html' %}
 
 {# ── Help modal ── #}
-<div class="help-overlay" id="help-overlay" onclick="closeHelp()"></div>
+<div class="help-overlay" id="help-overlay" data-action="close-help"></div>
 <div class="help-popup" id="help-popup">
   <h3>How DOI Discovery works</h3>
   <ol>
@@ -297,35 +23,31 @@
       metadata), <code>auto</code> (Crossref auto-approved), or <code>verified</code>
       (admin-approved).</li>
   </ol>
-  <button onclick="closeHelp()"
-          style="padding:0.35rem 0.9rem; border:1px solid var(--c-border,#ccc);
-                 border-radius:3px; cursor:pointer; background:var(--c-bg-alt,#f5f5f5);">
-    Close
-  </button>
+  <button class="help-close-btn" data-action="close-help">Close</button>
 </div>
 
 {# ── Header ── #}
 <div class="doi-header">
   <h2>DOI Discovery
-    <button class="help-btn" onclick="openHelp()" title="How DOI discovery works">?</button>
+    <button class="help-btn" data-action="open-help" title="How DOI discovery works">?</button>
   </h2>
 </div>
 
 {# ── Lookup controls ── #}
 <div class="doi-controls">
-  <button class="doi-run-btn" id="fetch-btn" onclick="runLookup(this)">Fetch next 20</button>
-  <button type="button" class="toggle-advanced" onclick="toggleAdvanced(this)">&#x25b8; Date range</button>
+  <button class="doi-run-btn" id="fetch-btn" data-doi-run>Fetch next 20</button>
+  <button type="button" class="toggle-advanced" data-doi-toggle-advanced>&#x25b8; Date range</button>
 </div>
 <div id="advanced-options" class="doi-advanced">
-  <label>From <input type="date" id="doi-from" value="{{ default_from }}" style="padding:0.2rem 0.4rem;"></label>
-  <label>To <input type="date" id="doi-to" value="{{ default_to }}" style="padding:0.2rem 0.4rem;"></label>
-  <button class="doi-run-btn" onclick="runLookup(this, true)">Run with date range</button>
+  <label>From <input type="date" id="doi-from" value="{{ default_from }}"></label>
+  <label>To <input type="date" id="doi-to" value="{{ default_to }}"></label>
+  <button class="doi-run-btn" data-doi-run data-with-dates="1">Run with date range</button>
 </div>
 
-<div id="run-log" style="display:none;"></div>
+<div id="run-log"></div>
 
 {# ── Tabs (counts in labels, AJAX switching) ── #}
-<div class="doi-tabs" id="doi-tabs">
+<div class="doi-tabs" id="doi-tabs" data-current-tab="{{ show }}" data-current-page="{{ page }}">
   <a href="#" data-tab="pending"  id="tab-pending"  class="{% if show == 'pending' %}active{% endif %}">Pending ({{ counts.get('pending', 0) }})</a>
   <a href="#" data-tab="approved" id="tab-approved" class="{% if show == 'approved' %}active{% endif %}">Approved ({{ counts.get('approved', 0) }})</a>
   <a href="#" data-tab="rejected" id="tab-rejected" class="{% if show == 'rejected' %}active{% endif %}">Rejected ({{ counts.get('rejected', 0) }})</a>
@@ -336,15 +58,15 @@
 <div id="doi-tab-content">
 <table class="doi-table">
   <colgroup>
-    <col style="width:44%">
-    <col style="width:44%">
-    <col style="width:12%">
+    <col class="doi-col-paper">
+    <col class="doi-col-match">
+    <col class="doi-col-actions">
   </colgroup>
   <thead>
     <tr>
       <th>arXiv Paper</th>
       <th>Crossref Match</th>
-      <th style="text-align:center"></th>
+      <th class="doi-action-heading"></th>
     </tr>
   </thead>
   <tbody id="doi-tbody">
@@ -378,8 +100,8 @@
           </span>
           {% if c.status == 'pending' %}
           <div class="doi-action-buttons">
-            <button class="approve-btn" onclick="doiAction({{ c.id }}, 'approve', this)" title="Approve &mdash; assign this DOI to the paper"{% if c.doi_conflict_summary %} data-conflict-summary="{{ c.doi_conflict_summary }}"{% endif %}>&#x2713;</button>
-            <button class="reject-btn" onclick="doiAction({{ c.id }}, 'reject', this)" title="Reject &mdash; wrong match, discard">&#x1f5d1;&#xfe0e;</button>
+            <button class="approve-btn" data-doi-action="approve" data-candidate-id="{{ c.id }}" title="Approve &mdash; assign this DOI to the paper"{% if c.doi_conflict_summary %} data-conflict-summary="{{ c.doi_conflict_summary }}"{% endif %}>&#x2713;</button>
+            <button class="reject-btn" data-doi-action="reject" data-candidate-id="{{ c.id }}" title="Reject &mdash; wrong match, discard">&#x1f5d1;&#xfe0e;</button>
           </div>
           {% elif c.status == 'approved' %}
           <span class="doi-done doi-done-ok">&#x2713; approved</span>
@@ -391,7 +113,7 @@
     </tr>
     {% endfor %}
     {% else %}
-    <tr><td colspan="3" style="color:var(--c-text-muted);padding:1rem;">No candidates in this view.</td></tr>
+    <tr><td colspan="3" class="doi-empty">No candidates in this view.</td></tr>
     {% endif %}
   </tbody>
 </table>
@@ -400,17 +122,17 @@
 <div id="doi-pagination">
 {% if total_pages > 1 %}
 <div class="pagination">
-  {% if page > 1 %}<a href="#" onclick="loadTab('{{ show }}', {{ page - 1 }}); return false;">&larr; Prev</a>{% endif %}
+  {% if page > 1 %}<a href="#" data-doi-tab="{{ show }}" data-doi-page="{{ page - 1 }}">&larr; Prev</a>{% endif %}
   {% for p in range(1, total_pages + 1) %}
     {% if p >= page - 2 and p <= page + 2 %}
       {% if p == page %}
         <span class="current">{{ p }}</span>
       {% else %}
-        <a href="#" onclick="loadTab('{{ show }}', {{ p }}); return false;">{{ p }}</a>
+        <a href="#" data-doi-tab="{{ show }}" data-doi-page="{{ p }}">{{ p }}</a>
       {% endif %}
     {% endif %}
   {% endfor %}
-  {% if page < total_pages %}<a href="#" onclick="loadTab('{{ show }}', {{ page + 1 }}); return false;">Next &rarr;</a>{% endif %}
+  {% if page < total_pages %}<a href="#" data-doi-tab="{{ show }}" data-doi-page="{{ page + 1 }}">Next &rarr;</a>{% endif %}
 </div>
 {% endif %}
 </div>
@@ -418,219 +140,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-const csrf = document.querySelector('meta[name="csrf-token"]').content;
-let currentTab = '{{ show }}';
-let currentPage = {{ page }};
-
-/* ── Helpers ── */
-function esc(s) {
-  if (!s) return '';
-  const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
-}
-
-function truncateText(text, maxLen) {
-  if (!text) return '';
-  return text.length > maxLen ? text.slice(0, maxLen) + '\u2026' : text;
-}
-
-function renderConflictWarning(c) {
-  if (!c.doi_conflicts || !c.doi_conflicts.length) return '';
-  const links = c.doi_conflicts.map(conflict => {
-    const status = conflict.doi_status ? ' (' + esc(conflict.doi_status) + ')' : '';
-    return '<a class="doi-warning-link" href="/paper/' + encodeURIComponent(conflict.arxiv_id) +
-      '" target="_blank">arXiv: ' + esc(conflict.arxiv_id) + '</a>' + status;
-  }).join(', ');
-  const tooltip = c.doi_conflict_tooltip ? ' title="' + esc(c.doi_conflict_tooltip) + '"' : '';
-  return '<div class="doi-warning"' + tooltip + '><strong>Already assigned</strong> to ' +
-    '<span class="doi-warning-links">' + links + '</span></div>';
-}
-
-/* ── Help modal ── */
-function openHelp()  { document.getElementById('help-overlay').style.display='block'; document.getElementById('help-popup').style.display='block'; }
-function closeHelp() { document.getElementById('help-overlay').style.display='none';  document.getElementById('help-popup').style.display='none'; }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHelp(); });
-
-/* ── Advanced toggle ── */
-function toggleAdvanced(btn) {
-  const div = document.getElementById('advanced-options');
-  if (getComputedStyle(div).display === 'none') {
-    div.style.display = 'flex';
-    btn.innerHTML = '&#x25be; Date range';
-  } else {
-    div.style.display = 'none';
-    btn.innerHTML = '&#x25b8; Date range';
-  }
-}
-
-/* ── Tab counts ── */
-function updateCounts(counts) {
-  document.getElementById('tab-pending').textContent  = 'Pending (' + (counts.pending || 0) + ')';
-  document.getElementById('tab-approved').textContent = 'Approved (' + (counts.approved || 0) + ')';
-  document.getElementById('tab-rejected').textContent = 'Rejected (' + (counts.rejected || 0) + ')';
-  const total = (counts.pending || 0) + (counts.approved || 0) + (counts.rejected || 0);
-  document.getElementById('tab-all').textContent = 'All (' + total + ')';
-}
-
-/* ── Render table rows from JSON ── */
-function renderRows(candidates) {
-  const tbody = document.getElementById('doi-tbody');
-  if (!candidates.length) {
-    tbody.innerHTML = '<tr><td colspan="3" style="color:var(--c-text-muted);padding:1rem;">No candidates in this view.</td></tr>';
-    return;
-  }
-  tbody.innerHTML = candidates.map(c => {
-    const confClass = c.confidence >= 0.90 ? 'doi-conf-high' : c.confidence >= 0.75 ? 'doi-conf-med' : 'doi-conf-low';
-    const confPct = Math.round(c.confidence * 100);
-    const pTitle = truncateText(c.paper_title_display || '', 80);
-    const crTitle = truncateText(c.crossref_title_display || '', 80);
-    const paperYear = c.paper_year ? ' (' + c.paper_year + ')' : '';
-    const yrSuffix = c.crossref_year ? ' (' + c.crossref_year + ')' : '';
-
-    let actionHtml = '<div class="doi-actions-inner"><span class="doi-conf ' + confClass + '">' + confPct + '%</span>';
-    if (c.status === 'pending') {
-      actionHtml += '<div class="doi-action-buttons">' +
-        '<button class="approve-btn" onclick="doiAction(' + c.id + ',\'approve\',this)" title="Approve — assign this DOI to the paper"' +
-          (c.doi_conflict_summary ? ' data-conflict-summary="' + esc(c.doi_conflict_summary) + '"' : '') +
-          '>&#x2713;</button>' +
-        '<button class="reject-btn" onclick="doiAction(' + c.id + ',\'reject\',this)" title="Reject — wrong match, discard">&#x1f5d1;&#xfe0e;</button>' +
-        '</div>';
-    } else if (c.status === 'approved') {
-      actionHtml += '<span class="doi-done doi-done-ok">&#x2713; approved</span>';
-    } else {
-      actionHtml += '<span class="doi-done doi-done-no">&#x2717; rejected</span>';
-    }
-    actionHtml += '</div>';
-
-    return '<tr id="row-' + c.id + '">' +
-      '<td><span class="doi-title" title="' + esc(c.paper_title) + '">' + esc(pTitle) + '</span><br>' +
-        '<a class="doi-meta-link" href="/paper/' + esc(c.arxiv_id) + '" target="_blank">arXiv: ' + esc(c.arxiv_id) + '</a><br>' +
-        '<span class="doi-authors"' + (c.paper_authors_full ? ' title="' + esc(c.paper_authors_full) + '"' : '') + '>' +
-          esc(c.paper_authors_display || '') + paperYear +
-        '</span></td>' +
-      '<td><span class="doi-title" title="' + esc(c.crossref_title || '') + '">' + esc(crTitle) + '</span><br>' +
-        '<a class="doi-link" href="https://doi.org/' + encodeURI(c.doi) + '" target="_blank" rel="noopener">' + esc(c.doi) + '</a>' +
-        renderConflictWarning(c) +
-        '<span class="doi-authors"' + (c.crossref_authors_full ? ' title="' + esc(c.crossref_authors_full) + '"' : '') + '>' +
-          esc(c.crossref_authors_display || '') + yrSuffix +
-        '</span></td>' +
-      '<td class="doi-actions" id="act-' + c.id + '">' + actionHtml + '</td>' +
-      '</tr>';
-  }).join('');
-}
-
-/* ── Render pagination ── */
-function renderPagination(page, totalPages, tab) {
-  const div = document.getElementById('doi-pagination');
-  if (totalPages <= 1) { div.innerHTML = ''; return; }
-  let html = '<div class="pagination">';
-  if (page > 1) html += '<a href="#" onclick="loadTab(\'' + tab + '\',' + (page - 1) + ');return false;">&larr; Prev</a>';
-  const lo = Math.max(1, page - 2), hi = Math.min(totalPages, page + 2);
-  for (let p = lo; p <= hi; p++) {
-    if (p === page) html += '<span class="current">' + p + '</span>';
-    else html += '<a href="#" onclick="loadTab(\'' + tab + '\',' + p + ');return false;">' + p + '</a>';
-  }
-  if (page < totalPages) html += '<a href="#" onclick="loadTab(\'' + tab + '\',' + (page + 1) + ');return false;">Next &rarr;</a>';
-  html += '</div>';
-  div.innerHTML = html;
-}
-
-/* ── Load tab via AJAX ── */
-async function loadTab(tab, page) {
-  page = page || 1;
-  currentTab = tab;
-  currentPage = page;
-  // Update active tab styling
-  document.querySelectorAll('#doi-tabs a').forEach(a => {
-    a.classList.toggle('active', a.dataset.tab === tab);
-  });
-  try {
-    const data = await fetchJson('/admin/dois/tab?show=' + tab + '&page=' + page, {
-      headers: {'Accept': 'application/json'}
-    });
-    if (!data.ok) return;
-    updateCounts(data.counts);
-    renderRows(data.candidates);
-    renderPagination(data.page, data.total_pages, tab);
-    history.replaceState(null, '', '?show=' + tab + '&page=' + page);
-  } catch (e) {
-    console.error('loadTab failed', e);
-  }
-}
-
-/* ── Tab click handlers ── */
-document.querySelectorAll('#doi-tabs a').forEach(a => {
-  a.addEventListener('click', e => {
-    e.preventDefault();
-    loadTab(a.dataset.tab, 1);
-  });
-});
-
-/* ── Approve / reject (AJAX) ── */
-async function doiAction(cid, action, btn) {
-  const container = document.getElementById('act-' + cid);
-  const conflictSummary = btn && btn.dataset ? btn.dataset.conflictSummary : '';
-  if (action === 'approve' && conflictSummary) {
-    const ok = window.confirm(
-      'This DOI is already assigned to ' + conflictSummary + '. Approve anyway?'
-    );
-    if (!ok) return;
-  }
-  try {
-    const data = await csrfJsonFetch('/admin/dois/' + cid + '/' + action, {});
-    if (data.ok) {
-      if (data.counts) updateCounts(data.counts);
-      if (currentTab === 'pending') {
-        await loadTab(currentTab, currentPage);
-        return;
-      }
-      const confBadge = container.querySelector('.doi-conf');
-      const confHtml = confBadge ? confBadge.outerHTML : '';
-      container.innerHTML = confHtml + (action === 'approve'
-        ? '<span class="doi-done doi-done-ok">&#x2713; approved</span>'
-        : '<span class="doi-done doi-done-no">&#x2717; rejected</span>');
-    } else {
-      btn.textContent = 'Error';
-    }
-  } catch(e) {
-    if (e.message !== 'AUTH_REQUIRED') btn.textContent = 'Failed';
-  }
-}
-
-/* ── Run DOI lookup ── */
-async function runLookup(btn, withDates) {
-  btn.disabled = true;
-  btn.textContent = 'Running\u2026';
-  const logDiv = document.getElementById('run-log');
-  logDiv.style.display = 'block';
-  logDiv.innerHTML = '<div class="doi-log">Looking up DOIs via Crossref\u2026</div>';
-  try {
-    const fd = new FormData();
-    if (withDates) {
-      const fromDate = document.getElementById('doi-from').value;
-      const toDate = document.getElementById('doi-to').value;
-      if (fromDate) fd.append('from_date', fromDate);
-      if (toDate) fd.append('to_date', toDate);
-    }
-    const data = await csrfJsonFetch('/admin/dois/run', fd);
-    logDiv.innerHTML = '<div class="doi-log">' +
-      (data.log || data.error || 'Done').replace(/</g, '&lt;') + '</div>';
-    if (data.ok) {
-      btn.textContent = 'Done!';
-      loadTab('pending', 1);
-    } else {
-      btn.textContent = 'Error — see log';
-    }
-  } catch(e) {
-    if (e.message !== 'AUTH_REQUIRED') {
-      logDiv.innerHTML = '<div class="doi-log">Request failed: ' + e.message + '</div>';
-      btn.textContent = 'Failed';
-    }
-  }
-  setTimeout(() => {
-    btn.disabled = false;
-    btn.textContent = withDates ? 'Run with date range' : 'Fetch next 20';
-  }, 3000);
-}
-</script>
+<script src="{{ url_for('static', filename='admin-dois.js') }}?v=1"></script>
 {% endblock %}

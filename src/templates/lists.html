@@ -5,8 +5,8 @@
 {% block content %}
 
 <div class="lists-header">
-    <h2 class="lists-title" style="color: var(--c-brand);">My Lists</h2>
-    <button class="btn-new-list" onclick="createListPrompt()">+ New list</button>
+    <h2 class="lists-title lists-title--brand">My Lists</h2>
+    <button class="btn-new-list" data-action="create-list">+ New list</button>
 </div>
 
 {% if categories %}
@@ -23,11 +23,11 @@
             <span class="list-card-count">{{ cat.paper_count }} paper{% if cat.paper_count != 1 %}s{% endif %}</span>
         </a>
         <div class="list-card-actions">
-            <button class="list-action-btn" onclick="renameListPrompt({{ cat.id }}, '{{ cat.name | e }}')" title="Rename">
+            <button class="list-action-btn" data-action="rename-list" data-cat-id="{{ cat.id }}" data-list-name="{{ cat.name }}" title="Rename">
                 <svg viewBox="0 0 20 20" fill="currentColor" width="0.85rem" height="0.85rem" aria-hidden="true"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg>
             </button>
             {% if not cat.is_starred %}
-            <button class="list-action-btn list-action-btn--danger" onclick="deleteListConfirm({{ cat.id }}, '{{ cat.name | e }}')" title="Delete list">
+            <button class="list-action-btn list-action-btn--danger" data-action="delete-list" data-cat-id="{{ cat.id }}" data-list-name="{{ cat.name }}" title="Delete list">
                 <svg viewBox="0 0 20 20" fill="currentColor" width="0.85rem" height="0.85rem" aria-hidden="true"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
             </button>
             {% endif %}
@@ -40,13 +40,13 @@
 {% endif %}
 
 {% if watched_keywords or watched_authors %}
-<div class="watch-section" style="margin-top: 2rem;">
+<div class="watch-section">
   {% if watched_keywords %}
   <h3 class="watch-section-title">Watched keywords</h3>
   <div class="watch-pills" id="watched-keywords">
     {% for kw in watched_keywords %}
     <span class="watch-pill" id="wk-{{ kw.id }}">
-      <button class="watch-pill-remove" onclick="unwatch('keyword', {{ kw.id }}, 'wk-{{ kw.id }}')" title="Stop watching">×</button>
+      <button class="watch-pill-remove" data-action="unwatch" data-watch-kind="keyword" data-watch-id="{{ kw.id }}" data-pill-id="wk-{{ kw.id }}" title="Stop watching">×</button>
       <a href="/keyword/{{ kw.phrase | replace(' ', '%20') }}">{{ kw.phrase }}</a>
     </span>
     {% endfor %}
@@ -54,11 +54,11 @@
   {% endif %}
 
   {% if watched_authors %}
-  <h3 class="watch-section-title" style="margin-top: 1.2rem;">Watched authors</h3>
+  <h3 class="watch-section-title watch-section-title--spaced">Watched authors</h3>
   <div class="watch-pills" id="watched-authors">
     {% for a in watched_authors %}
     <span class="watch-pill" id="wa-{{ a.id }}">
-      <button class="watch-pill-remove" onclick="unwatch('author', {{ a.id }}, 'wa-{{ a.id }}')" title="Stop watching">×</button>
+      <button class="watch-pill-remove" data-action="unwatch" data-watch-kind="author" data-watch-id="{{ a.id }}" data-pill-id="wa-{{ a.id }}" title="Stop watching">×</button>
       <a href="/author/{{ a.slug }}">{{ a.name }}</a>
     </span>
     {% endfor %}
@@ -67,75 +67,4 @@
 </div>
 {% endif %}
 
-{% endblock %}
-
-{% block extra_css %}
-<style>
-.watch-section-title { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--c-text-sub); margin: 0 0 0.5rem; }
-.watch-pills { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-.watch-pill {
-  display: inline-flex; align-items: center; gap: 0.3rem;
-  background: var(--c-bg-alt, #f0f0f0); border-radius: 999px;
-  padding: 0.2rem 0.7rem 0.2rem 0.3rem; font-size: 0.85rem;
-}
-.watch-pill a { color: var(--c-link); text-decoration: none; }
-.watch-pill a:hover { text-decoration: underline; }
-.watch-pill-remove {
-  background: none; border: none; cursor: pointer; font-size: 1rem; line-height: 1;
-  color: var(--c-text-sub); padding: 0 0.1rem; border-radius: 50%;
-}
-.watch-pill-remove:hover { color: var(--c-danger, #c00); }
-</style>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-async function unwatch(type, id, pillId) {
-  try {
-    const data = await csrfJsonFetch('/api/watch/' + type + '/' + id, {});
-    if (!data.watching) {
-      const el = document.getElementById(pillId);
-      if (el) el.remove();
-    }
-  } catch (e) {
-    if (e.message !== 'AUTH_REQUIRED') console.error('unwatch failed', e);
-  }
-}
-
-async function createListPrompt() {
-    const name = prompt('New list name:');
-    if (!name || !name.trim()) return;
-    const resp = await csrfFetch('/api/lists/categories/new', { name: name.trim() });
-    if (resp.ok) {
-        location.reload();
-    } else {
-        const data = await resp.json();
-        alert(data.error || 'Failed to create list.');
-    }
-}
-
-async function renameListPrompt(catId, currentName) {
-    const name = prompt('Rename list:', currentName);
-    if (!name || !name.trim() || name.trim() === currentName) return;
-    const resp = await csrfFetch(`/api/lists/categories/${catId}/rename`, { name: name.trim() });
-    if (resp.ok) {
-        document.getElementById(`list-name-${catId}`).textContent = name.trim();
-    } else {
-        const data = await resp.json();
-        alert(data.error || 'Failed to rename list.');
-    }
-}
-
-async function deleteListConfirm(catId, name) {
-    if (!confirm(`Delete list "${name}" and all its saved papers?`)) return;
-    const resp = await csrfFetch(`/api/lists/categories/${catId}/delete`, {});
-    if (resp.ok) {
-        const card = document.getElementById(`list-card-${catId}`);
-        if (card) card.remove();
-    } else {
-        const data = await resp.json();
-        alert(data.error || 'Failed to delete list.');
-    }
-}
-</script>
 {% endblock %}

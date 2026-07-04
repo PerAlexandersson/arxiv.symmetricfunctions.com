@@ -3,12 +3,12 @@
 {% block title %}Browse by Date - {{ year }} - arXiv Combinatorics{% endblock %}
 
 {% block content %}
-<div class="browse-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-    <h2 style="margin: 0;">Browse Papers by Date - {{ year }}</h2>
+<div class="browse-header">
+    <h2 class="page-title page-title--compact">Browse Papers by Date - {{ year }}</h2>
     <div>
-        <label for="year-select" style="margin-right: 0.5rem; color: var(--c-text-sub);">Year:</label>
-        <select id="year-select" onchange="window.location.href='/browse?year=' + this.value"
-                style="padding: 0.4rem 0.8rem; border: 1px solid var(--c-border); border-radius: 4px; background: var(--c-bg-surface); color: var(--c-text-main); font-size: 0.95rem;">
+        <label for="year-select" class="field-label">Year:</label>
+        <select id="year-select" data-action="browse-year"
+                class="form-control">
             {% for y, count in available_years %}
                 <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }} ({{ count }} entries)</option>
             {% endfor %}

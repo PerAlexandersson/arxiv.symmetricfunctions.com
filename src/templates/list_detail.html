@@ -16,11 +16,11 @@
     </div>
     <div class="lists-header-right">
         {% if papers %}
-        <button class="btn-secondary" onclick="showBibtexModal('/api/lists/{{ cat_id }}/bibtex', '{{ category.name | e }}')">BIB</button>
+        <button class="btn-secondary" data-action="show-bibtex-modal" data-bibtex-url="/api/lists/{{ cat_id }}/bibtex" data-bibtex-title="{{ category.name }}">BIB</button>
         {% endif %}
-        <button class="btn-secondary" onclick="renameListPrompt({{ cat_id }}, '{{ category.name | e }}')">Rename</button>
+        <button class="btn-secondary" data-action="rename-list" data-cat-id="{{ cat_id }}" data-list-name="{{ category.name }}">Rename</button>
         {% if not category.is_starred %}
-        <button class="btn-danger" onclick="deleteListConfirm({{ cat_id }}, '{{ category.name | e }}')">Delete list</button>
+        <button class="btn-danger" data-action="delete-list" data-cat-id="{{ cat_id }}" data-list-name="{{ category.name }}">Delete list</button>
         {% endif %}
     </div>
 </div>
@@ -35,32 +35,4 @@
 {% else %}
 <p class="lists-empty">This list is empty. Star papers or use the bookmark icon to save them here.</p>
 {% endif %}
-{% endblock %}
-
-{% block extra_js %}
-<script>
-async function renameListPrompt(catId, currentName) {
-    const name = prompt('Rename list:', currentName);
-    if (!name || !name.trim() || name.trim() === currentName) return;
-    const resp = await csrfFetch(`/api/lists/categories/${catId}/rename`, { name: name.trim() });
-    if (resp.ok) {
-        document.getElementById('list-page-title').textContent = name.trim();
-        document.title = name.trim() + ' — My Lists — arXiv Combinatorics';
-    } else {
-        const data = await resp.json();
-        alert(data.error || 'Failed to rename list.');
-    }
-}
-
-async function deleteListConfirm(catId, name) {
-    if (!confirm(`Delete list "${name}" and all its saved papers?`)) return;
-    const resp = await csrfFetch(`/api/lists/categories/${catId}/delete`, {});
-    if (resp.ok) {
-        window.location.href = '{{ url_for("lists.my_lists") }}';
-    } else {
-        const data = await resp.json();
-        alert(data.error || 'Failed to delete list.');
-    }
-}
-</script>
 {% endblock %}

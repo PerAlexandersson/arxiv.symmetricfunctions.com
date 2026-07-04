@@ -1,127 +1,55 @@
 {% extends "base.html" %}
 {% block title %}Fetch Papers — Admin{% endblock %}
 
-{% block extra_css %}
-<style>
-.fetch-form { max-width: 480px; margin-top: 1rem; }
-.fetch-form .row { display: flex; gap: 1rem; margin-bottom: 1rem; align-items: flex-end; }
-.fetch-form label { display: block; font-size: 0.9rem; margin-bottom: 0.3rem; }
-.fetch-form input[type=date], .fetch-form input[type=number] {
-  width: 100%; padding: 0.4rem 0.6rem; font-size: 0.9rem;
-  border: 1px solid var(--c-border, #ccc); border-radius: 4px;
-  background: var(--c-bg-surface, #fff); color: var(--c-text-main, #000);
-}
-.fetch-form .sep {
-  font-size: 0.85rem; color: var(--c-text-muted, #888);
-  margin: 1rem 0 0.6rem; border-top: 1px solid var(--c-border, #ddd); padding-top: 1rem;
-}
-.result-box {
-  margin-top: 1.5rem; padding: 1rem 1.2rem;
-  border: 1px solid var(--c-border, #ccc); border-radius: 4px;
-  font-size: 0.88rem;
-}
-.result-box.ok  { background: #f0f8f0; border-color: #b2d9b2; }
-.result-box.err { background: #fdf0f0; border-color: #e0b2b2; }
-.result-box pre { margin: 0.5rem 0 0; white-space: pre-wrap; font-size: 0.82rem; }
-
-@media (max-width: 500px) {
-  .fetch-form { max-width: 100%; }
-  .fetch-form .row { flex-direction: column; gap: 0.6rem; }
-}
-</style>
-{% endblock %}
-
 {% block content %}
 {% include 'admin/_nav.html' %}
 
-<h2 style="margin-top: 0;">Fetch Papers</h2>
-<p style="font-size: 0.9rem; color: var(--c-muted, #666);">
+<h2 class="page-title">Fetch Papers</h2>
+<p class="admin-note">
   Fetch new papers from arXiv. Use <em>Recent</em> for routine top-ups,
   or <em>Date range</em> to backfill a specific period.
 </p>
 
-<form class="fetch-form" id="fetch-form" method="post">
-  <p class="sep">Recent papers</p>
-  <div class="row">
-    <div style="flex:1">
+<form class="admin-form" id="fetch-form" method="post">
+  <p class="admin-form-section-title">Recent papers</p>
+  <div class="admin-form-row">
+    <div class="admin-field">
       <label for="days">Days back</label>
-      <input type="number" id="days" name="days" value="3" min="1" max="30" style="width:6rem">
+      <input type="number" id="days" name="days" value="3" min="1" max="30" class="admin-input-narrow">
     </div>
     <div>
-      <button type="submit" name="mode" value="recent" data-running-label="Fetching…"
-              style="padding: 0.45rem 1.2rem; font-size: 0.9rem; cursor: pointer;
-                     background: var(--c-accent, #2a6); color: #fff;
-                     border: none; border-radius: 4px;">
+      <button type="submit" name="mode" value="recent" data-running-label="Fetching…" class="admin-primary-btn">
         Fetch recent
       </button>
     </div>
   </div>
 
-  <p class="sep">Date range</p>
-  <div class="row">
-    <div style="flex:1">
+  <p class="admin-form-section-title">Date range</p>
+  <div class="admin-form-row">
+    <div class="admin-field">
       <label for="from_date">From</label>
       <input type="date" id="from_date" name="from_date"
              value="{{ request.form.get('from_date', '') }}" max="{{ today }}">
     </div>
-    <div style="flex:1">
+    <div class="admin-field">
       <label for="to_date">To</label>
       <input type="date" id="to_date" name="to_date"
              value="{{ request.form.get('to_date', today) }}" max="{{ today }}">
     </div>
     <div>
-      <button type="submit" name="mode" value="range" data-running-label="Fetching…"
-              style="padding: 0.45rem 1.2rem; font-size: 0.9rem; cursor: pointer;
-                     background: var(--c-brand, #357); color: #fff;
-                     border: none; border-radius: 4px;">
+      <button type="submit" name="mode" value="range" data-running-label="Fetching…" class="admin-primary-btn admin-primary-btn--brand">
         Fetch range
       </button>
     </div>
   </div>
 </form>
 
-<div class="result-box {{ 'ok' if result and result.ok else 'err' }}" id="fetch-result"{% if not result %} style="display:none"{% endif %}>
+<div class="admin-result-box {{ 'ok' if result and result.ok else 'err' }}" id="fetch-result"{% if not result %} style="display:none"{% endif %}>
   <strong>{{ 'Done' if result and result.ok else 'Error' }}</strong>
   <pre id="fetch-result-log">{{ result.log if result else '' }}</pre>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script>
-const fetchForm = document.getElementById('fetch-form');
-const fetchResult = document.getElementById('fetch-result');
-const fetchResultLog = document.getElementById('fetch-result-log');
-
-fetchForm?.addEventListener('submit', async function(e) {
-  e.preventDefault();
-  const btn = e.submitter;
-  const originalText = btn?.textContent || 'Run';
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = btn.dataset.runningLabel || 'Running…';
-  }
-  fetchResult.style.display = 'block';
-  fetchResult.classList.remove('ok', 'err');
-  fetchResultLog.textContent = 'Running fetch…';
-  try {
-    const fd = new FormData(fetchForm);
-    if (btn?.name && !fd.has(btn.name)) fd.append(btn.name, btn.value);
-    const data = await csrfJsonFetch(fetchForm.action || window.location.pathname, fd);
-    fetchResult.classList.add(data.ok ? 'ok' : 'err');
-    fetchResult.querySelector('strong').textContent = data.ok ? 'Done' : 'Error';
-    fetchResultLog.textContent = data.log || data.error || '';
-  } catch (err) {
-    if (err.message !== 'AUTH_REQUIRED') {
-      fetchResult.classList.add('err');
-      fetchResult.querySelector('strong').textContent = 'Error';
-      fetchResultLog.textContent = 'Request failed.';
-    }
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = originalText;
-    }
-  }
-});
-</script>
+<script src="{{ url_for('static', filename='admin-fetch.js') }}?v=1"></script>
 {% endblock %}

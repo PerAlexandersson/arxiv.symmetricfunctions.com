@@ -1,11 +1,14 @@
 {% extends "base.html" %}
-{% from '_macros.html' import kw_tag_link %}
+{% from '_macros.html' import kw_tag_link, paper_action_links with context %}
 
 {% block title %}{{ paper.title }} - arXiv Combinatorics{% endblock %}
 
 {% block content %}
-<div class="paper">
-    <h2 class="paper-title" style="margin-top: 0;">
+<div class="paper" id="paper-{{ paper.arxiv_id }}"
+     data-arxiv-id="{{ paper.arxiv_id }}"
+     data-paper-id="{{ paper.id }}"
+     data-published-bibtex-endpoint="{% if paper.doi %}/api/doi-bibtex/{% elif paper.publication_url %}/api/publication-bibtex/{% endif %}">
+    <h2 class="paper-title page-title">
         {{ paper.title }}
     </h2>
 
@@ -54,9 +57,9 @@
     </div>
 
     {% if is_admin %}
-    <div class="paper-meta" id="publication-admin" style="margin-top:0.3rem;">
-      <form onsubmit="return setPublication(event)" style="display:flex; flex-wrap:wrap; align-items:center; gap:0.4rem;">
-        <select id="publication-mode" style="padding:0.2rem 0.4rem; font-size:0.88rem; border:1px solid var(--c-border); border-radius:3px;">
+    <div class="paper-meta paper-admin-panel" id="publication-admin">
+      <form class="inline-admin-form" data-publication-form>
+        <select id="publication-mode" class="form-control form-control--small">
           <option value="auto">Auto</option>
           <option value="doi"{% if paper.doi %} selected{% endif %}>DOI</option>
           <option value="publication_url"{% if paper.publication_url and paper.publication_status != 'known_no_doi' %} selected{% endif %}>Publication URL</option>
@@ -65,29 +68,27 @@
         </select>
         <input type="text" id="publication-value" placeholder="DOI, DOI URL, or publication URL..."
                value="{{ paper.doi or paper.publication_url or '' }}"
-               style="padding:0.2rem 0.5rem; font-size:0.88rem; border:1px solid var(--c-border); border-radius:3px; width:min(30rem, 100%);">
-        <button type="submit" id="publication-save-btn" style="padding:0.2rem 0.6rem; font-size:0.85rem; cursor:pointer;
-               border:1px solid var(--c-border); border-radius:3px; background:var(--c-bg-surface);">Save publication</button>
-        <button type="button" id="skip-doi-btn" onclick="toggleSkipDoi({{ paper.id }})"
+               class="form-control form-control--small publication-input">
+        <button type="submit" id="publication-save-btn" class="plain-action-btn">Save publication</button>
+        <button type="button" id="skip-doi-btn" data-action="skip-doi" data-paper-id="{{ paper.id }}"
                 class="skip-doi-btn{% if paper.doi_status == 'skipped' %} skip-doi-active{% endif %}"
                 title="{{ 'Paper marked as unlikely to get a DOI — click to undo' if paper.doi_status == 'skipped' else 'Mark as unlikely to ever get a DOI (skips future lookups)' }}"
-                style="{% if paper.doi %}display:none;{% endif %}">
+                {% if paper.doi %}style="display:none;"{% endif %}>
           {% if paper.doi_status == 'skipped' %}&#x2717; No DOI{% else %}No DOI{% endif %}
         </button>
-        <span id="publication-status" style="font-size:0.82rem;"></span>
+        <span id="publication-status" class="inline-status"></span>
       </form>
-      <form onsubmit="return setEditorNote(event)" style="display:flex; align-items:flex-start; gap:0.4rem; margin-top:0.5rem;">
+      <form class="inline-admin-form inline-admin-form--top" data-editor-note-form>
         <textarea id="editor-note-input" placeholder="Public editor note..."
-                  style="padding:0.3rem 0.5rem; font-size:0.88rem; border:1px solid var(--c-border); border-radius:3px; min-height:2.3rem; width:min(38rem, 100%);">{{ paper.editor_note or '' }}</textarea>
-        <button type="submit" id="editor-note-save-btn" style="padding:0.25rem 0.6rem; font-size:0.85rem; cursor:pointer;
-               border:1px solid var(--c-border); border-radius:3px; background:var(--c-bg-surface);">Save note</button>
-        <span id="editor-note-status" style="font-size:0.82rem;"></span>
+                  class="form-control form-control--small editor-note-input">{{ paper.editor_note or '' }}</textarea>
+        <button type="submit" id="editor-note-save-btn" class="plain-action-btn">Save note</button>
+        <span id="editor-note-status" class="inline-status"></span>
       </form>
     </div>
     {% endif %}
 
     {% if paper.categories %}
-    <div class="paper-kw-tags" style="margin-top: 0.8rem; line-height: 2;">
+    <div class="paper-kw-tags paper-tags paper-tags--categories">
       {% for cat in paper.categories %}
         <a href="/category/{{ cat }}" class="kw-tag kw-tag--cat">{{ cat }}</a>
       {% endfor %}
@@ -95,296 +96,46 @@
     {% endif %}
 
     {% if paper.keywords %}
-    <div class="paper-kw-tags" style="margin-top: 0.4rem; line-height: 2;">
+    <div class="paper-kw-tags paper-tags">
       {% for kw in paper.keywords %}
         {{ kw_tag_link(kw) }}
       {% endfor %}
     </div>
     {% endif %}
 
-    <div class="paper-links paper-detail-links" style="margin-top: 1.5rem;">
-        <a href="https://arxiv.org/abs/{{ paper.arxiv_id }}" target="_blank" rel="noopener noreferrer">View on arXiv</a>
-        <span class="bullet">•</span>
-        <a href="https://arxiv.org/pdf/{{ paper.arxiv_id }}" target="_blank" rel="noopener noreferrer">Download PDF</a>
-        <span class="bullet">•</span>
-        <a href="#" onclick="copyBibtex('{{ paper.arxiv_id }}'); return false;">Copy BibTeX</a>
-        {% if is_admin %}
-        <span class="bullet">•</span>
-        <button id="refetch-btn" class="refetch-btn" title="Re-fetch this paper from arXiv" onclick="refetchPaper('{{ paper.arxiv_id }}')">
-          <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14" aria-hidden="true" style="vertical-align:middle;margin-right:3px"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
-          Re-fetch
-        </button>
-        <span id="refetch-status" style="font-size:0.85em;color:var(--c-text-sub);margin-left:0.4em;"></span>
-        {% endif %}
+    <div class="paper-detail-links">
+        {{ paper_action_links(paper, include_info=False, include_refetch=True) }}
     </div>
 
-    <h3 style="margin-top: 2rem; margin-bottom: 1rem;">Abstract</h3>
+    <h3 class="paper-section-title">Abstract</h3>
     <div class="paper-abstract">
         {{ paper.abstract }}
     </div>
 
-    <h3 style="margin-top: 2rem; margin-bottom: 1rem;">BibTeX</h3>
+    <h3 class="paper-section-title">BibTeX</h3>
 
     {% set has_published_bibtex = paper.doi or paper.publication_url %}
-    <div id="tabs" style="border-bottom: 2px solid var(--c-border); margin-bottom: 1rem;{% if not has_published_bibtex %} display:none;{% endif %}">
-        <button class="tab-button active" onclick="showTab('arxiv-tab')" id="arxiv-tab-btn"
-                style="padding: 0.5rem 1rem; margin-right: 0.5rem; background: none; border: none; border-bottom: 3px solid var(--c-link); cursor: pointer; font-weight: 600; color: var(--c-link);">
+    <div id="tabs" class="tab-strip"{% if not has_published_bibtex %} style="display:none;"{% endif %}>
+        <button class="tab-button active" data-action="show-tab" data-tab-id="arxiv-tab" id="arxiv-tab-btn">
             arXiv BibTeX
         </button>
-        <button class="tab-button" onclick="showTab('published-tab')" id="published-tab-btn"
-                style="padding: 0.5rem 1rem; background: none; border: none; border-bottom: 3px solid transparent; cursor: pointer; color: var(--c-text-sub);">
+        <button class="tab-button" data-action="show-tab" data-tab-id="published-tab" id="published-tab-btn">
             Published BibTeX
         </button>
     </div>
 
     <div id="arxiv-tab" class="tab-content">
         <div class="bibtex" id="arxiv-bibtex">Loading...</div>
-        <button class="copy-btn" onclick="copyBibtexContent('arxiv-bibtex')">Copy to Clipboard</button>
+        <button class="copy-btn" data-action="copy-element-text" data-element-id="arxiv-bibtex">Copy to Clipboard</button>
     </div>
 
     <div id="published-tab" class="tab-content" style="display: none;">
         <div class="bibtex" id="published-bibtex">Loading...</div>
-        <button class="copy-btn" onclick="copyBibtexContent('published-bibtex')">Copy to Clipboard</button>
+        <button class="copy-btn" data-action="copy-element-text" data-element-id="published-bibtex">Copy to Clipboard</button>
     </div>
 </div>
 {% endblock %}
 
-{% block extra_css %}
-<style>
-.refetch-btn {
-  background: none; border: 1px solid var(--c-border); border-radius: 4px;
-  color: var(--c-text-sub); cursor: pointer; font-size: 0.85em;
-  padding: 2px 7px; vertical-align: middle;
-}
-.refetch-btn:hover { color: var(--c-link); border-color: var(--c-link); }
-.refetch-btn:disabled { opacity: 0.5; cursor: default; }
-.skip-doi-btn {
-  padding: 0.2rem 0.6rem; font-size: 0.85rem; cursor: pointer;
-  border: 1px solid var(--c-border); border-radius: 3px;
-  background: var(--c-bg-surface); color: var(--c-text-sub);
-}
-.skip-doi-btn:hover { border-color: #721c24; color: #721c24; }
-.skip-doi-active {
-  background: #f8d7da; color: #721c24; border-color: #721c24;
-}
-.skip-doi-active:hover { background: var(--c-bg-surface); color: var(--c-text-sub); border-color: var(--c-border); }
-</style>
-{% endblock %}
-
 {% block extra_js %}
-<script>
-{% if is_admin %}
-const PAPER_ARXIV_ID = {{ paper.arxiv_id | tojson }};
-
-function setPublishedBibtexAvailable(available, endpoint) {
-  const tabs = document.getElementById('tabs');
-  if (!tabs) return;
-  if (available) {
-    tabs.style.display = '';
-    if (endpoint) fetchBibtex(PAPER_ARXIV_ID, 'published-bibtex', endpoint);
-  } else {
-    tabs.style.display = 'none';
-    showTab('arxiv-tab');
-    const published = document.getElementById('published-bibtex');
-    if (published) published.textContent = '';
-  }
-}
-
-function updateSkipDoiButton(data) {
-  const btn = document.getElementById('skip-doi-btn');
-  if (!btn) return;
-  if (data.doi) {
-    btn.style.display = 'none';
-    return;
-  }
-  btn.style.display = '';
-  const skipped = ['known_no_doi', 'arxiv_only'].includes(data.publication_status);
-  btn.classList.toggle('skip-doi-active', skipped);
-  if (skipped) {
-    btn.innerHTML = '&#x2717; No DOI';
-    btn.title = 'Paper marked as unlikely to get a DOI \u2014 click to undo';
-  } else {
-    btn.textContent = 'No DOI';
-    btn.title = 'Mark as unlikely to ever get a DOI (skips future lookups)';
-  }
-}
-
-function updatePublicationDisplay(data) {
-  const meta = document.getElementById('publication-meta');
-  const label = document.getElementById('publication-label');
-  const display = document.getElementById('publication-display');
-  if (!meta || !label || !display) return;
-
-  display.textContent = '';
-  if (data.doi) {
-    label.textContent = 'DOI:';
-    const link = document.createElement('a');
-    link.href = 'https://doi.org/' + data.doi;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.textContent = data.doi;
-    display.appendChild(link);
-    meta.style.display = '';
-    setPublishedBibtexAvailable(true, '/api/doi-bibtex/');
-  } else if (data.publication_url) {
-    label.textContent = 'Publication:';
-    const link = document.createElement('a');
-    link.href = data.publication_url;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.textContent = data.publication_venue_label || 'View publication';
-    display.appendChild(link);
-    meta.style.display = '';
-    setPublishedBibtexAvailable(true, '/api/publication-bibtex/');
-  } else if (data.publication_status === 'arxiv_only') {
-    label.textContent = 'Publication:';
-    display.textContent = 'arXiv only';
-    meta.style.display = '';
-    setPublishedBibtexAvailable(false);
-  } else {
-    meta.style.display = 'none';
-    setPublishedBibtexAvailable(false);
-  }
-  updateSkipDoiButton(data);
-}
-
-async function setPublication(e) {
-  e.preventDefault();
-  const mode = document.getElementById('publication-mode').value;
-  const val = document.getElementById('publication-value').value.trim();
-  const status = document.getElementById('publication-status');
-  const saveBtn = document.getElementById('publication-save-btn');
-  if (!val && mode !== 'arxiv_only') { status.textContent = 'empty'; return false; }
-  status.textContent = 'Saving…';
-  status.style.color = 'var(--c-text-sub)';
-  saveBtn.disabled = true;
-  const fd = new FormData();
-  fd.append('publication_mode', mode);
-  fd.append('publication_value', val);
-  try {
-    const data = await csrfJsonFetch('/admin/papers/{{ paper.id }}/publication', fd);
-    if (data.ok) {
-      status.textContent = '\u2713 saved';
-      status.style.color = 'green';
-      document.getElementById('publication-value').value = data.doi || data.publication_url || '';
-      updatePublicationDisplay(data);
-      saveBtn.disabled = false;
-    } else {
-      status.textContent = data.error || 'Error';
-      status.style.color = 'red';
-      saveBtn.disabled = false;
-    }
-  } catch (e2) {
-    if (e2.message !== 'AUTH_REQUIRED') {
-      status.textContent = 'Failed';
-      status.style.color = 'red';
-    }
-    saveBtn.disabled = false;
-  }
-  return false;
-}
-
-async function setEditorNote(e) {
-  e.preventDefault();
-  const status = document.getElementById('editor-note-status');
-  const saveBtn = document.getElementById('editor-note-save-btn');
-  const fd = new FormData();
-  fd.append('editor_note', document.getElementById('editor-note-input').value.trim());
-  status.textContent = 'Saving…';
-  status.style.color = 'var(--c-text-sub)';
-  saveBtn.disabled = true;
-  try {
-    const data = await csrfJsonFetch('/admin/papers/{{ paper.id }}/editor-note', fd);
-    if (data.ok) {
-      status.textContent = '\u2713 saved';
-      status.style.color = 'green';
-      const note = data.editor_note || '';
-      const noteMeta = document.getElementById('editor-note-meta');
-      const noteText = document.getElementById('editor-note-text');
-      if (noteText) noteText.textContent = note;
-      if (noteMeta) noteMeta.style.display = note ? '' : 'none';
-      saveBtn.disabled = false;
-    } else {
-      status.textContent = data.error || 'Error';
-      status.style.color = 'red';
-      saveBtn.disabled = false;
-    }
-  } catch (e2) {
-    if (e2.message !== 'AUTH_REQUIRED') {
-      status.textContent = 'Failed';
-      status.style.color = 'red';
-    }
-    saveBtn.disabled = false;
-  }
-  return false;
-}
-
-async function toggleSkipDoi(paperId) {
-  const btn = document.getElementById('skip-doi-btn');
-  const isSkipped = btn.classList.contains('skip-doi-active');
-  const action = isSkipped ? 'unskip' : 'skip';
-  try {
-    const data = await csrfJsonFetch('/admin/dois/' + paperId + '/' + action, {});
-    if (data.ok) {
-      if (action === 'skip') {
-        btn.classList.add('skip-doi-active');
-        btn.innerHTML = '&#x2717; No DOI';
-        btn.title = 'Paper marked as unlikely to get a DOI \u2014 click to undo';
-      } else {
-        btn.classList.remove('skip-doi-active');
-        btn.textContent = 'No DOI';
-        btn.title = 'Mark as unlikely to ever get a DOI (skips future lookups)';
-      }
-    }
-  } catch (e2) {
-    if (e2.message !== 'AUTH_REQUIRED') {
-      console.error('toggleSkipDoi failed', e2);
-    }
-  }
-}
-
-async function refetchPaper(arxivId) {
-  const btn = document.getElementById('refetch-btn');
-  const status = document.getElementById('refetch-status');
-  btn.disabled = true;
-  status.textContent = 'Fetching…';
-  status.style.color = 'var(--c-text-sub)';
-  try {
-    const data = await csrfJsonFetch('/admin/paper/' + arxivId + '/refetch', {});
-    if (data.ok) {
-      status.textContent = 'Done. Reload to view latest metadata.';
-      status.style.color = 'green';
-      btn.disabled = false;
-    } else {
-      status.textContent = 'Error: ' + (data.error || 'unknown');
-      status.style.color = 'red';
-      btn.disabled = false;
-    }
-  } catch (e2) {
-    if (e2.message !== 'AUTH_REQUIRED') {
-      status.textContent = 'Request failed.';
-      status.style.color = 'red';
-      btn.disabled = false;
-    }
-  }
-}
-{% endif %}
-
-// Fetch BibTeX on page load using utils.js fetchBibtex()
-fetchBibtex('{{ paper.arxiv_id }}', 'arxiv-bibtex');
-{% if paper.doi %}
-fetchBibtex('{{ paper.arxiv_id }}', 'published-bibtex', '/api/doi-bibtex/');
-{% elif paper.publication_url %}
-fetchBibtex('{{ paper.arxiv_id }}', 'published-bibtex', '/api/publication-bibtex/');
-{% endif %}
-
-function copyBibtexContent(elementId) {
-    const bibtex = document.getElementById(elementId).textContent;
-    copyToClipboard(bibtex).then(() => {
-        alert('BibTeX copied to clipboard!');
-    }).catch(err => {
-        alert('Failed to copy: ' + err);
-    });
-}
-</script>
+<script src="{{ url_for('static', filename='paper.js') }}?v=1"></script>
 {% endblock %}

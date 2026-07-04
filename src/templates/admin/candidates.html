@@ -1,173 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Keyword Candidates — Admin{% endblock %}
 
-{% block extra_css %}
-<style>
 
-.filters {
-  display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: flex-end;
-  background: var(--c-bg-alt, #f5f5f5); padding: 0.8rem 1rem;
-  border-radius: 4px; margin-bottom: 1rem;
-}
-.filters label { display: flex; flex-direction: column; font-size: 0.82rem; gap: 0.2rem; }
-.filters input[type=number], .filters input[type=text], .filters select {
-  padding: 0.3rem 0.4rem; border: 1px solid var(--c-border, #ccc); border-radius: 3px;
-  background: var(--c-bg-surface, #fff); color: var(--c-text-main, #000);
-}
-.filters input[type=number] { width: 5em; }
-.filters input[type=text]   { width: 12em; }
-
-.stats { font-size: 0.85rem; color: var(--c-muted, #666); margin-bottom: 0.8rem; }
-
-table.candidates { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-table.candidates th {
-  text-align: left; padding: 0.4rem 0.6rem;
-  border-bottom: 2px solid var(--c-border, #ccc); white-space: nowrap;
-}
-table.candidates td {
-  padding: 0.35rem 0.6rem;
-  border-bottom: 1px solid var(--c-border-light, #eee);
-  vertical-align: middle;
-}
-table.candidates tr:hover td { background: var(--c-bg-alt, #f9f9f9); }
-table.candidates tr.candidate-row--processed td {
-  transition: background-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-}
-table.candidates tr.candidate-row--useful td {
-  background: #eef8ef;
-  box-shadow: inset 3px 0 0 #4f9d61;
-}
-table.candidates tr.candidate-row--math td {
-  background: #eef6ff;
-  box-shadow: inset 3px 0 0 #4b86c5;
-}
-table.candidates tr.candidate-row--ignore td {
-  background: #fff1f1;
-  box-shadow: inset 3px 0 0 #c86767;
-}
-table.candidates tr.candidate-row--alias td {
-  background: #f7effd;
-  box-shadow: inset 3px 0 0 #9b65c9;
-}
-table.candidates tr.candidate-row--saving td { opacity: 0.55; }
-table.candidates tr.candidate-row--error td {
-  box-shadow: inset 3px 0 0 #b00020;
-}
-table.candidates tr.candidate-row--processed:hover td { filter: brightness(0.985); }
-
-/* Phrase cell: looks like plain text, becomes an input on focus */
-.phrase-edit {
-  font-family: monospace; font-size: 0.95rem;
-  background: none; border: none;
-  border-bottom: 1px dashed transparent;
-  padding: 0; width: 100%; color: inherit; cursor: text;
-}
-.phrase-edit:hover  { border-bottom-color: var(--c-border, #ccc); }
-.phrase-edit:focus  {
-  outline: none; background: var(--c-bg-surface, #fff);
-  border: 1px solid var(--c-link, #06c); border-radius: 3px;
-  padding: 0.1rem 0.3rem;
-}
-
-/* Status badges */
-.badge {
-  display: inline-block; font-size: 0.75rem; padding: 0.1rem 0.45rem;
-  border-radius: 3px; white-space: nowrap;
-}
-.badge-useful   { background: #d4edda; color: #1a6630; }
-.badge-math     { background: #cce5ff; color: #004085; }
-.badge-ignore   { background: #f8d7da; color: #721c24; }
-.badge-alias    { background: #e8d5f5; color: #5a1a8a; }
-
-/* Action buttons — single form with hidden status input */
-.action-btns { display: flex; gap: 0.35rem; flex-wrap: wrap; }
-.action-btns button {
-  padding: 0.2rem 0.55rem; font-size: 0.8rem; border-radius: 3px;
-  cursor: pointer; border: 1px solid transparent;
-}
-.btn-useful  { background: #d4edda; color: #1a6630; border-color: #b1dfbb; }
-.btn-math    { background: #cce5ff; color: #004085; border-color: #b8daff; }
-.btn-ignore  { background: #f8d7da; color: #721c24; border-color: #f5c6cb; }
-.btn-undo    { background: none; color: var(--c-muted,#888); border-color: var(--c-border,#ccc); font-size: 0.75rem; }
-.btn-edit    { background: none; color: var(--c-link,#06c); border-color: var(--c-border,#ccc); font-size: 0.8rem; }
-.action-btns button:hover { filter: brightness(0.93); }
-.candidate-status-note {
-  color: var(--c-muted,#666);
-  font-size: 0.78rem;
-}
-
-.pagination { margin-top: 1.2rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
-.pagination a, .pagination span {
-  padding: 0.3rem 0.7rem; border: 1px solid var(--c-border, #ccc); border-radius: 3px; font-size: 0.85rem;
-}
-.pagination a { color: var(--c-link, #0066cc); text-decoration: none; }
-.pagination a:hover { background: var(--c-bg-alt, #f5f5f5); }
-.pagination .current { background: var(--c-link, #0066cc); color: #fff; border-color: var(--c-link, #0066cc); }
-
-/* Help tooltip */
-.help-btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 1.3em; height: 1.3em; border-radius: 50%;
-  border: 1px solid var(--c-border, #ccc); background: var(--c-bg-alt, #f5f5f5);
-  color: var(--c-muted, #666); font-size: 0.75rem; font-weight: bold;
-  cursor: pointer; vertical-align: middle; margin-left: 0.4rem;
-  text-decoration: none; position: relative;
-}
-.help-popup {
-  display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  background: var(--c-bg-surface, #fff); border: 1px solid var(--c-border, #ccc);
-  border-radius: 6px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-  padding: 1.4rem 1.6rem; max-width: 520px; width: 90vw;
-  font-size: 0.88rem; line-height: 1.55; z-index: 1000;
-}
-.help-popup h3 { margin: 0 0 0.8rem; font-size: 1rem; }
-.help-popup ol { margin: 0.5rem 0 0.8rem; padding-left: 1.3rem; }
-.help-popup li { margin-bottom: 0.4rem; }
-.help-popup code { font-family: monospace; background: var(--c-bg-alt,#f0f0f0); padding: 0.1em 0.3em; border-radius: 2px; }
-.help-overlay {
-  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 999;
-}
-
-@media (max-width: 700px) {
-  .filters {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .filters label { flex-direction: row; align-items: center; gap: 0.5rem; }
-  .filters input[type=text] { width: 100%; }
-
-  table.candidates thead { display: none; }
-  table.candidates tbody tr {
-    display: flex; flex-wrap: wrap; gap: 0.2rem 0.6rem;
-    align-items: center;
-    padding: 0.6rem 0; border-bottom: 1px solid var(--c-border-light, #eee);
-  }
-  table.candidates td {
-    display: inline-flex; align-items: center;
-    border: none; padding: 0.15rem 0;
-  }
-  /* Phrase — full width */
-  table.candidates td:nth-child(1) { flex-basis: 100%; order: 0; }
-  table.candidates td:nth-child(1) .phrase-edit { font-size: 1rem; }
-  /* Papers count */
-  table.candidates td:nth-child(2) { order: 1; font-size: 0.82rem; color: var(--c-text-muted, #888); }
-  table.candidates td:nth-child(2)::before { content: 'Papers: '; font-weight: 500; }
-  /* Word count */
-  table.candidates td:nth-child(3) { order: 2; font-size: 0.82rem; color: var(--c-text-muted, #888); }
-  table.candidates td:nth-child(3)::before { content: 'Words: '; font-weight: 500; }
-  /* Status badge */
-  table.candidates td:nth-child(4) { order: 3; }
-  /* Action buttons — full width */
-  table.candidates td:nth-child(5) { order: 4; flex-basis: 100%; }
-  table.candidates td:nth-child(5) .action-btns { flex-wrap: wrap; }
-}
-</style>
-{% endblock %}
 
 {% block content %}
 {% include 'admin/_nav.html' %}
 
-<div class="help-overlay" id="help-overlay" onclick="closeHelp()"></div>
+<div class="help-overlay" id="help-overlay" data-action="close-help"></div>
 <div class="help-popup" id="help-popup">
   <h3>How the keyword pipeline works</h3>
   <ol>
@@ -176,7 +15,7 @@ table.candidates tr.candidate-row--processed:hover td { filter: brightness(0.985
       papers each 1–4 word phrase appears in. Result: <code>keywords.csv</code> (≈49k phrases).</li>
     <li><strong>Triage here</strong> — this page reads <code>keywords.csv</code> and lets you
       classify each phrase:
-      <ul style="margin:0.3rem 0; padding-left:1.1rem">
+      <ul>
         <li><span class="badge badge-useful">useful</span> — specific enough to tag papers
           (e.g. <em>schur function</em>). Saved to the <code>keywords</code> DB table.</li>
         <li><span class="badge badge-math">math</span> — valid math but too broad alone
@@ -194,16 +33,12 @@ table.candidates tr.candidate-row--processed:hover td { filter: brightness(0.985
       (e.g. after many new papers arrive) to update phrase counts and surface new candidates.
       Deploy the new CSV to update this page.</li>
   </ol>
-  <button onclick="closeHelp()"
-          style="padding:0.35rem 0.9rem; border:1px solid var(--c-border,#ccc);
-                 border-radius:3px; cursor:pointer; background:var(--c-bg-alt,#f5f5f5);">
-    Close
-  </button>
+  <button class="help-close-btn" data-action="close-help">Close</button>
 </div>
 
-<h2 style="margin-top: 0;">
+<h2 class="page-title">
   Keyword Candidates
-  <button class="help-btn" onclick="openHelp()" title="How this works">?</button>
+  <button class="help-btn" data-action="open-help" title="How this works">?</button>
 </h2>
 
 {# ── Filters ── #}
@@ -232,20 +67,20 @@ table.candidates tr.candidate-row--processed:hover td { filter: brightness(0.985
       {% endfor %}
     </select>
   </label>
-  <button type="submit" style="align-self: flex-end; padding: 0.35rem 0.8rem;">Apply</button>
+  <button type="submit">Apply</button>
 </form>
 
 {# ── Stats ── #}
 <p class="stats">
   Showing <strong>{{ total }}</strong> {{ show }} candidates
-  &nbsp;·&nbsp; <span style="color:#1a6630"><span id="useful-count">{{ useful_count }}</span> useful</span>
-  &nbsp;·&nbsp; <span style="color:#004085"><span id="math-count">{{ math_count }}</span> math</span>
-  &nbsp;·&nbsp; <span style="color:#721c24"><span id="ignored-count">{{ ignored_count }}</span> ignored</span>
+  &nbsp;·&nbsp; <span class="candidate-count--useful"><span id="useful-count">{{ useful_count }}</span> useful</span>
+  &nbsp;·&nbsp; <span class="candidate-count--math"><span id="math-count">{{ math_count }}</span> math</span>
+  &nbsp;·&nbsp; <span class="candidate-count--ignore"><span id="ignored-count">{{ ignored_count }}</span> ignored</span>
   &nbsp;·&nbsp; page {{ page }}/{{ total_pages }}
 </p>
 
 {# ── Legend ── #}
-<p style="font-size:0.8rem; color:var(--c-muted,#666); margin-bottom:0.8rem;">
+<p class="candidate-filter-note">
   <span class="badge badge-useful">useful</span> tag papers + score &nbsp;
   <span class="badge badge-alias">alias → …</span> synonym of another keyword &nbsp;
   <span class="badge badge-math">math</span> valid but too broad alone &nbsp;
@@ -258,12 +93,12 @@ table.candidates tr.candidate-row--processed:hover td { filter: brightness(0.985
 
 {# ── Table ── #}
 {% if candidates %}
-<table class="candidates">
+<table class="candidates" data-mark-candidate-url="{{ url_for('admin.mark_candidate') }}" data-keywords-url="{{ url_for('admin.keywords') }}">
   <thead>
     <tr>
       <th>Phrase</th>
-      <th style="text-align:right">Papers</th>
-      <th style="text-align:right">Words</th>
+      <th class="num-cell">Papers</th>
+      <th class="num-cell">Words</th>
       <th>Status</th>
       <th>Actions</th>
     </tr>
@@ -275,8 +110,8 @@ table.candidates tr.candidate-row--processed:hover td { filter: brightness(0.985
     <td>
       <input class="phrase-edit" type="text" value="{{ c.phrase }}" title="Click to edit before adding">
     </td>
-    <td style="text-align:right">{{ c.paper_count }}</td>
-    <td style="text-align:right">{{ c.word_count }}</td>
+    <td class="num-cell">{{ c.paper_count }}</td>
+    <td class="num-cell">{{ c.word_count }}</td>
     <td class="status-cell">
       {% if c.status == 'useful' %}
         <span class="badge badge-useful">useful</span>
@@ -292,49 +127,43 @@ table.candidates tr.candidate-row--processed:hover td { filter: brightness(0.985
       <div class="action-btns">
         {% if c.status in ('useful', 'alias') %}
           {% if c.status == 'useful' %}
-          <a href="{{ url_for('admin.keywords') }}" class="btn-edit"
-             style="padding:0.2rem 0.55rem; font-size:0.8rem; border:1px solid var(--c-border,#ccc); border-radius:3px; text-decoration:none;">Edit ↗</a>
+          <a href="{{ url_for('admin.keywords') }}" class="btn-edit candidate-edit-link">Edit ↗</a>
           {% endif %}
-          <form method="post" action="{{ url_for('admin.mark_candidate') }}" style="display:contents">
+          <form method="post" action="{{ url_for('admin.mark_candidate') }}" class="candidate-action-form">
             <input type="hidden" name="phrase" value="{{ c.phrase }}">
             <input type="hidden" name="status" value="unreviewed">
             <button type="submit" class="btn-undo">✕ unmark</button>
           </form>
         {% else %}
           {# Useful: reads edited phrase from the phrase-edit input in this row #}
-          <form method="post" action="{{ url_for('admin.mark_candidate') }}" class="useful-form" style="display:contents">
+          <form method="post" action="{{ url_for('admin.mark_candidate') }}" class="candidate-action-form useful-form">
             <input type="hidden" name="phrase" value="{{ c.phrase }}">
             <input type="hidden" name="keyword_phrase" value="{{ c.phrase }}">
             <input type="hidden" name="status" value="useful">
             <button type="submit" class="btn-useful">Useful</button>
           </form>
           {# Alias: reads phrase-edit as alias text, prompts for canonical #}
-          <button type="button" class="btn-alias btn-edit" onclick="showAliasEdit(this)"
-                  style="background:#e8d5f5; color:#5a1a8a; border-color:#c9aaec;">Alias →</button>
-          <form method="post" action="{{ url_for('admin.mark_candidate') }}" class="alias-form"
-                style="display:none; align-items:center; gap:0.3rem; flex-wrap:wrap;">
+          <button type="button" class="btn-alias btn-edit" data-candidate-show-alias>Alias →</button>
+          <form method="post" action="{{ url_for('admin.mark_candidate') }}" class="candidate-action-form alias-form">
             <input type="hidden" name="phrase" value="{{ c.phrase }}">
             <input type="hidden" name="status" value="alias">
             <input type="hidden" name="keyword_phrase" value="{{ c.phrase }}">
-            <input type="text" name="alias_of" placeholder="canonical keyword…" list="kw-list"
-                   style="padding:0.2rem 0.4rem; font-size:0.85rem; font-family:monospace;
-                          border:1px solid var(--c-border,#ccc); border-radius:3px;
-                          background:var(--c-bg-surface,#fff); color:var(--c-text-main,#000); min-width:14em;">
-            <button type="submit" class="btn-useful" style="white-space:nowrap">Add ✓</button>
-            <button type="button" class="btn-undo" onclick="hideAliasEdit(this)">✕</button>
+            <input type="text" name="alias_of" placeholder="canonical keyword…" list="kw-list" class="alias-input">
+            <button type="submit" class="btn-useful btn-nowrap">Add ✓</button>
+            <button type="button" class="btn-undo" data-candidate-hide-alias>✕</button>
           </form>
-          <form method="post" action="{{ url_for('admin.mark_candidate') }}" style="display:contents">
+          <form method="post" action="{{ url_for('admin.mark_candidate') }}" class="candidate-action-form">
             <input type="hidden" name="phrase" value="{{ c.phrase }}">
             <input type="hidden" name="status" value="math">
             <button type="submit" class="btn-math">Math</button>
           </form>
-          <form method="post" action="{{ url_for('admin.mark_candidate') }}" style="display:contents">
+          <form method="post" action="{{ url_for('admin.mark_candidate') }}" class="candidate-action-form">
             <input type="hidden" name="phrase" value="{{ c.phrase }}">
             <input type="hidden" name="status" value="ignore">
             <button type="submit" class="btn-ignore">Ignore</button>
           </form>
           {% if c.status != 'unreviewed' %}
-          <form method="post" action="{{ url_for('admin.mark_candidate') }}" style="display:contents">
+          <form method="post" action="{{ url_for('admin.mark_candidate') }}" class="candidate-action-form">
             <input type="hidden" name="phrase" value="{{ c.phrase }}">
             <input type="hidden" name="status" value="unreviewed">
             <button type="submit" class="btn-undo">✕</button>
@@ -348,7 +177,7 @@ table.candidates tr.candidate-row--processed:hover td { filter: brightness(0.985
   </tbody>
 </table>
 {% else %}
-<p style="color: var(--c-muted, #666)">No candidates match the current filters.</p>
+<p class="empty-note">No candidates match the current filters.</p>
 {% endif %}
 
 {# ── Pagination ── #}
@@ -369,198 +198,8 @@ table.candidates tr.candidate-row--processed:hover td { filter: brightness(0.985
   {% endif %}
 </div>
 {% endif %}
-<script>
-function openHelp()  { document.getElementById('help-overlay').style.display='block'; document.getElementById('help-popup').style.display='block'; }
-function closeHelp() { document.getElementById('help-overlay').style.display='none';  document.getElementById('help-popup').style.display='none'; }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHelp(); });
+{% endblock %}
 
-const markCandidateUrl = {{ url_for('admin.mark_candidate')|tojson }};
-
-function htmlEscape(value) {
-  return String(value ?? '').replace(/[&<>"']/g, ch => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  }[ch]));
-}
-
-function hiddenInput(name, value) {
-  return `<input type="hidden" name="${htmlEscape(name)}" value="${htmlEscape(value)}">`;
-}
-
-function statusBadgeHtml(status, aliasOf) {
-  if (status === 'useful') return '<span class="badge badge-useful">useful</span>';
-  if (status === 'math') return '<span class="badge badge-math">math</span>';
-  if (status === 'ignore') return '<span class="badge badge-ignore">ignore</span>';
-  if (status === 'alias') {
-    const alias = htmlEscape(aliasOf || '');
-    return `<span class="badge badge-alias" title="alias of: ${alias}">alias → ${alias}</span>`;
-  }
-  return '';
-}
-
-function markFormHtml(fields, buttonHtml, extraClass = '', style = 'display:contents') {
-  const inputs = Object.entries(fields).map(([name, value]) => hiddenInput(name, value)).join('');
-  return `<form method="post" action="${markCandidateUrl}" class="${extraClass}" style="${style}">
-    ${inputs}${buttonHtml}
-  </form>`;
-}
-
-function unreviewedActionsHtml(row) {
-  const phrase = row.dataset.orig || '';
-  const edited = row.querySelector('.phrase-edit')?.value.trim() || phrase;
-  return `
-    ${markFormHtml(
-      {phrase, keyword_phrase: edited, status: 'useful'},
-      '<button type="submit" class="btn-useful">Useful</button>',
-      'useful-form'
-    )}
-    <button type="button" class="btn-alias btn-edit" onclick="showAliasEdit(this)"
-            style="background:#e8d5f5; color:#5a1a8a; border-color:#c9aaec;">Alias →</button>
-    ${markFormHtml(
-      {phrase, status: 'alias', keyword_phrase: edited},
-      `<input type="text" name="alias_of" placeholder="canonical keyword…" list="kw-list"
-              style="padding:0.2rem 0.4rem; font-size:0.85rem; font-family:monospace;
-                     border:1px solid var(--c-border,#ccc); border-radius:3px;
-                     background:var(--c-bg-surface,#fff); color:var(--c-text-main,#000); min-width:14em;">
-       <button type="submit" class="btn-useful" style="white-space:nowrap">Add ✓</button>
-       <button type="button" class="btn-undo" onclick="hideAliasEdit(this)">✕</button>`,
-      'alias-form',
-      'display:none; align-items:center; gap:0.3rem; flex-wrap:wrap;'
-    )}
-    ${markFormHtml(
-      {phrase, status: 'math'},
-      '<button type="submit" class="btn-math">Math</button>'
-    )}
-    ${markFormHtml(
-      {phrase, status: 'ignore'},
-      '<button type="submit" class="btn-ignore">Ignore</button>'
-    )}
-  `;
-}
-
-function processedActionsHtml(status, phrase) {
-  let html = '';
-  if (status === 'useful') {
-    html += `<a href="{{ url_for('admin.keywords') }}" class="btn-edit"
-               style="padding:0.2rem 0.55rem; font-size:0.8rem; border:1px solid var(--c-border,#ccc); border-radius:3px; text-decoration:none;">Edit ↗</a>`;
-  }
-  html += markFormHtml(
-    {phrase, status: 'unreviewed'},
-    '<button type="submit" class="btn-undo">✕ unmark</button>'
-  );
-  return html;
-}
-
-function updateCandidateCounts(data) {
-  const useful = document.getElementById('useful-count');
-  const math = document.getElementById('math-count');
-  const ignored = document.getElementById('ignored-count');
-  if (useful && data.useful_count !== undefined) useful.textContent = data.useful_count;
-  if (math && data.math_count !== undefined) math.textContent = data.math_count;
-  if (ignored && data.ignored_count !== undefined) ignored.textContent = data.ignored_count;
-}
-
-function updateCandidateRow(row, data) {
-  const status = data.status || 'unreviewed';
-  const effectivePhrase = data.keyword_phrase || data.phrase || row.dataset.orig || '';
-  const unmarkPhrase = (status === 'useful' || status === 'alias')
-    ? effectivePhrase
-    : (data.phrase || row.dataset.orig || effectivePhrase);
-
-  row.dataset.status = status;
-  row.dataset.currentPhrase = effectivePhrase;
-  row.classList.remove(
-    'candidate-row--processed',
-    'candidate-row--useful',
-    'candidate-row--math',
-    'candidate-row--ignore',
-    'candidate-row--alias',
-    'candidate-row--error'
-  );
-  if (status !== 'unreviewed') {
-    row.classList.add('candidate-row--processed', `candidate-row--${status}`);
-  }
-
-  const phraseInput = row.querySelector('.phrase-edit');
-  if (phraseInput && (status === 'useful' || status === 'alias')) {
-    phraseInput.value = effectivePhrase;
-  }
-
-  const statusCell = row.querySelector('.status-cell');
-  if (statusCell) statusCell.innerHTML = statusBadgeHtml(status, data.alias_of);
-
-  const actions = row.querySelector('.actions-cell .action-btns');
-  if (actions) {
-    actions.innerHTML = status === 'unreviewed'
-      ? unreviewedActionsHtml(row)
-      : processedActionsHtml(status, unmarkPhrase);
-  }
-}
-
-// Keep keyword_phrase in sync with the editable phrase cell
-document.querySelectorAll('tr[data-orig]').forEach(row => {
-  const phraseInput = row.querySelector('.phrase-edit');
-  if (!phraseInput) return;
-  const syncPhrase = () => {
-    const val = phraseInput.value.trim();
-    row.querySelectorAll('input[name=keyword_phrase]').forEach(h => h.value = val);
-  };
-  phraseInput.addEventListener('input', syncPhrase);
-  phraseInput.addEventListener('change', syncPhrase);
-});
-
-function showAliasEdit(btn) {
-  const cell = btn.closest('td');
-  const form = cell.querySelector('.alias-form');
-  const row  = btn.closest('tr');
-  // Sync current phrase into keyword_phrase before showing
-  const phrase = row.querySelector('.phrase-edit').value.trim();
-  form.querySelector('input[name=keyword_phrase]').value = phrase;
-  btn.style.display = 'none';
-  form.style.display = 'flex';
-  form.querySelector('input[name=alias_of]').focus();
-}
-
-function hideAliasEdit(btn) {
-  const cell = btn.closest('td');
-  cell.querySelector('.alias-form').style.display = 'none';
-  cell.querySelector('.btn-alias').style.display = '';
-}
-
-document.querySelector('table.candidates')?.addEventListener('submit', async event => {
-  const form = event.target;
-  if (!form.action.endsWith(markCandidateUrl)) return;
-
-  event.preventDefault();
-  const row = form.closest('tr[data-orig]');
-  if (!row) return;
-
-  const fd = new FormData(form);
-  const phraseInput = row.querySelector('.phrase-edit');
-  if (phraseInput && (form.classList.contains('useful-form') || form.classList.contains('alias-form'))) {
-    fd.set('keyword_phrase', phraseInput.value.trim());
-  }
-  if (form.classList.contains('alias-form') && !(fd.get('alias_of') || '').trim()) {
-    form.querySelector('input[name=alias_of]')?.focus();
-    return;
-  }
-
-  row.classList.add('candidate-row--saving');
-  row.querySelectorAll('button').forEach(btn => { btn.disabled = true; });
-
-  try {
-    const data = await csrfJsonFetch(form.action, fd);
-    if (!data.ok) throw new Error(data.error || 'Request failed');
-    updateCandidateCounts(data);
-    updateCandidateRow(row, data);
-  } catch (err) {
-    if (err.message !== 'AUTH_REQUIRED') {
-      row.classList.add('candidate-row--error');
-      alert(err.message || 'Could not update candidate.');
-    }
-  } finally {
-    row.classList.remove('candidate-row--saving');
-    row.querySelectorAll('button').forEach(btn => { btn.disabled = false; });
-  }
-});
-</script>
+{% block extra_js %}
+<script src="{{ url_for('static', filename='admin-candidates.js') }}?v=1"></script>
 {% endblock %}
