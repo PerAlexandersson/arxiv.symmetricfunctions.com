@@ -65,6 +65,8 @@ scp -P "$REMOTE_PORT" "$SCRIPT_DIR/passenger_wsgi.py" \
     "$REMOTE_HOST:~/$REMOTE_PATH/"
 scp -P "$REMOTE_PORT" "$SCRIPT_DIR/requirements.txt" \
     "$REMOTE_HOST:~/$REMOTE_PATH/"
+scp -P "$REMOTE_PORT" "$SCRIPT_DIR/cron_update.sh" \
+    "$REMOTE_HOST:~/$REMOTE_PATH/"
 scp -P "$REMOTE_PORT" "$PROD_ENV" \
     "$REMOTE_HOST:~/$REMOTE_PATH/.env"
 
@@ -101,6 +103,7 @@ ssh -p "$REMOTE_PORT" "$REMOTE_HOST" "
     cd ~/$REMOTE_PATH
     pip install -r requirements.txt
     chmod 755 passenger_wsgi.py
+    chmod 755 cron_update.sh
     chmod -R 755 public_html
     chmod 664 public_html/static/*.css public_html/static/*.js 2>/dev/null || true
 "
