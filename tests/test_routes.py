@@ -259,6 +259,23 @@ class RouteTests(unittest.TestCase):
         self.assertIn('Last run completed', html)
         self.assertIn('Scheduled arXiv update complete', html)
 
+    def test_admin_cron_status_falls_back_to_legacy_fetch_log(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log_path = Path(tmp) / 'fetch.log'
+            log_path.write_text('legacy fetch output\n')
+            with self.client.session_transaction() as sess:
+                sess['admin_logged_in'] = True
+            with mock.patch.dict(os.environ, {
+                'ARXIV_CRON_LOG_DIR': tmp,
+                'ARXIV_CRON_LOG': '',
+            }):
+                resp = self.client.get('/admin/cron')
+
+        html = resp.get_data(as_text=True)
+        self.assertEqual(200, resp.status_code)
+        self.assertIn('fetch.log', html)
+        self.assertIn('legacy fetch output', html)
+
 
 if __name__ == '__main__':
     unittest.main()

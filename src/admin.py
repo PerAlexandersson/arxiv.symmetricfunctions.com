@@ -78,7 +78,13 @@ def _cron_log_path():
         return Path(explicit).expanduser()
     log_dir = os.environ.get('ARXIV_CRON_LOG_DIR')
     base = Path(log_dir).expanduser() if log_dir else Path.home() / 'logs'
-    return base / 'arxiv-update.log'
+    wrapper_log = base / 'arxiv-update.log'
+    if wrapper_log.exists():
+        return wrapper_log
+    legacy_log = base / 'fetch.log'
+    if legacy_log.exists():
+        return legacy_log
+    return wrapper_log
 
 
 def _tail_text_file(path, max_lines=200, max_bytes=200_000):
