@@ -945,6 +945,15 @@ table.kw-table col.col-del      { width: 58px; }
   background: var(--c-bg-alt, #f0f0f0); border: 1px solid var(--c-border, #ccc);
   border-radius: 3px; color: var(--c-text-sub, #555); font-family: inherit;
 }
+.sc-sug-btn--exact-key {
+  background: #eaf7ef;
+  border-color: #6bb98a;
+  background: color-mix(in srgb, var(--c-accent, #2a6) 10%, var(--c-bg-surface, #fff));
+  border-color: color-mix(in srgb, var(--c-accent, #2a6) 55%, var(--c-border, #ccc));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-accent, #2a6) 22%, transparent);
+  color: var(--c-text-main, #222);
+  font-weight: 600;
+}
 .sc-sug-btn:hover { border-color: var(--c-accent, #2a6); color: var(--c-accent, #2a6); }
 .sc-sug-btn .sc-sug-match { font-size: 0.7rem; color: var(--c-text-muted, #999); }
 .sc-sug-applied {

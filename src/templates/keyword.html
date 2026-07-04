@@ -56,7 +56,9 @@
       {% if url_suggestions %}
       <div class="sc-sug" id="akw-url-sug">
         {% for key, label, match in url_suggestions %}
-        <button type="button" class="sc-sug-btn" data-akw-apply-sug data-anchor="{{ key }}"
+        <button type="button"
+                class="sc-sug-btn{% if match == 'key match' %} sc-sug-btn--exact-key{% endif %}"
+                data-akw-apply-sug data-anchor="{{ key }}"
                 title="{{ label.title }} ({{ label.page }}.htm)">
           {{ key }} <span class="sc-sug-match">{{ match }}</span>
         </button>

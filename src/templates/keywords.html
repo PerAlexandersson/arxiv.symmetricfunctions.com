@@ -36,7 +36,8 @@
     <span class="sc-panel-phrase">{{ item.phrase }}</span>
     <div class="sc-sug" id="sug-{{ item.id }}">
       {% for key, label, match in item.suggestions %}
-      <button class="sc-sug-btn" data-sc-apply data-kid="{{ item.id }}" data-anchor="{{ key }}"
+      <button class="sc-sug-btn{% if match == 'key match' %} sc-sug-btn--exact-key{% endif %}"
+              data-sc-apply data-kid="{{ item.id }}" data-anchor="{{ key }}"
               title="{{ label.title }} ({{ label.page }}.htm)">
         {{ key }} <span class="sc-sug-match">{{ match }}</span>
       </button>

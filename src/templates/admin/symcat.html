@@ -66,7 +66,8 @@
         <td colspan="3">
           <div class="sc-sug" id="sug-{{ kw.id }}">
             {% for key, label, match in kw.suggestions %}
-            <button class="sc-sug-btn" data-sc-apply data-kid="{{ kw.id }}" data-anchor="{{ key }}"
+            <button class="sc-sug-btn{% if match == 'key match' %} sc-sug-btn--exact-key{% endif %}"
+                    data-sc-apply data-kid="{{ kw.id }}" data-anchor="{{ key }}"
                     title="{{ label.title }} ({{ label.page }}.htm)">
               {{ key }} <span class="sc-sug-match">{{ match }}</span>
             </button>
