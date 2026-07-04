@@ -1,6 +1,7 @@
 const doiTabs = document.getElementById('doi-tabs');
 let currentTab = doiTabs?.dataset.currentTab || 'pending';
 let currentPage = parseInt(doiTabs?.dataset.currentPage || '1', 10);
+const conflictToggleKey = 'admin-dois-show-conflicts';
 
 /* ── Helpers ── */
 function esc(s) {
@@ -15,14 +16,41 @@ function truncateText(text, maxLen) {
 
 function renderConflictWarning(c) {
   if (!c.doi_conflicts || !c.doi_conflicts.length) return '';
-  const links = c.doi_conflicts.map(conflict => {
+  const conflicts = c.doi_conflicts.map(conflict => {
     const status = conflict.doi_status ? ' (' + esc(conflict.doi_status) + ')' : '';
+    const title = truncateText(conflict.title_display || conflict.title || '', 90);
+    const titleHtml = title ? '<span class="doi-warning-title">' + esc(title) + '</span>' : '';
     return '<a class="doi-warning-link" href="/paper/' + encodeURIComponent(conflict.arxiv_id) +
-      '" target="_blank">arXiv: ' + esc(conflict.arxiv_id) + '</a>' + status;
-  }).join(', ');
+      '" target="_blank">arXiv: ' + esc(conflict.arxiv_id) + '</a>' + status + titleHtml;
+  }).join('</div><div class="doi-warning-conflict">');
   const tooltip = c.doi_conflict_tooltip ? ' title="' + esc(c.doi_conflict_tooltip) + '"' : '';
-  return '<div class="doi-warning"' + tooltip + '><strong>Already assigned</strong> to ' +
-    '<span class="doi-warning-links">' + links + '</span></div>';
+  return '<div class="doi-warning"' + tooltip + '><strong>Already assigned</strong>' +
+    '<div class="doi-warning-conflicts"><div class="doi-warning-conflict">' + conflicts +
+    '</div></div></div>';
+}
+
+function shouldShowConflicts() {
+  const toggle = document.getElementById('doi-show-conflicts');
+  return !toggle || toggle.checked;
+}
+
+function applyConflictVisibility() {
+  const showConflicts = shouldShowConflicts();
+  document.querySelectorAll('#doi-tbody tr.doi-row--conflict').forEach(row => {
+    row.hidden = !showConflicts;
+  });
+}
+
+function setupConflictToggle() {
+  const toggle = document.getElementById('doi-show-conflicts');
+  if (!toggle) return;
+  const saved = localStorage.getItem(conflictToggleKey);
+  if (saved !== null) toggle.checked = saved === '1';
+  toggle.addEventListener('change', () => {
+    localStorage.setItem(conflictToggleKey, toggle.checked ? '1' : '0');
+    applyConflictVisibility();
+  });
+  applyConflictVisibility();
 }
 
 /* ── Advanced toggle ── */
@@ -67,6 +95,11 @@ function renderRows(candidates) {
         '<button class="approve-btn" data-doi-action="approve" data-candidate-id="' + c.id + '" title="Approve — assign this DOI to the paper"' +
           (c.doi_conflict_summary ? ' data-conflict-summary="' + esc(c.doi_conflict_summary) + '"' : '') +
           '>&#x2713;</button>' +
+        (c.doi_conflicts && c.doi_conflicts.length
+          ? '<button class="reassign-btn" data-doi-action="reassign" data-candidate-id="' + c.id + '" title="Reassign — clear this DOI from the already assigned paper(s), then assign it here"' +
+            (c.doi_conflict_summary ? ' data-conflict-summary="' + esc(c.doi_conflict_summary) + '"' : '') +
+            '>move</button>'
+          : '') +
         '<button class="reject-btn" data-doi-action="reject" data-candidate-id="' + c.id + '" title="Reject — wrong match, discard">&#x1f5d1;&#xfe0e;</button>' +
         '</div>';
     } else if (c.status === 'approved') {
@@ -76,7 +109,10 @@ function renderRows(candidates) {
     }
     actionHtml += '</div>';
 
-    return '<tr id="row-' + c.id + '">' +
+    const conflictAttrs = c.doi_conflicts && c.doi_conflicts.length
+      ? ' class="doi-row--conflict" data-has-conflict="1"'
+      : '';
+    return '<tr id="row-' + c.id + '"' + conflictAttrs + '>' +
       '<td><span class="doi-title" title="' + esc(c.paper_title) + '">' + esc(pTitle) + '</span><br>' +
         '<a class="doi-meta-link" href="/paper/' + esc(c.arxiv_id) + '" target="_blank">arXiv: ' + esc(c.arxiv_id) + '</a><br>' +
         '<span class="doi-authors"' + (c.paper_authors_full ? ' title="' + esc(c.paper_authors_full) + '"' : '') + '>' +
@@ -91,6 +127,7 @@ function renderRows(candidates) {
       '<td class="doi-actions" id="act-' + c.id + '">' + actionHtml + '</td>' +
       '</tr>';
   }).join('');
+  applyConflictVisibility();
 }
 
 /* ── Render pagination ── */
@@ -174,19 +211,19 @@ async function doiAction(cid, action, btn) {
     );
     if (!ok) return;
   }
+  if (action === 'reassign') {
+    const ok = window.confirm(
+      'Move this DOI from ' + (conflictSummary || 'the already assigned paper(s)') +
+      ' to this paper? The old paper(s) will have this DOI cleared.'
+    );
+    if (!ok) return;
+  }
   try {
     const data = await csrfJsonFetch('/admin/dois/' + cid + '/' + action, {});
     if (data.ok) {
       if (data.counts) updateCounts(data.counts);
-      if (currentTab === 'pending') {
-        await loadTab(currentTab, currentPage);
-        return;
-      }
-      const confBadge = container.querySelector('.doi-conf');
-      const confHtml = confBadge ? confBadge.outerHTML : '';
-      container.innerHTML = confHtml + (action === 'approve'
-        ? '<span class="doi-done doi-done-ok">&#x2713; approved</span>'
-        : '<span class="doi-done doi-done-no">&#x2717; rejected</span>');
+      await loadTab(currentTab, currentPage);
+      return;
     } else {
       btn.textContent = 'Error';
     }
@@ -230,3 +267,5 @@ async function runLookup(btn, withDates) {
     btn.textContent = withDates ? 'Run with date range' : 'Fetch next 20';
   }, 3000);
 }
+
+setupConflictToggle();

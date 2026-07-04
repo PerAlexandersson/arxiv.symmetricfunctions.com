@@ -37,6 +37,10 @@
 <div class="doi-controls">
   <button class="doi-run-btn" id="fetch-btn" data-doi-run>Fetch next 20</button>
   <button type="button" class="toggle-advanced" data-doi-toggle-advanced>&#x25b8; Date range</button>
+  <label class="doi-conflict-toggle">
+    <input type="checkbox" id="doi-show-conflicts" data-doi-show-conflicts checked>
+    Show already assigned
+  </label>
 </div>
 <div id="advanced-options" class="doi-advanced">
   <label>From <input type="date" id="doi-from" value="{{ default_from }}"></label>
@@ -72,7 +76,7 @@
   <tbody id="doi-tbody">
     {% if candidates %}
     {% for c in candidates %}
-    <tr id="row-{{ c.id }}">
+    <tr id="row-{{ c.id }}"{% if c.doi_conflicts %} class="doi-row--conflict" data-has-conflict="1"{% endif %}>
       <td>
         <span class="doi-title" title="{{ c.paper_title }}">{{ c.paper_title_display[:80] }}{% if c.paper_title_display|length > 80 %}&hellip;{% endif %}</span><br>
         <a class="doi-meta-link" href="/paper/{{ c.arxiv_id }}" target="_blank">arXiv: {{ c.arxiv_id }}</a><br>
@@ -83,12 +87,17 @@
         <a class="doi-link" href="https://doi.org/{{ c.doi }}" target="_blank" rel="noopener">{{ c.doi }}</a>
         {% if c.doi_conflicts %}
         <div class="doi-warning"{% if c.doi_conflict_tooltip %} title="{{ c.doi_conflict_tooltip }}"{% endif %}>
-          <strong>Already assigned</strong> to
-          <span class="doi-warning-links">
+          <strong>Already assigned</strong>
+          <div class="doi-warning-conflicts">
             {% for conflict in c.doi_conflicts %}
-            <a class="doi-warning-link" href="/paper/{{ conflict.arxiv_id }}" target="_blank">arXiv: {{ conflict.arxiv_id }}</a>{% if conflict.doi_status %} ({{ conflict.doi_status }}){% endif %}{% if not loop.last %}, {% endif %}
+            <div class="doi-warning-conflict">
+              <a class="doi-warning-link" href="/paper/{{ conflict.arxiv_id }}" target="_blank">arXiv: {{ conflict.arxiv_id }}</a>{% if conflict.doi_status %} ({{ conflict.doi_status }}){% endif %}
+              {% if conflict.title_display %}
+              <span class="doi-warning-title">{{ conflict.title_display[:90] }}{% if conflict.title_display|length > 90 %}&hellip;{% endif %}</span>
+              {% endif %}
+            </div>
             {% endfor %}
-          </span>
+          </div>
         </div>
         {% endif %}
         <span class="doi-authors"{% if c.crossref_authors_full %} title="{{ c.crossref_authors_full }}"{% endif %}>{{ c.crossref_authors_display }}{% if c.crossref_year %} ({{ c.crossref_year }}){% endif %}</span>
@@ -101,6 +110,9 @@
           {% if c.status == 'pending' %}
           <div class="doi-action-buttons">
             <button class="approve-btn" data-doi-action="approve" data-candidate-id="{{ c.id }}" title="Approve &mdash; assign this DOI to the paper"{% if c.doi_conflict_summary %} data-conflict-summary="{{ c.doi_conflict_summary }}"{% endif %}>&#x2713;</button>
+            {% if c.doi_conflicts %}
+            <button class="reassign-btn" data-doi-action="reassign" data-candidate-id="{{ c.id }}" title="Reassign &mdash; clear this DOI from the already assigned paper(s), then assign it here"{% if c.doi_conflict_summary %} data-conflict-summary="{{ c.doi_conflict_summary }}"{% endif %}>move</button>
+            {% endif %}
             <button class="reject-btn" data-doi-action="reject" data-candidate-id="{{ c.id }}" title="Reject &mdash; wrong match, discard">&#x1f5d1;&#xfe0e;</button>
           </div>
           {% elif c.status == 'approved' %}

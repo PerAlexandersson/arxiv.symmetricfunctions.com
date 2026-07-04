@@ -973,6 +973,7 @@ def _attach_doi_display_fields(candidates):
         labels = []
         details = []
         for conflict in conflicts:
+            conflict['title_display'] = normalize_title(conflict.get('title') or '')
             label = f"arXiv: {conflict['arxiv_id']}"
             if conflict.get('doi_status'):
                 label += f" ({conflict['doi_status']})"
@@ -1157,6 +1158,77 @@ def approve_doi(cid):
     counts = _doi_counts(cursor)
     cursor.close()
     return jsonify({'ok': True, 'doi': cand['doi'], 'counts': counts})
+
+
+@admin.route('/dois/<int:cid>/reassign', methods=['POST'])
+@login_required
+def reassign_doi(cid):
+    """Move an already-assigned DOI to this candidate's paper."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT dc.paper_id, dc.doi, dc.confidence
+        FROM doi_candidates dc WHERE dc.id = %s
+    """, (cid,))
+    cand = cursor.fetchone()
+    if not cand:
+        cursor.close()
+        return jsonify({'ok': False, 'error': 'not found'}), 404
+
+    cursor.execute("""
+        SELECT id AS paper_id, arxiv_id, title, doi_status
+        FROM papers
+        WHERE doi = %s AND id != %s
+    """, (cand['doi'], cand['paper_id']))
+    conflicts = cursor.fetchall()
+    conflict_ids = [row['paper_id'] for row in conflicts]
+
+    if conflict_ids:
+        placeholders = ','.join(['%s'] * len(conflict_ids))
+        cursor.execute(f"""
+            UPDATE papers
+            SET doi = NULL,
+                doi_status = NULL,
+                doi_confidence = NULL,
+                publication_status = CASE
+                    WHEN publication_url IS NULL AND publication_venue_key IS NULL THEN NULL
+                    ELSE publication_status
+                END
+            WHERE id IN ({placeholders})
+        """, conflict_ids)
+        cursor.execute(f"""
+            UPDATE doi_candidates
+            SET status = 'rejected', reviewed_at = NOW()
+            WHERE doi = %s AND paper_id IN ({placeholders})
+        """, [cand['doi']] + conflict_ids)
+
+    cursor.execute("""
+        UPDATE papers SET doi = %s, doi_status = 'verified',
+               doi_confidence = %s WHERE id = %s
+    """, (cand['doi'], cand['confidence'], cand['paper_id']))
+    cursor.execute("""
+        UPDATE doi_candidates SET status = 'approved', reviewed_at = NOW()
+        WHERE id = %s
+    """, (cid,))
+    _mark_other_doi_candidates_rejected(cursor, cand['paper_id'], keep_doi=cand['doi'])
+    conn.commit()
+    _mark_index_cache_dirty()
+    counts = _doi_counts(cursor)
+    cursor.close()
+    return jsonify({
+        'ok': True,
+        'doi': cand['doi'],
+        'counts': counts,
+        'reassigned_from': [
+            {
+                'paper_id': row['paper_id'],
+                'arxiv_id': row['arxiv_id'],
+                'title': row['title'],
+                'doi_status': row['doi_status'],
+            }
+            for row in conflicts
+        ],
+    })
 
 
 @admin.route('/dois/<int:cid>/reject', methods=['POST'])

@@ -59,9 +59,13 @@ class FakeCursor:
 class FakeConnection:
     def __init__(self, cursor):
         self._cursor = cursor
+        self.committed = False
 
     def cursor(self):
         return self._cursor
+
+    def commit(self):
+        self.committed = True
 
 
 class RouteTests(unittest.TestCase):
@@ -275,6 +279,45 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(200, resp.status_code)
         self.assertIn('fetch.log', html)
         self.assertIn('legacy fetch output', html)
+
+    def test_admin_doi_reassign_clears_conflicts_and_approves_candidate(self):
+        import admin as admin_module
+
+        cursor = FakeCursor(
+            fetchone_values=[{
+                'paper_id': 10,
+                'doi': '10.1000/example',
+                'confidence': 0.91,
+            }],
+            fetchall_values=[
+                [{
+                    'paper_id': 20,
+                    'arxiv_id': '2401.00020',
+                    'title': 'Old DOI Assignment',
+                    'doi_status': 'auto',
+                }],
+                [{'status': 'approved', 'cnt': 1}],
+            ],
+        )
+        conn = FakeConnection(cursor)
+        with self.client.session_transaction() as sess:
+            sess['admin_logged_in'] = True
+
+        with mock.patch.object(admin_module, 'get_db_connection',
+                               return_value=conn), \
+                mock.patch.object(admin_module, '_mark_index_cache_dirty'):
+            resp = self.client.post('/admin/dois/99/reassign')
+
+        data = resp.get_json()
+        queries = [q for q, _ in cursor.queries]
+        self.assertEqual(200, resp.status_code)
+        self.assertTrue(data['ok'])
+        self.assertTrue(conn.committed)
+        self.assertEqual('2401.00020', data['reassigned_from'][0]['arxiv_id'])
+        self.assertTrue(any('SET doi = NULL' in q for q in queries))
+        self.assertTrue(any("SET status = 'rejected'" in q for q in queries))
+        self.assertTrue(any("doi_status = 'verified'" in q for q in queries))
+        self.assertTrue(any("SET status = 'approved'" in q for q in queries))
 
 
 if __name__ == '__main__':
