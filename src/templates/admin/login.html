@@ -8,6 +8,7 @@
   {% endif %}
 {% endwith %}
 <form method="post" class="admin-form admin-login-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <label>Password<br>
     <input type="password" name="password" autofocus class="form-control admin-login-password">
   </label>
