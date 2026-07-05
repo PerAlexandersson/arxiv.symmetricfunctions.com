@@ -6,6 +6,7 @@ Main web interface for browsing arXiv papers.
 """
 
 from flask import Flask, render_template, request, jsonify, abort, redirect, url_for, session
+from markupsafe import Markup, escape
 from urllib.parse import unquote, urlencode
 import io
 import contextlib
@@ -247,6 +248,85 @@ def _sf_url(value):
     return f'{SF_BASE}#{value}'
 
 app.jinja_env.filters['sf_url'] = _sf_url
+
+
+def _sf_label(value):
+    if not value or value.startswith(('http://', 'https://')):
+        return None
+    return sf_labels.get(value)
+
+
+app.jinja_env.filters['sf_label'] = _sf_label
+
+
+def _search_highlight_terms(query):
+    """Return short, safe-ish text terms to highlight in search results."""
+    terms = []
+    for raw in re.findall(r'[A-Za-z0-9][A-Za-z0-9_.-]*', query or ''):
+        term = raw.strip('._-').lower()
+        if len(term) < 2 or term in terms:
+            continue
+        terms.append(term)
+        if len(terms) >= 8:
+            break
+    return terms
+
+
+def _normalized_search_text(value):
+    return strip_accents(str(value or '')).casefold()
+
+
+def _contains_search_term(value, terms):
+    haystack = _normalized_search_text(value)
+    return any(_normalized_search_text(term) in haystack for term in terms)
+
+
+def _annotate_search_matches(papers, query, forced_label=None):
+    """Attach compact search reason labels to paper dicts."""
+    terms = _search_highlight_terms(query)
+    for paper in papers:
+        labels = []
+        if forced_label:
+            labels.append(forced_label)
+        if terms and _contains_search_term(paper.get('title'), terms):
+            labels.append('title')
+        authors = paper.get('authors') or []
+        if paper.get('author_match') or any(_contains_search_term(author, terms) for author in authors):
+            labels.append('author')
+        keywords = paper.get('keywords') or []
+        if any(_contains_search_term(kw.get('phrase'), terms) for kw in keywords):
+            labels.append('keyword')
+        if terms and _contains_search_term(paper.get('abstract'), terms):
+            labels.append('abstract')
+        if not labels and paper.get('text_score'):
+            labels.append('text')
+        paper['search_match_labels'] = list(dict.fromkeys(labels))
+    return terms
+
+
+@app.template_filter('highlight_terms')
+def highlight_terms_filter(value, terms):
+    """Escape value, then wrap matched terms in a search highlight mark."""
+    text = str(value or '')
+    clean_terms = [str(term) for term in (terms or []) if term]
+    if not text or not clean_terms:
+        return escape(text)
+    pattern = re.compile(
+        '|'.join(re.escape(term) for term in sorted(clean_terms, key=len, reverse=True)),
+        re.IGNORECASE,
+    )
+    parts = []
+    last = 0
+    for match in pattern.finditer(text):
+        if match.start() > last:
+            parts.append(str(escape(text[last:match.start()])))
+        parts.append('<mark class="search-hit">')
+        parts.append(str(escape(match.group(0))))
+        parts.append('</mark>')
+        last = match.end()
+    if last < len(text):
+        parts.append(str(escape(text[last:])))
+    return Markup(''.join(parts))
 
 
 def _extract_arxiv_id(value):
@@ -1056,6 +1136,39 @@ def _author_search_condition(author_terms):
     """, params
 
 
+def _keyword_search_condition(keyword_terms):
+    """Build SQL requiring every term to appear among active keywords/aliases."""
+    if not keyword_terms:
+        return "0 = 1", []
+
+    having = []
+    params = []
+    for term in keyword_terms:
+        having.append("""
+            SUM(
+                CASE
+                    WHEN LOWER(k.phrase) LIKE %s OR LOWER(ka.alias) LIKE %s
+                    THEN 1 ELSE 0
+                END
+            ) > 0
+        """)
+        like_term = f"%{term}%"
+        params.extend([like_term, like_term])
+
+    return f"""
+        EXISTS (
+            SELECT 1
+            FROM paper_keywords pk_match
+            JOIN keywords k ON k.id = pk_match.keyword_id
+            LEFT JOIN keyword_aliases ka ON ka.keyword_id = k.id
+            WHERE pk_match.paper_id = p.id
+              AND k.active = 1
+            GROUP BY pk_match.paper_id
+            HAVING {' AND '.join(having)}
+        )
+    """, params
+
+
 def _latest_search_date(cursor):
     cursor.execute("SELECT latest_date FROM site_stats WHERE id = 1")
     row = cursor.fetchone()
@@ -1221,12 +1334,14 @@ def search():
         total = len(bibtex_matches)
         papers = bibtex_matches[offset:offset + per_page]
         attach_keywords(cursor, papers)
+        search_terms = _annotate_search_matches(papers, query, forced_label='BibTeX key')
         latest_date = _latest_search_date(cursor)
         cursor.close()
         return render_template('search.html',
                                papers=papers,
                                query=query,
                                sort=sort,
+                               search_terms=search_terms,
                                page=page,
                                total_pages=(total + per_page - 1) // per_page,
                                total=total,
@@ -1239,10 +1354,10 @@ def search():
         (SELECT pk.paper_id, COALESCE(SUM(k.score), 0) AS kw_score
          FROM paper_keywords pk
          JOIN keywords k ON pk.keyword_id = k.id
-         GROUP BY pk.paper_id) kw
+        GROUP BY pk.paper_id) kw
     """
-
-    order_clause = ("author_match DESC, text_score DESC, kw_score DESC, p.published_date DESC, p.id DESC"
+    order_clause = ("author_match DESC, keyword_match DESC, text_score DESC, "
+                    "kw_score DESC, p.published_date DESC, p.id DESC"
                     if sort == 'relevance'
                     else "p.published_date DESC, p.id DESC")
 
@@ -1250,6 +1365,8 @@ def search():
     use_fulltext = all(len(w) >= 3 for w in words) and len(words) > 0
     author_condition, author_params = _author_search_condition(
         _search_author_terms(query))
+    keyword_condition, keyword_params = _keyword_search_condition(
+        _search_highlight_terms(query))
 
     if use_fulltext:
         ft_query = '+' + ' +'.join(words)  # boolean mode: require all words
@@ -1259,7 +1376,8 @@ def search():
             FROM papers p
             WHERE MATCH(p.title, p.abstract) AGAINST(%s IN BOOLEAN MODE)
                OR {author_condition}
-        """, [ft_query] + author_params)
+               OR {keyword_condition}
+        """, [ft_query] + author_params + keyword_params)
         total = cursor.fetchone()['count']
 
         cursor.execute(f"""
@@ -1268,15 +1386,20 @@ def search():
                    p.publication_url, p.publication_venue_key, p.publication_status,
                    p.comment, p.primary_category,
                    ({author_condition}) AS author_match,
+                   ({keyword_condition}) AS keyword_match,
                    MATCH(p.title, p.abstract) AGAINST(%s IN BOOLEAN MODE) AS text_score,
                    COALESCE(kw.kw_score, 0) AS kw_score
             FROM papers p
             LEFT JOIN {kw_subquery} ON p.id = kw.paper_id
             WHERE MATCH(p.title, p.abstract) AGAINST(%s IN BOOLEAN MODE)
                OR {author_condition}
+               OR {keyword_condition}
             ORDER BY {order_clause}
             LIMIT %s OFFSET %s
-        """, author_params + [ft_query, ft_query] + author_params + [per_page, offset])
+        """, (
+            author_params + keyword_params + [ft_query, ft_query] +
+            author_params + keyword_params + [per_page, offset]
+        ))
     else:
         like_term = f"%{query}%"
 
@@ -1284,7 +1407,8 @@ def search():
             SELECT COUNT(DISTINCT p.id) as count FROM papers p
             WHERE p.title LIKE %s OR p.abstract LIKE %s
                OR {author_condition}
-        """, [like_term, like_term] + author_params)
+               OR {keyword_condition}
+        """, [like_term, like_term] + author_params + keyword_params)
         total = cursor.fetchone()['count']
 
         cursor.execute(f"""
@@ -1293,6 +1417,7 @@ def search():
                    p.publication_url, p.publication_venue_key, p.publication_status,
                    p.comment, p.primary_category,
                    ({author_condition}) AS author_match,
+                   ({keyword_condition}) AS keyword_match,
                    CASE
                        WHEN p.title LIKE %s THEN 2
                        WHEN p.abstract LIKE %s THEN 1
@@ -1303,13 +1428,18 @@ def search():
             LEFT JOIN {kw_subquery} ON p.id = kw.paper_id
             WHERE p.title LIKE %s OR p.abstract LIKE %s
                OR {author_condition}
+               OR {keyword_condition}
             ORDER BY {order_clause}
             LIMIT %s OFFSET %s
-        """, author_params + [like_term, like_term, like_term, like_term] + author_params + [per_page, offset])
+        """, (
+            author_params + keyword_params + [like_term, like_term, like_term, like_term] +
+            author_params + keyword_params + [per_page, offset]
+        ))
 
     papers = cursor.fetchall()
     attach_authors(cursor, papers)
     attach_keywords(cursor, papers)
+    search_terms = _annotate_search_matches(papers, query)
 
     cursor.close()
 
@@ -1319,6 +1449,7 @@ def search():
                            papers=papers,
                            query=query,
                            sort=sort,
+                           search_terms=search_terms,
                            page=page,
                            total_pages=total_pages,
                            total=total,

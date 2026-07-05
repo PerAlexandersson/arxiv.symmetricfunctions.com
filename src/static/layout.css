@@ -273,9 +273,11 @@ main {
 }
 
 .page-title__link {
+  display: inline-block;
   font-size: 0.6em;
   font-weight: 400;
   margin-left: 0.6rem;
+  position: relative;
   vertical-align: middle;
 }
 
@@ -499,6 +501,51 @@ details.abstract-details summary.paper-title:hover {
   background: var(--c-bg-header);
   border-radius: 4px;
   border-left: 3px solid var(--c-brand-light);
+}
+
+:root.compact-papers .paper {
+  padding: 0.45rem 0.7rem;
+  margin: 0 -0.7rem;
+  border-radius: 4px;
+}
+
+:root.compact-papers .paper-authors-row {
+  gap: 0.55rem;
+  margin-bottom: 0.08rem;
+}
+
+:root.compact-papers summary.paper-title {
+  font-size: 0.9rem;
+  line-height: 1.24;
+}
+
+:root.compact-papers .paper-authors {
+  font-size: 0.8rem;
+}
+
+:root.compact-papers .paper-links {
+  gap: 0.25rem;
+}
+
+:root.compact-papers .paper-links a {
+  min-height: 1.5rem;
+  padding-block: 0.05rem;
+}
+
+:root.compact-papers .paper-kw-tags--list {
+  margin-top: 0.25rem;
+  line-height: 1.45;
+}
+
+:root.compact-papers .kw-tag--small {
+  font-size: 0.64rem;
+  padding: 0.06rem 0.28rem;
+}
+
+:root.compact-papers .paper-abstract {
+  margin-top: 0.35rem;
+  padding: 0.7rem 0.85rem;
+  line-height: 1.42;
 }
 
 /* BibTeX Display */
@@ -783,4 +830,3 @@ code {
 .katex {
   font-size: 1.1em;
 }
-

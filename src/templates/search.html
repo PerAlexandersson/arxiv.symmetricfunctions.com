@@ -19,7 +19,7 @@
 
     {% if papers %}
         {% for paper in papers %}
-            {{ render_paper(paper, latest_date) }}
+            {{ render_paper(paper, latest_date, search_terms=search_terms, show_search_context=True) }}
         {% endfor %}
         {{ render_pagination(page, total_pages, '/search?q=' ~ (query | urlencode) ~ '&sort=' ~ sort ~ '&page=') }}
     {% else %}

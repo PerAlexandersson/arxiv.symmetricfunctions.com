@@ -202,9 +202,42 @@
   text-decoration: none;
   opacity: 0.5;
   line-height: 1;
+  position: relative;
   transition: opacity 0.1s;
 }
 .kw-tag--has-info:hover .kw-tag__info { opacity: 1; }
+
+.kw-tag__info[data-sf-preview]::after,
+.page-title__link[data-sf-preview]::after {
+  content: attr(data-sf-preview);
+  position: absolute;
+  z-index: 20;
+  bottom: calc(100% + 0.35rem);
+  left: 50%;
+  width: max-content;
+  max-width: min(20rem, 80vw);
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--c-border);
+  border-radius: 4px;
+  background: var(--c-bg-surface);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.16);
+  color: var(--c-text-main);
+  font-size: 0.72rem;
+  line-height: 1.25;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 0.2rem);
+  transition: opacity 0.12s, transform 0.12s;
+  white-space: normal;
+}
+
+.kw-tag__info[data-sf-preview]:hover::after,
+.kw-tag__info[data-sf-preview]:focus-visible::after,
+.page-title__link[data-sf-preview]:hover::after,
+.page-title__link[data-sf-preview]:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
 
 /* Watched keyword highlight */
 .kw-tag--watched {
@@ -228,6 +261,61 @@
 .paper-kw-tags--list {
   margin-top: 0.5rem;
   line-height: 1.8;
+}
+
+.search-match-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.1rem 0 0.2rem;
+}
+
+.search-match-chip {
+  border: 1px solid var(--c-border);
+  border-radius: 999px;
+  color: var(--c-text-muted);
+  font-size: 0.68rem;
+  line-height: 1.2;
+  padding: 0.08rem 0.45rem;
+}
+
+.search-hit {
+  background: #fff3a3;
+  border-radius: 2px;
+  color: inherit;
+  padding: 0 0.08em;
+}
+
+:root.dark .search-hit {
+  background: hsl(49, 52%, 28%);
+}
+
+:root.compact-papers .search-match-line {
+  margin: 0.02rem 0 0.08rem;
+}
+
+@media (max-width: 768px) {
+  :root.compact-papers .paper {
+    padding: 0.55rem 0.7rem;
+  }
+
+  :root.compact-papers .paper-authors {
+    margin-bottom: 0;
+  }
+
+  :root.compact-papers .paper-links a,
+  :root.compact-papers .paper-icon-btn {
+    min-height: 2.35rem;
+    min-width: 2rem;
+  }
+
+  :root.compact-papers .paper-links .bullet {
+    line-height: 2.35rem;
+  }
+
+  :root.compact-papers summary.paper-title {
+    font-size: 0.94rem;
+  }
 }
 
 /* Contextual override: author lists and calendar cells both use paper counts. */

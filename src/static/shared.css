@@ -374,6 +374,10 @@
   color: var(--c-brand);
   text-decoration: none;
 }
+.nav-icon-btn.nav-icon-active {
+  background: var(--c-bg-gray);
+  color: var(--c-brand);
+}
 .nav-icon-btn svg {
   width: 1.1rem;
   height: 1.1rem;
@@ -584,4 +588,3 @@ body.modal-open { overflow: hidden; }
 .save-dropdown-item:hover { background: var(--c-bg-gray); color: var(--c-brand); }
 .save-dropdown-new       { color: var(--c-link); border-top: 1px solid var(--c-border); }
 .save-dropdown-empty     { color: var(--c-text-muted); cursor: default; }
-

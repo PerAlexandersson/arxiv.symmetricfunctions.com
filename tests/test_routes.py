@@ -181,12 +181,25 @@ class RouteTests(unittest.TestCase):
         html = resp.get_data(as_text=True)
         final_query = cursor.queries[-1][0]
         self.assertEqual(200, resp.status_code)
-        self.assertIn('Schur Graphs from Authors', html)
+        self.assertIn('<mark class="search-hit">Schur</mark>', html)
+        self.assertIn('<mark class="search-hit">Graph</mark>s from Authors', html)
         self.assertIn(
-            'ORDER BY author_match DESC, text_score DESC, kw_score DESC, '
+            'ORDER BY author_match DESC, keyword_match DESC, text_score DESC, '
+            'kw_score DESC, '
             'p.published_date DESC, p.id DESC',
             final_query,
         )
+        self.assertIn('LEFT JOIN keyword_aliases ka', final_query)
+
+    def test_highlight_terms_filter_escapes_input(self):
+        rendered = str(app_module.highlight_terms_filter(
+            '<script>Schur</script>',
+            ['schur'],
+        ))
+
+        self.assertIn('&lt;script&gt;', rendered)
+        self.assertIn('<mark class="search-hit">Schur</mark>', rendered)
+        self.assertNotIn('<script>', rendered)
 
     def test_search_date_sort_uses_date_ordering(self):
         cursor = FakeCursor(

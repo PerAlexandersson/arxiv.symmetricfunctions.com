@@ -321,6 +321,9 @@ function initDelegatedActions() {
             case 'toggle-dark-mode':
                 toggleDarkMode();
                 break;
+            case 'toggle-compact-papers':
+                toggleCompactPapers();
+                break;
             case 'close-bibtex-modal':
                 closeBibtexModal();
                 break;
@@ -518,12 +521,26 @@ function initKeyboardShortcuts() {
 // UI FEATURES - Dark Mode
 // ============================================================================
 
+function getStoredPreference(key) {
+    try {
+        return localStorage.getItem(key);
+    } catch (err) {
+        return null;
+    }
+}
+
+function setStoredPreference(key, value) {
+    try {
+        localStorage.setItem(key, value);
+    } catch (err) {}
+}
+
 /**
  * Toggle dark mode and persist preference
  */
 function toggleDarkMode() {
     const isDark = document.documentElement.classList.toggle('dark');
-    localStorage.setItem('dark-mode', isDark ? 'on' : 'off');
+    setStoredPreference('dark-mode', isDark ? 'on' : 'off');
     updateDarkModeLabel();
 }
 
@@ -543,11 +560,46 @@ function updateDarkModeLabel() {
  * Initialize dark mode from saved preference
  */
 function initDarkMode() {
-    const saved = localStorage.getItem('dark-mode');
+    const saved = getStoredPreference('dark-mode');
     if (saved === 'on') {
         document.documentElement.classList.add('dark');
     }
     updateDarkModeLabel();
+}
+
+// ============================================================================
+// UI FEATURES - Compact Paper List
+// ============================================================================
+
+/**
+ * Toggle compact paper list mode and persist preference.
+ */
+function toggleCompactPapers() {
+    const isCompact = document.documentElement.classList.toggle('compact-papers');
+    setStoredPreference('compact-paper-list', isCompact ? 'on' : 'off');
+    updateCompactPaperLabel();
+}
+
+/**
+ * Update compact-mode toggle state.
+ */
+function updateCompactPaperLabel() {
+    const toggle = document.getElementById('compact-paper-toggle');
+    if (!toggle) return;
+    const isCompact = document.documentElement.classList.contains('compact-papers');
+    toggle.setAttribute('aria-label', isCompact ? 'Use relaxed paper list' : 'Use compact paper list');
+    toggle.setAttribute('title', isCompact ? 'Use relaxed paper list' : 'Use compact paper list');
+    toggle.classList.toggle('nav-icon-active', isCompact);
+}
+
+/**
+ * Initialize compact paper list mode from saved preference.
+ */
+function initCompactPapers() {
+    if (getStoredPreference('compact-paper-list') === 'on') {
+        document.documentElement.classList.add('compact-papers');
+    }
+    updateCompactPaperLabel();
 }
 
 // ============================================================================
@@ -947,6 +999,7 @@ async function csrfJsonFetch(url, data) {
  */
 document.addEventListener('DOMContentLoaded', function() {
     initDarkMode();
+    initCompactPapers();
     initDelegatedActions();
     initAbstractPersistence();
     initKeyboardShortcuts();

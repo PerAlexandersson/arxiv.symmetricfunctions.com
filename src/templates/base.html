@@ -10,7 +10,16 @@
         gtag('js', new Date());
         gtag('config', 'G-MZ4DPP8FJR');
     </script>
-    <script>if(localStorage.getItem('dark-mode')==='on')document.documentElement.classList.add('dark')</script>
+    <script>
+      try {
+        if (localStorage.getItem('dark-mode') === 'on') {
+          document.documentElement.classList.add('dark');
+        }
+        if (localStorage.getItem('compact-paper-list') === 'on') {
+          document.documentElement.classList.add('compact-papers');
+        }
+      } catch (e) {}
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}arXiv++ Combinatorics{% endblock %}</title>
     <meta name="author" content="Per Alexandersson" />
@@ -22,9 +31,9 @@
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32.png') }}">
     <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='favicon-192.png') }}">
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='favicon-180.png') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='layout.css') }}?v=1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='shared.css') }}?v=1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='pages.css') }}?v=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='layout.css') }}?v=2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='shared.css') }}?v=2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='pages.css') }}?v=2">
     {% if request.endpoint and request.endpoint.startswith('admin.') %}
     <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}?v=1">
     {% endif %}
@@ -72,7 +81,7 @@
     </script>
 
     <!-- Utility functions -->
-    <script src="{{ url_for('static', filename='utils.js') }}?v=9"></script>
+    <script src="{{ url_for('static', filename='utils.js') }}?v=10"></script>
 
     {% block extra_css %}{% endblock %}
 </head>
@@ -109,6 +118,11 @@
                   </a>
 
                   <span class="nav-sep" aria-hidden="true"></span>
+                  <button class="nav-icon-btn" id="compact-paper-toggle" data-action="toggle-compact-papers" aria-label="Toggle compact paper list" title="Toggle compact paper list">
+                    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path d="M4 4.5A1.5 1.5 0 115.5 6 1.5 1.5 0 014 4.5zM8 4a1 1 0 000 2h8a1 1 0 100-2H8zM4 10a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zM8 9a1 1 0 000 2h8a1 1 0 100-2H8zM4 15.5A1.5 1.5 0 115.5 17 1.5 1.5 0 014 15.5zM8 15a1 1 0 100 2h8a1 1 0 100-2H8z"/>
+                    </svg>
+                  </button>
 
                   <!-- User section: grayed out when not signed in -->
                   {% if current_user %}

@@ -6,9 +6,13 @@
 {% block content %}
 <h2 class="page-title">
   {{ keyword.phrase }}
+  {% set sf_info = keyword.url | sf_label %}
   <a href="{{ keyword.url | sf_url }}" target="_blank" rel="noopener"
      id="kw-reference-link"
-     class="page-title__link"{% if not keyword.url %} style="display:none;"{% endif %}>↗ reference</a>
+     class="page-title__link"
+     title="{% if sf_info %}{{ sf_info.title }} · {{ sf_info.page }} on symmetricfunctions.com{% else %}Reference page{% endif %}"
+     {% if sf_info %}data-sf-preview="{{ sf_info.title }} · {{ sf_info.page }}"{% endif %}
+     {% if not keyword.url %} style="display:none;"{% endif %}>↗ reference</a>
 </h2>
 
 <div class="stats">
