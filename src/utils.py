@@ -162,7 +162,7 @@ def arxiv2bib(paper_data):
     key  = generate_bibtex_key(paper_data.get('authors', []), year, published=False)
 
     author_str      = ' and '.join(paper_data.get('authors', [])) or 'Unknown'
-    clean_arxiv_id  = re.sub(r'v\d+$', '', paper_data['arxiv_id'])
+    arxiv_id        = str(paper_data['arxiv_id']).strip()
     protected_title = protect_capitals_for_bibtex(paper_data['title'])
 
     bib = (
@@ -170,8 +170,8 @@ def arxiv2bib(paper_data):
         f"  author = {{{author_str}}},\n"
         f"  title = {{{protected_title}}},\n"
         f"  year = {{{year}}},\n"
-        f"  eprint = {{{clean_arxiv_id}}},\n"
-        f"  url = {{https://arxiv.org/abs/{clean_arxiv_id}}},\n"
+        f"  eprint = {{{arxiv_id}}},\n"
+        f"  url = {{https://arxiv.org/abs/{arxiv_id}}},\n"
         f"  journal = {{arXiv e-prints}}"
     )
     if paper_data.get('journal_ref'):

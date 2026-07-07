@@ -793,11 +793,16 @@ def bibtex(arxiv_id):
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    canonical_id = _resolve_paper_arxiv_id(cursor, arxiv_id)
+    if not canonical_id:
+        cursor.close()
+        abort(404)
+
     cursor.execute("""
         SELECT id, arxiv_id, title, published_date, journal_ref, doi
         FROM papers
         WHERE arxiv_id = %s
-    """, (arxiv_id,))
+    """, (canonical_id,))
 
     paper = cursor.fetchone()
 
@@ -817,11 +822,16 @@ def doi_bibtex(arxiv_id):
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    canonical_id = _resolve_paper_arxiv_id(cursor, arxiv_id)
+    if not canonical_id:
+        cursor.close()
+        abort(404)
+
     cursor.execute("""
         SELECT id, arxiv_id, title, published_date, journal_ref, doi
         FROM papers
         WHERE arxiv_id = %s
-    """, (arxiv_id,))
+    """, (canonical_id,))
 
     paper = cursor.fetchone()
 
@@ -844,12 +854,17 @@ def publication_bibtex(arxiv_id):
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    canonical_id = _resolve_paper_arxiv_id(cursor, arxiv_id)
+    if not canonical_id:
+        cursor.close()
+        abort(404)
+
     cursor.execute("""
         SELECT id, arxiv_id, title, published_date, journal_ref, doi,
                publication_url, publication_venue_key, publication_status
         FROM papers
         WHERE arxiv_id = %s
-    """, (arxiv_id,))
+    """, (canonical_id,))
 
     paper = cursor.fetchone()
 
@@ -1035,6 +1050,12 @@ def _generate_bibtex(input_text, lookup_doi=False):
             entry = root.find('atom:entry', ns)
             if entry is None or entry.find('atom:title', ns) is None:
                 return {'error': 'Paper not found on arXiv'}, 404
+            entry_id_el = entry.find('atom:id', ns)
+            entry_arxiv_id = (
+                extract_arxiv_id(entry_id_el.text)
+                if entry_id_el is not None and entry_id_el.text
+                else arxiv_id
+            )
             title = ' '.join(entry.find('atom:title', ns).text.split())
             authors = [a.find('atom:name', ns).text
                        for a in entry.findall('atom:author', ns)]
@@ -1044,7 +1065,7 @@ def _generate_bibtex(input_text, lookup_doi=False):
             journal_el = entry.find('arxiv:journal_ref', ns)
             journal_val = journal_el.text.strip() if journal_el is not None else None
             paper_data = {
-                'arxiv_id': arxiv_id, 'title': title, 'authors': authors,
+                'arxiv_id': entry_arxiv_id, 'title': title, 'authors': authors,
                 'published_date': published, 'journal_ref': journal_val, 'doi': doi_val,
             }
             result = {'arxiv': arxiv2bib(paper_data)}

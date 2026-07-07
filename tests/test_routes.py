@@ -259,6 +259,60 @@ class RouteTests(unittest.TestCase):
         self.assertIn('https://arxiv.org/abs/2607.01572v1', html)
         self.assertIn('Sign in to star papers', html)
 
+    def test_bibtex_api_uses_canonical_versioned_arxiv_id(self):
+        paper = {
+            'id': 12,
+            'arxiv_id': '2607.01572v1',
+            'title': 'A Test Paper',
+            'published_date': date(2026, 7, 1),
+            'journal_ref': None,
+            'doi': None,
+        }
+        cursor = FakeCursor(fetchone_values=[paper])
+
+        with mock.patch.object(app_module, 'get_db_connection',
+                               return_value=FakeConnection(cursor)), \
+                mock.patch.object(app_module, '_resolve_paper_arxiv_id',
+                                  return_value='2607.01572v1'), \
+                mock.patch.object(app_module, 'get_paper_authors',
+                                  return_value=['Ada Lovelace']):
+            resp = self.client.get('/api/bibtex/2607.01572')
+
+        bib = resp.get_data(as_text=True)
+        self.assertEqual(200, resp.status_code)
+        self.assertIn('eprint = {2607.01572v1}', bib)
+        self.assertIn('url = {https://arxiv.org/abs/2607.01572v1}', bib)
+
+    def test_bibtex_json_fallback_uses_arxiv_entry_version(self):
+        class FakeResponse:
+            text = """<?xml version="1.0" encoding="UTF-8"?>
+            <feed xmlns="http://www.w3.org/2005/Atom"
+                  xmlns:arxiv="http://arxiv.org/schemas/atom">
+              <entry>
+                <id>http://arxiv.org/abs/2607.04999v1</id>
+                <title>Cluster parking functions II</title>
+                <published>2026-07-07T00:00:00Z</published>
+                <author><name>Matthieu Josuat-Vergès</name></author>
+              </entry>
+            </feed>"""
+
+            def raise_for_status(self):
+                pass
+
+        cursor = FakeCursor()
+        with mock.patch.object(app_module, 'get_db_connection',
+                               return_value=FakeConnection(cursor)), \
+                mock.patch.object(app_module, '_resolve_paper_arxiv_id',
+                                  return_value=None), \
+                mock.patch.object(app_module.requests, 'get',
+                                  return_value=FakeResponse()):
+            resp = self.client.get('/api/bibtex.json?id=2607.04999')
+
+        data = resp.get_json()
+        self.assertEqual(200, resp.status_code)
+        self.assertIn('eprint = {2607.04999v1}', data['arxiv'])
+        self.assertIn('url = {https://arxiv.org/abs/2607.04999v1}', data['arxiv'])
+
     def test_admin_cron_status_reads_configured_log(self):
         with tempfile.TemporaryDirectory() as tmp:
             log_path = Path(tmp) / 'arxiv-update.log'

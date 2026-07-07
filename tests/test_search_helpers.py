@@ -1,10 +1,12 @@
 import sys
 import unittest
+from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 
 from utils import (
+    arxiv2bib,
     bibtex_keys_for_authors_year,
     extract_arxiv_id,
     parse_bibtex_search_key,
@@ -45,6 +47,20 @@ class SearchHelperTests(unittest.TestCase):
         )
         self.assertIn('athanasiadiswagner2024', keys)
         self.assertIn('athanasiadiswagner2024x', keys)
+
+    def test_arxiv2bib_preserves_arxiv_version(self):
+        bib = arxiv2bib({
+            'arxiv_id': '2607.04999v1',
+            'title': 'Cluster parking functions II',
+            'authors': ['Matthieu Josuat-Vergès'],
+            'published_date': date(2026, 7, 7),
+            'journal_ref': None,
+            'doi': None,
+        })
+
+        self.assertIn('eprint = {2607.04999v1}', bib)
+        self.assertIn('url = {https://arxiv.org/abs/2607.04999v1}', bib)
+        self.assertNotIn('eprint = {2607.04999}', bib)
 
 
 if __name__ == '__main__':
