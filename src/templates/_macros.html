@@ -64,7 +64,7 @@
 
 {% macro paper_action_links(paper, include_info=True, list_cat_id=None, include_refetch=False) %}
 <div class="paper-links">
-    <a href="#paper-{{ paper.arxiv_id }}" data-action="copy-share-link" data-arxiv-id="{{ paper.arxiv_id }}" title="Copy shareable link" aria-label="Copy link">#</a>
+    <a href="{{ url_for('paper_detail', arxiv_id=paper.arxiv_id) }}" data-action="copy-share-link" data-arxiv-id="{{ paper.arxiv_id }}" title="Copy shareable link" aria-label="Copy link">#</a>
     {% if include_info %}
     <span class="bullet" aria-hidden="true">•</span>
     <a href="/paper/{{ paper.arxiv_id }}" title="View details" aria-label="Paper details">INFO</a>

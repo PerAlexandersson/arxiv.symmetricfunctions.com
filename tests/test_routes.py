@@ -119,6 +119,7 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(200, resp.status_code)
         self.assertIn('Eulerian Polynomials in Disguise', html)
         self.assertIn('data-action="copy-bibtex"', html)
+        self.assertIn('href="/paper/2401.00001" data-action="copy-share-link"', html)
         self.assertIn('href="/paper/2401.00001"', html)
 
     def test_search_exact_author_redirects_to_author_page(self):
@@ -254,6 +255,7 @@ class RouteTests(unittest.TestCase):
         html = resp.get_data(as_text=True)
         self.assertEqual(200, resp.status_code)
         self.assertIn('data-action="copy-share-link"', html)
+        self.assertIn('href="/paper/2607.01572v1" data-action="copy-share-link"', html)
         self.assertIn('data-action="copy-bibtex"', html)
         self.assertIn('https://arxiv.org/pdf/2607.01572v1', html)
         self.assertIn('https://arxiv.org/abs/2607.01572v1', html)
