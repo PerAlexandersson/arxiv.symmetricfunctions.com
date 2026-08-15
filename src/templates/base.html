@@ -15,9 +15,7 @@
         if (localStorage.getItem('dark-mode') === 'on') {
           document.documentElement.classList.add('dark');
         }
-        if (localStorage.getItem('compact-paper-list') === 'on') {
-          document.documentElement.classList.add('compact-papers');
-        }
+        document.documentElement.classList.add('compact-papers');
       } catch (e) {}
     </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -118,12 +116,6 @@
                   </a>
 
                   <span class="nav-sep" aria-hidden="true"></span>
-                  <button class="nav-icon-btn" id="compact-paper-toggle" data-action="toggle-compact-papers" aria-label="Toggle compact paper list" title="Toggle compact paper list">
-                    <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                      <path d="M4 4.5A1.5 1.5 0 115.5 6 1.5 1.5 0 014 4.5zM8 4a1 1 0 000 2h8a1 1 0 100-2H8zM4 10a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zM8 9a1 1 0 000 2h8a1 1 0 100-2H8zM4 15.5A1.5 1.5 0 115.5 17 1.5 1.5 0 014 15.5zM8 15a1 1 0 100 2h8a1 1 0 100-2H8z"/>
-                    </svg>
-                  </button>
-
                   <!-- User section: grayed out when not signed in -->
                   {% if current_user %}
                   {% if is_admin %}

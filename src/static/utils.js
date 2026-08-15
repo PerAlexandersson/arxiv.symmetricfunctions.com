@@ -321,9 +321,6 @@ function initDelegatedActions() {
             case 'toggle-dark-mode':
                 toggleDarkMode();
                 break;
-            case 'toggle-compact-papers':
-                toggleCompactPapers();
-                break;
             case 'close-bibtex-modal':
                 closeBibtexModal();
                 break;
@@ -572,34 +569,10 @@ function initDarkMode() {
 // ============================================================================
 
 /**
- * Toggle compact paper list mode and persist preference.
- */
-function toggleCompactPapers() {
-    const isCompact = document.documentElement.classList.toggle('compact-papers');
-    setStoredPreference('compact-paper-list', isCompact ? 'on' : 'off');
-    updateCompactPaperLabel();
-}
-
-/**
- * Update compact-mode toggle state.
- */
-function updateCompactPaperLabel() {
-    const toggle = document.getElementById('compact-paper-toggle');
-    if (!toggle) return;
-    const isCompact = document.documentElement.classList.contains('compact-papers');
-    toggle.setAttribute('aria-label', isCompact ? 'Use relaxed paper list' : 'Use compact paper list');
-    toggle.setAttribute('title', isCompact ? 'Use relaxed paper list' : 'Use compact paper list');
-    toggle.classList.toggle('nav-icon-active', isCompact);
-}
-
-/**
- * Initialize compact paper list mode from saved preference.
+ * Paper lists are compact by default.
  */
 function initCompactPapers() {
-    if (getStoredPreference('compact-paper-list') === 'on') {
-        document.documentElement.classList.add('compact-papers');
-    }
-    updateCompactPaperLabel();
+    document.documentElement.classList.add('compact-papers');
 }
 
 // ============================================================================
