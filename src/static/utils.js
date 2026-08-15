@@ -641,7 +641,10 @@ function setResultBoxState(box, state = '') {
 async function toggleWatch(type, id, btn) {
     btn.disabled = true;
     try {
-        const data = await csrfJsonFetch('/api/watch/' + type + '/' + id, {});
+        const desired = !btn.classList.contains('watching');
+        const data = await csrfJsonFetch('/api/watch/' + type + '/' + id, {
+            watching: desired ? 'true' : 'false',
+        });
         if (data.watching) {
             btn.textContent = 'Watching';
             btn.classList.add('watching');
@@ -649,6 +652,7 @@ async function toggleWatch(type, id, btn) {
             btn.textContent = 'Watch';
             btn.classList.remove('watching');
         }
+        btn.setAttribute('aria-pressed', data.watching ? 'true' : 'false');
     } catch (e) {
         if (e.message !== 'AUTH_REQUIRED') console.error('toggleWatch failed', e);
     } finally {
@@ -659,6 +663,42 @@ async function toggleWatch(type, id, btn) {
 // ============================================================================
 // MY LISTS — STAR / SAVE / REMOVE
 // ============================================================================
+
+let listCategoriesPromise = null;
+let activeSaveDropdownClose = null;
+
+function invalidateListCategories() {
+    listCategoriesPromise = null;
+}
+
+function getListCategories() {
+    if (!listCategoriesPromise) {
+        listCategoriesPromise = fetchJson('/api/lists/categories?counts=0').then(data => {
+            if (!Array.isArray(data)) throw new Error(data.error || 'Invalid list response');
+            return data;
+        }).catch(error => {
+            listCategoriesPromise = null;
+            throw error;
+        });
+    }
+    return listCategoriesPromise;
+}
+
+function showPaperActionMessage(btn, message, isError = false) {
+    let status = btn.parentElement?.querySelector('.paper-action-status');
+    if (!status) {
+        status = document.createElement('span');
+        status.className = 'paper-action-status';
+        status.setAttribute('role', 'status');
+        status.setAttribute('aria-live', 'polite');
+        btn.insertAdjacentElement('afterend', status);
+    }
+    status.classList.toggle('paper-action-status--error', isError);
+    status.textContent = message;
+    window.setTimeout(() => {
+        if (status.textContent === message) status.remove();
+    }, 3500);
+}
 
 function listDetailTitle(name) {
     return `${name} \u2014 My Lists \u2014 arXiv Combinatorics`;
@@ -692,7 +732,7 @@ function removeEmptyWatchGroup(container) {
  */
 async function unwatch(type, id, pillId) {
     try {
-        const data = await csrfJsonFetch('/api/watch/' + type + '/' + id, {});
+        const data = await csrfJsonFetch('/api/watch/' + type + '/' + id, { watching: 'false' });
         if (!data.watching) {
             const el = document.getElementById(pillId);
             const container = el ? el.closest('.watch-pills') : null;
@@ -713,6 +753,7 @@ async function createListPrompt() {
             alert(data.error);
             return;
         }
+        invalidateListCategories();
         location.reload();
     } catch (e) {
         if (e.message !== 'AUTH_REQUIRED') alert('Failed to create list.');
@@ -728,6 +769,7 @@ async function renameListPrompt(catId, currentName) {
             alert(data.error);
             return;
         }
+        invalidateListCategories();
         updateListNameInPage(catId, data.name || name.trim());
     } catch (e) {
         if (e.message !== 'AUTH_REQUIRED') alert('Failed to rename list.');
@@ -742,6 +784,7 @@ async function deleteListConfirm(catId, name) {
             alert(data.error);
             return;
         }
+        invalidateListCategories();
         const card = document.getElementById(`list-card-${catId}`);
         if (card) {
             card.remove();
@@ -759,18 +802,43 @@ async function deleteListConfirm(catId, name) {
  * @param {string} arxivId
  */
 async function toggleStar(btn, arxivId) {
+    if (btn.disabled) return;
+    const desired = !btn.classList.contains('starred');
+    btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
     try {
-        const resp = await csrfFetch(`/api/lists/star/${arxivId}`, {});
-        if (!resp.ok) {
-            if (resp.status === 401) { window.location.href = '/login'; return; }
-            throw new Error(`HTTP ${resp.status}`);
+        const arxivPath = arxivId.split('/').map(encodeURIComponent).join('/');
+        const data = await csrfJsonFetch(
+            `/api/lists/star/${arxivPath}`,
+            { starred: desired ? 'true' : 'false' }
+        );
+        if (data.error) throw new Error(data.error);
+
+        document.querySelectorAll('.star-btn[data-arxiv-id]').forEach(starBtn => {
+            if (starBtn.dataset.arxivId !== arxivId) return;
+            starBtn.classList.toggle('starred', data.starred);
+            starBtn.setAttribute('aria-pressed', data.starred ? 'true' : 'false');
+            starBtn.title = data.starred ? 'Remove from Starred' : 'Star this paper';
+            starBtn.setAttribute('aria-label', starBtn.title);
+        });
+        document.querySelectorAll('.save-btn[data-arxiv-id]').forEach(saveBtn => {
+            if (saveBtn.dataset.arxivId !== arxivId) return;
+            saveBtn.classList.toggle('saved', data.saved);
+            saveBtn.title = data.saved ? 'Saved to a list' : 'Save to list';
+        });
+        if (!data.starred && btn.dataset.starredList === '1') {
+            btn.closest('.list-paper-row')?.remove();
+        } else {
+            showPaperActionMessage(btn, data.starred ? 'Starred' : 'Unstarred');
         }
-        const data = await resp.json();
-        btn.classList.toggle('starred', data.starred);
-        btn.title = data.starred ? 'Remove from Starred' : 'Star this paper';
-        btn.setAttribute('aria-label', btn.title);
     } catch (err) {
-        console.error('toggleStar failed:', err);
+        if (err.message !== 'AUTH_REQUIRED') {
+            console.error('toggleStar failed:', err);
+            showPaperActionMessage(btn, err.message || 'Could not update star', true);
+        }
+    } finally {
+        btn.disabled = false;
+        btn.removeAttribute('aria-busy');
     }
 }
 
@@ -780,23 +848,71 @@ async function toggleStar(btn, arxivId) {
  * @param {string} arxivId
  */
 async function showSaveMenu(btn, arxivId) {
-    document.querySelectorAll('.save-dropdown').forEach(d => d.remove());
-
-    let categories;
-    try {
-        const resp = await fetch('/api/lists/categories');
-        if (!resp.ok) {
-            if (resp.status === 401) { window.location.href = '/login'; return; }
-            throw new Error(`HTTP ${resp.status}`);
-        }
-        categories = await resp.json();
-    } catch (err) {
-        console.error('showSaveMenu failed:', err);
-        return;
-    }
+    if (activeSaveDropdownClose) activeSaveDropdownClose();
 
     const dropdown = document.createElement('div');
     dropdown.className = 'save-dropdown';
+    dropdown.setAttribute('role', 'menu');
+    dropdown.setAttribute('aria-label', 'Save paper to list');
+
+    const loading = document.createElement('div');
+    loading.className = 'save-dropdown-item save-dropdown-empty';
+    loading.setAttribute('role', 'status');
+    loading.textContent = 'Loading lists…';
+    dropdown.appendChild(loading);
+
+    document.body.appendChild(dropdown);
+    btn.setAttribute('aria-expanded', 'true');
+    const rect = btn.getBoundingClientRect();
+    const ddW = dropdown.offsetWidth;
+    let left = rect.left + window.scrollX;
+    if (left + ddW > window.innerWidth - 8) left = window.innerWidth - ddW - 8;
+    dropdown.style.top = (rect.bottom + window.scrollY + 4) + 'px';
+    dropdown.style.left = Math.max(4, left) + 'px';
+
+    let closed = false;
+    const closeDropdown = (restoreFocus = false) => {
+        if (closed) return;
+        closed = true;
+        dropdown.remove();
+        btn.setAttribute('aria-expanded', 'false');
+        document.removeEventListener('click', onOutsideClick, true);
+        if (activeSaveDropdownClose === closeDropdown) activeSaveDropdownClose = null;
+        if (restoreFocus) btn.focus();
+    };
+    activeSaveDropdownClose = closeDropdown;
+    const onOutsideClick = event => {
+        if (!dropdown.contains(event.target) && event.target !== btn) closeDropdown();
+    };
+    dropdown.addEventListener('keydown', event => {
+        const items = [...dropdown.querySelectorAll('button:not(:disabled)')];
+        const index = items.indexOf(document.activeElement);
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            closeDropdown(true);
+        } else if (event.key === 'ArrowDown' && items.length) {
+            event.preventDefault();
+            items[(index + 1 + items.length) % items.length].focus();
+        } else if (event.key === 'ArrowUp' && items.length) {
+            event.preventDefault();
+            items[(index - 1 + items.length) % items.length].focus();
+        }
+    });
+    window.setTimeout(() => document.addEventListener('click', onOutsideClick, true), 0);
+
+    let categories;
+    try {
+        categories = await getListCategories();
+    } catch (err) {
+        if (err.message !== 'AUTH_REQUIRED') {
+            console.error('showSaveMenu failed:', err);
+            loading.textContent = 'Could not load lists';
+            loading.classList.add('paper-action-status--error');
+        }
+        return;
+    }
+    if (closed || !dropdown.isConnected) return;
+    dropdown.replaceChildren();
 
     if (categories.length === 0) {
         const empty = document.createElement('div');
@@ -805,58 +921,69 @@ async function showSaveMenu(btn, arxivId) {
         dropdown.appendChild(empty);
     } else {
         categories.forEach(cat => {
-            const item = document.createElement('div');
+            const item = document.createElement('button');
+            item.type = 'button';
             item.className = 'save-dropdown-item';
+            item.setAttribute('role', 'menuitem');
             item.textContent = cat.name;
             item.addEventListener('click', async () => {
-                dropdown.remove();
-                const r = await csrfFetch('/api/lists/save', { arxiv_id: arxivId, category_id: cat.id });
-                if (r.ok) {
+                closeDropdown();
+                btn.disabled = true;
+                btn.setAttribute('aria-busy', 'true');
+                try {
+                    const data = await csrfJsonFetch('/api/lists/save', {
+                        arxiv_id: arxivId,
+                        category_id: cat.id,
+                    });
+                    if (data.error) throw new Error(data.error);
                     btn.classList.add('saved');
                     btn.title = `Saved to ${cat.name}`;
-                } else {
-                    const d = await r.json();
-                    alert(d.error || 'Failed to save.');
+                    showPaperActionMessage(btn, `Saved to ${cat.name}`);
+                } catch (err) {
+                    if (err.message !== 'AUTH_REQUIRED') {
+                        showPaperActionMessage(btn, err.message || 'Failed to save', true);
+                    }
+                } finally {
+                    btn.disabled = false;
+                    btn.removeAttribute('aria-busy');
                 }
             });
             dropdown.appendChild(item);
         });
     }
 
-    const newItem = document.createElement('div');
+    const newItem = document.createElement('button');
+    newItem.type = 'button';
     newItem.className = 'save-dropdown-item save-dropdown-new';
+    newItem.setAttribute('role', 'menuitem');
     newItem.textContent = '+ New list\u2026';
     newItem.addEventListener('click', async () => {
-        dropdown.remove();
+        closeDropdown();
         const name = prompt('New list name:');
         if (!name || !name.trim()) return;
-        const r = await csrfFetch('/api/lists/save', { arxiv_id: arxivId, new_name: name.trim() });
-        if (r.ok) {
-            const d = await r.json();
+        btn.disabled = true;
+        btn.setAttribute('aria-busy', 'true');
+        try {
+            const data = await csrfJsonFetch('/api/lists/save', {
+                arxiv_id: arxivId,
+                new_name: name.trim(),
+            });
+            if (data.error) throw new Error(data.error);
             btn.classList.add('saved');
-            btn.title = `Saved to ${d.category_name}`;
-        } else {
-            const d = await r.json();
-            alert(d.error || 'Failed to save.');
+            btn.title = `Saved to ${data.category_name}`;
+            invalidateListCategories();
+            showPaperActionMessage(btn, `Saved to ${data.category_name}`);
+        } catch (err) {
+            if (err.message !== 'AUTH_REQUIRED') {
+                showPaperActionMessage(btn, err.message || 'Failed to save', true);
+            }
+        } finally {
+            btn.disabled = false;
+            btn.removeAttribute('aria-busy');
         }
     });
     dropdown.appendChild(newItem);
-
-    document.body.appendChild(dropdown);
-    const rect = btn.getBoundingClientRect();
-    const ddW  = dropdown.offsetWidth;
-    let left   = rect.left + window.scrollX;
-    if (left + ddW > window.innerWidth - 8) left = window.innerWidth - ddW - 8;
-    dropdown.style.top  = (rect.bottom + window.scrollY + 4) + 'px';
-    dropdown.style.left = Math.max(4, left) + 'px';
-
-    const closeDropdown = (e) => {
-        if (!dropdown.contains(e.target) && e.target !== btn) {
-            dropdown.remove();
-            document.removeEventListener('click', closeDropdown, true);
-        }
-    };
-    setTimeout(() => document.addEventListener('click', closeDropdown, true), 0);
+    dropdown.querySelector('button')?.focus();
 }
 
 /**
@@ -866,13 +993,24 @@ async function showSaveMenu(btn, arxivId) {
  * @param {number} catId
  */
 async function removePaperFromList(btn, arxivId, catId) {
+    if (btn.disabled) return;
+    btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
     try {
-        const resp = await csrfFetch('/api/lists/remove', { arxiv_id: arxivId, category_id: catId });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await csrfJsonFetch('/api/lists/remove', {
+            arxiv_id: arxivId,
+            category_id: catId,
+        });
+        if (data.error) throw new Error(data.error);
         const row = document.getElementById(`list-row-${arxivId}`);
         if (row) row.remove();
     } catch (err) {
-        alert('Failed to remove paper: ' + err);
+        if (err.message !== 'AUTH_REQUIRED') {
+            showPaperActionMessage(btn, err.message || 'Failed to remove paper', true);
+        }
+    } finally {
+        btn.disabled = false;
+        btn.removeAttribute('aria-busy');
     }
 }
 
@@ -923,9 +1061,22 @@ async function fetchResponseJson(response) {
     const redirectedUrl = response.url ? new URL(response.url, window.location.origin) : null;
     const redirectedToLogin = redirectedUrl && /\/(?:admin\/)?login\/?$/.test(redirectedUrl.pathname);
 
-    if ((response.status === 401 || response.status === 403) ||
-        (response.redirected && redirectedToLogin && contentType.includes('text/html'))) {
-        window.location.href = redirectedUrl ? redirectedUrl.toString() : '/login';
+    if (response.redirected && redirectedToLogin && contentType.includes('text/html')) {
+        window.location.href = redirectedUrl.toString();
+        throw new Error('AUTH_REQUIRED');
+    }
+
+    if (response.status === 401) {
+        let loginUrl = response.url.includes('/admin/') ? '/admin/login' : '/login';
+        if (contentType.includes('application/json')) {
+            try {
+                const authData = await response.clone().json();
+                if (authData.login_url) loginUrl = authData.login_url;
+            } catch (error) {
+                console.debug('Could not parse authentication response', error);
+            }
+        }
+        window.location.href = loginUrl;
         throw new Error('AUTH_REQUIRED');
     }
 
@@ -933,7 +1084,11 @@ async function fetchResponseJson(response) {
         throw new Error(`Expected JSON response, got ${contentType || 'unknown content type'}`);
     }
 
-    return response.json();
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || `HTTP ${response.status}`);
+    }
+    return data;
 }
 
 /**

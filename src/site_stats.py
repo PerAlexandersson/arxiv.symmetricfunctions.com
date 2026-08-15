@@ -7,10 +7,13 @@ state needed by the web process must be persisted in the database.
 
 import pymysql
 from datetime import datetime
+from threading import Lock
 
 from config import DB_CONFIG
 
 DEFAULT_CACHE_REBUILD_DELAY_SECONDS = 10 * 60
+_ensure_lock = Lock()
+_site_stats_ensured = False
 
 
 def _connect():
@@ -19,33 +22,40 @@ def _connect():
 
 def ensure_site_stats():
     """Create the site_stats table and seed it if empty."""
-    conn = _connect()
-    cursor = conn.cursor()
-    try:
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS site_stats (
-                id           TINYINT  NOT NULL DEFAULT 1,
-                paper_count  INT      NOT NULL DEFAULT 0,
-                author_count INT      NOT NULL DEFAULT 0,
-                latest_date  DATE,
-                updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                cache_dirty_at DATETIME NULL DEFAULT NULL,
-                cache_rebuild_after DATETIME NULL DEFAULT NULL,
-                PRIMARY KEY (id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-        """)
-        conn.commit()
-        cursor.execute("SELECT id FROM site_stats WHERE id = 1")
-        if not cursor.fetchone():
+    global _site_stats_ensured
+    if _site_stats_ensured:
+        return
+    with _ensure_lock:
+        if _site_stats_ensured:
+            return
+        conn = _connect()
+        cursor = conn.cursor()
+        try:
             cursor.execute("""
-                INSERT INTO site_stats (id, paper_count, author_count, latest_date)
-                SELECT 1, COUNT(*), (SELECT COUNT(*) FROM authors), MAX(published_date)
-                FROM papers
+                CREATE TABLE IF NOT EXISTS site_stats (
+                    id           TINYINT  NOT NULL DEFAULT 1,
+                    paper_count  INT      NOT NULL DEFAULT 0,
+                    author_count INT      NOT NULL DEFAULT 0,
+                    latest_date  DATE,
+                    updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    cache_dirty_at DATETIME NULL DEFAULT NULL,
+                    cache_rebuild_after DATETIME NULL DEFAULT NULL,
+                    PRIMARY KEY (id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """)
             conn.commit()
-    finally:
-        cursor.close()
-        conn.close()
+            cursor.execute("SELECT id FROM site_stats WHERE id = 1")
+            if not cursor.fetchone():
+                cursor.execute("""
+                    INSERT INTO site_stats (id, paper_count, author_count, latest_date)
+                    SELECT 1, COUNT(*), (SELECT COUNT(*) FROM authors), MAX(published_date)
+                    FROM papers
+                """)
+                conn.commit()
+            _site_stats_ensured = True
+        finally:
+            cursor.close()
+            conn.close()
 
 
 def refresh_site_stats():

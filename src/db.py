@@ -78,6 +78,7 @@ def attach_keywords(cursor, papers):
         FROM paper_keywords pk
         JOIN keywords k ON pk.keyword_id = k.id
         WHERE pk.paper_id IN ({placeholders})
+          AND k.active = 1
         ORDER BY pk.paper_id, k.score DESC, k.phrase ASC
     """, paper_ids)
     by_paper = {}

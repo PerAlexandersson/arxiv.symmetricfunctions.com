@@ -102,6 +102,7 @@ ssh -p "$REMOTE_PORT" "$REMOTE_HOST" "
     . $REMOTE_VENV
     cd ~/$REMOTE_PATH
     pip install -r requirements.txt
+    chmod 600 ~/$REMOTE_PATH/.env
     chmod 755 passenger_wsgi.py
     chmod 755 cron_update.sh
     chmod -R 755 public_html

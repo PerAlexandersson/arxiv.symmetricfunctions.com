@@ -185,11 +185,15 @@ def _fetch_papers(query, max_results):
     processed_papers = []
     try:
         for paper in client.results(search):
+            cursor.execute("SAVEPOINT fetch_one_paper")
             try:
                 paper_id = insert_or_update_paper(cursor, paper)
+                cursor.execute("RELEASE SAVEPOINT fetch_one_paper")
                 processed_papers.append((paper_id, paper.title, paper.summary))
                 count += 1
             except Exception as e:
+                cursor.execute("ROLLBACK TO SAVEPOINT fetch_one_paper")
+                cursor.execute("RELEASE SAVEPOINT fetch_one_paper")
                 errors += 1
                 arxiv_id = paper.entry_id.split('/abs/')[-1] if hasattr(paper, 'entry_id') else 'unknown'
                 print(f"  Error processing {arxiv_id}: {e}")

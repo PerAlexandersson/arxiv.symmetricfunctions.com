@@ -12,6 +12,7 @@ import io
 import contextlib
 import calendar
 import html
+import hmac
 import logging
 import random
 import re
@@ -74,6 +75,23 @@ from watch import watch_bp
 app.register_blueprint(watch_bp)
 
 
+@app.after_request
+def add_security_headers(response):
+    """Apply browser security headers that are safe for every response."""
+    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+    response.headers.setdefault(
+        'Permissions-Policy',
+        'camera=(), geolocation=(), microphone=()',
+    )
+    if not app.debug:
+        response.headers.setdefault(
+            'Strict-Transport-Security',
+            'max-age=31536000; includeSubDomains',
+        )
+    return response
+
+
 @app.context_processor
 def inject_current_user():
     user_id = session.get('user_id')
@@ -101,14 +119,31 @@ def inject_current_user():
                 WHERE uwa.user_id = %s
             """, (user_id,))
             ctx['watched_author_names'] = frozenset(row['name'] for row in cursor.fetchall())
+            cursor.execute("""
+                SELECT ul.arxiv_id, MAX(uc.is_starred) AS is_starred
+                FROM user_lists ul
+                JOIN user_categories uc
+                  ON uc.user_id = ul.user_id AND uc.name = ul.list_name
+                WHERE ul.user_id = %s
+                GROUP BY ul.arxiv_id
+            """, (user_id,))
+            list_rows = cursor.fetchall()
+            ctx['saved_arxiv_ids'] = frozenset(row['arxiv_id'] for row in list_rows)
+            ctx['starred_arxiv_ids'] = frozenset(
+                row['arxiv_id'] for row in list_rows if row['is_starred']
+            )
             cursor.close()
         except Exception:
             ctx['watched_kw_phrases']   = frozenset()
             ctx['watched_author_names'] = frozenset()
+            ctx['saved_arxiv_ids']      = frozenset()
+            ctx['starred_arxiv_ids']    = frozenset()
     else:
         ctx['current_user']          = None
         ctx['watched_kw_phrases']    = frozenset()
         ctx['watched_author_names']  = frozenset()
+        ctx['saved_arxiv_ids']       = frozenset()
+        ctx['starred_arxiv_ids']     = frozenset()
     return ctx
 
 
@@ -772,6 +807,7 @@ def paper_detail(arxiv_id):
         FROM paper_keywords pk
         JOIN keywords k ON pk.keyword_id = k.id
         WHERE pk.paper_id = %s
+          AND k.active = 1
         ORDER BY k.score DESC, k.phrase ASC
     """, (paper['id'],))
     paper['keywords'] = cursor.fetchall()
@@ -1858,18 +1894,25 @@ def author_bibtex(author_slug):
     return bibtex_all, 200, {'Content-Type': 'text/plain; charset=utf-8'}
 
 
-@app.route('/fetch')
+@app.route('/fetch', methods=['POST'])
+@csrf.exempt
 def fetch_papers():
-    """Fetch recent papers from arXiv. Requires secret key."""
-    key = request.args.get('key', '')
-    days = request.args.get('days', 1, type=int)
+    """Fetch recent papers from arXiv using a header-carried secret."""
+    authorization = request.headers.get('Authorization', '')
+    bearer = authorization[7:].strip() if authorization.startswith('Bearer ') else ''
+    key = request.headers.get('X-Fetch-Secret', '') or bearer
 
-    if not FETCH_SECRET or key != FETCH_SECRET:
+    if not FETCH_SECRET or not hmac.compare_digest(key, FETCH_SECRET):
         logger.warning("Unauthorized /fetch attempt from %s", request.remote_addr)
         abort(403)
 
-    # Cap days to prevent abuse
-    days = min(days, 30)
+    payload = request.get_json(silent=True) or {}
+    raw_days = request.form.get('days', payload.get('days', 1))
+    try:
+        days = int(raw_days)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'days must be an integer'}), 400
+    days = max(1, min(days, 30))
     logger.info("/fetch triggered: days=%d from %s", days, request.remote_addr)
 
     from fetch_arxiv import fetch_recent_papers

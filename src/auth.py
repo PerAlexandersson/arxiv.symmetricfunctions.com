@@ -5,11 +5,12 @@ Routes:
     GET  /login                  → login page (ORCID button)
     GET  /login/orcid            → start ORCID OAuth flow
     GET  /login/orcid/callback   → handle redirect, upsert user, set session
-    GET  /logout                 → clear session
+    POST /logout                 → clear session
 """
 
 import os
 import requests as http_requests
+from urllib.parse import urljoin, urlparse
 from flask import (Blueprint, render_template, redirect, url_for,
                    session, request, flash, current_app, abort)
 from authlib.integrations.flask_client import OAuth
@@ -97,6 +98,15 @@ def _upsert_user(provider, provider_id, display_name):
         cursor.close()
 
 
+def _is_safe_redirect(target):
+    """Return whether target resolves to the current HTTP(S) host."""
+    if not target:
+        return False
+    reference = urlparse(request.host_url)
+    resolved = urlparse(urljoin(request.host_url, target))
+    return resolved.scheme in {'http', 'https'} and resolved.netloc == reference.netloc
+
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @auth.route('/login')
@@ -140,7 +150,9 @@ def orcid_callback():
     _set_session(user_id, name, orcid_id)
 
     next_url = session.pop('login_next', None)
-    return redirect(next_url or url_for('index'))
+    if next_url and _is_safe_redirect(next_url):
+        return redirect(next_url)
+    return redirect(url_for('index'))
 
 
 @auth.route('/dev-login')
@@ -156,7 +168,7 @@ def dev_login():
     return redirect(url_for('index'))
 
 
-@auth.route('/logout')
+@auth.route('/logout', methods=['POST'])
 def logout():
     session.pop('user_id',        None)
     session.pop('user_name',      None)

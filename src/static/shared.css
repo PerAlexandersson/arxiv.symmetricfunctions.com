@@ -566,6 +566,13 @@ body.modal-open { overflow: hidden; }
 .paper-icon-btn.star-btn.starred { color: var(--c-brand); }
 .paper-icon-btn.save-btn.saved   { color: var(--c-link); }
 .paper-icon-btn.remove-btn:hover { color: #c0392b; }
+.paper-icon-btn:disabled { cursor: wait; opacity: 0.55; }
+.paper-action-status {
+  margin-left: 0.25rem;
+  color: var(--c-text-muted);
+  font-size: 0.72rem;
+}
+.paper-action-status--error { color: #b42318; }
 
 /* Save-to-list dropdown */
 .save-dropdown {
@@ -579,12 +586,27 @@ body.modal-open { overflow: hidden; }
   box-shadow: 0 4px 14px rgba(0,0,0,0.15);
 }
 .save-dropdown-item {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
   padding: 0.45rem 0.85rem;
   cursor: pointer;
   font-size: 0.8rem;
   color: var(--c-text-main);
   white-space: nowrap;
 }
-.save-dropdown-item:hover { background: var(--c-bg-gray); color: var(--c-brand); }
+.save-dropdown-item:hover,
+.save-dropdown-item:focus-visible { background: var(--c-bg-gray); color: var(--c-brand); }
 .save-dropdown-new       { color: var(--c-link); border-top: 1px solid var(--c-border); }
 .save-dropdown-empty     { color: var(--c-text-muted); cursor: default; }
+
+.nav-icon-form,
+.admin-logout-form { display: inline-flex; margin: 0; }
+.admin-logout-form .logout-link {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}

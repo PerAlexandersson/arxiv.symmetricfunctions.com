@@ -136,10 +136,11 @@ Add this line (adjust the path to match your setup):
 Alternatively, trigger a fetch via HTTP (useful on shared hosting without cron access):
 
 ```
-GET /fetch?key=<FETCH_SECRET>&days=2
+curl -X POST -H "X-Fetch-Secret: <FETCH_SECRET>" -F days=2 \
+  https://arxiv.symmetricfunctions.com/fetch
 ```
 
-Set `FETCH_SECRET` in `.env`. Returns plain-text fetch output.
+Set `FETCH_SECRET` in `.env`. The endpoint returns plain-text fetch output.
 
 ---
 

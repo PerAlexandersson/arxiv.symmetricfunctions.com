@@ -8,5 +8,8 @@
   <a href="{{ url_for('admin.dois') }}"      class="tab{% if request.endpoint == 'admin.dois' %} active{% endif %}">DOIs</a>
   <a href="{{ url_for('admin.users') }}"      class="tab{% if request.endpoint == 'admin.users' %} active{% endif %}">Users</a>
   <span class="spacer"></span>
-  <a href="{{ url_for('admin.logout') }}" class="logout-link">Log out</a>
+  <form action="{{ url_for('admin.logout') }}" method="post" class="admin-logout-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="logout-link">Log out</button>
+  </form>
 </nav>

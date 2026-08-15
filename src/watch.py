@@ -21,11 +21,21 @@ watch_bp = Blueprint('watch', __name__)
 _require_user = require_user  # back-compat alias
 
 
+def _desired_watch_state():
+    raw = request.form.get('watching', '').strip().lower()
+    if raw not in {'true', 'false', '1', '0'}:
+        return None
+    return raw in {'true', '1'}
+
+
 # ── API routes ─────────────────────────────────────────────────────────────────
 
 @watch_bp.route('/api/watch/keyword/<int:kid>', methods=['POST'])
 def toggle_watch_keyword(kid):
     user_id = _require_user()
+    desired = _desired_watch_state()
+    if desired is None:
+        return jsonify({'error': 'watching must be true or false'}), 400
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -33,24 +43,21 @@ def toggle_watch_keyword(kid):
         if not cursor.fetchone():
             return jsonify({'error': 'Keyword not found'}), 404
 
-        cursor.execute(
-            "SELECT 1 FROM user_watched_keywords WHERE user_id=%s AND keyword_id=%s",
-            (user_id, kid)
-        )
-        if cursor.fetchone():
-            cursor.execute(
-                "DELETE FROM user_watched_keywords WHERE user_id=%s AND keyword_id=%s",
-                (user_id, kid)
-            )
-            conn.commit()
-            return jsonify({'watching': False})
-        else:
+        if desired:
             cursor.execute(
                 "INSERT IGNORE INTO user_watched_keywords (user_id, keyword_id) VALUES (%s, %s)",
                 (user_id, kid)
             )
-            conn.commit()
-            return jsonify({'watching': True})
+        else:
+            cursor.execute(
+                "DELETE FROM user_watched_keywords WHERE user_id=%s AND keyword_id=%s",
+                (user_id, kid)
+            )
+        conn.commit()
+        return jsonify({'watching': desired})
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         cursor.close()
 
@@ -58,6 +65,9 @@ def toggle_watch_keyword(kid):
 @watch_bp.route('/api/watch/author/<int:aid>', methods=['POST'])
 def toggle_watch_author(aid):
     user_id = _require_user()
+    desired = _desired_watch_state()
+    if desired is None:
+        return jsonify({'error': 'watching must be true or false'}), 400
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -65,24 +75,21 @@ def toggle_watch_author(aid):
         if not cursor.fetchone():
             return jsonify({'error': 'Author not found'}), 404
 
-        cursor.execute(
-            "SELECT 1 FROM user_watched_authors WHERE user_id=%s AND author_id=%s",
-            (user_id, aid)
-        )
-        if cursor.fetchone():
-            cursor.execute(
-                "DELETE FROM user_watched_authors WHERE user_id=%s AND author_id=%s",
-                (user_id, aid)
-            )
-            conn.commit()
-            return jsonify({'watching': False})
-        else:
+        if desired:
             cursor.execute(
                 "INSERT IGNORE INTO user_watched_authors (user_id, author_id) VALUES (%s, %s)",
                 (user_id, aid)
             )
-            conn.commit()
-            return jsonify({'watching': True})
+        else:
+            cursor.execute(
+                "DELETE FROM user_watched_authors WHERE user_id=%s AND author_id=%s",
+                (user_id, aid)
+            )
+        conn.commit()
+        return jsonify({'watching': desired})
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         cursor.close()
 

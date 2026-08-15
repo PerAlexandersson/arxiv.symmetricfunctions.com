@@ -33,7 +33,7 @@ Key env vars:
 - `ADMIN_PASSWORD` — for `/admin` login
 - `ADMIN_ORCID` — ORCID iD auto-granted admin on login
 - `ORCID_CLIENT_ID`, `ORCID_CLIENT_SECRET` — ORCID OAuth
-- `FETCH_SECRET` — key for `/fetch?key=...` endpoint
+- `FETCH_SECRET` — bearer or `X-Fetch-Secret` credential for `POST /fetch`
 
 Config loader: `src/config.py`.
 

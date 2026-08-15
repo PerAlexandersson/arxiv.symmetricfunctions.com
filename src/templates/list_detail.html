@@ -18,8 +18,8 @@
         {% if papers %}
         <button class="btn-secondary" data-action="show-bibtex-modal" data-bibtex-url="/api/lists/{{ cat_id }}/bibtex" data-bibtex-title="{{ category.name }}">BIB</button>
         {% endif %}
-        <button class="btn-secondary" data-action="rename-list" data-cat-id="{{ cat_id }}" data-list-name="{{ category.name }}">Rename</button>
         {% if not category.is_starred %}
+        <button class="btn-secondary" data-action="rename-list" data-cat-id="{{ cat_id }}" data-list-name="{{ category.name }}">Rename</button>
         <button class="btn-danger" data-action="delete-list" data-cat-id="{{ cat_id }}" data-list-name="{{ category.name }}">Delete list</button>
         {% endif %}
     </div>
@@ -29,7 +29,7 @@
 <p class="lists-count">{{ papers|length }} paper{% if papers|length != 1 %}s{% endif %}</p>
 {% for paper in papers %}
 <div class="list-paper-row" id="list-row-{{ paper.arxiv_id }}">
-    {{ render_paper(paper, list_cat_id=cat_id) }}
+    {{ render_paper(paper, list_cat_id=cat_id, list_is_starred=category.is_starred) }}
 </div>
 {% endfor %}
 {% else %}

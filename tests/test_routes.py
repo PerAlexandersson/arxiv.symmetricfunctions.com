@@ -38,9 +38,10 @@ with mock.patch('requests.get') as _mock_get, \
 
 
 class FakeCursor:
-    def __init__(self, fetchone_values=None, fetchall_values=None):
+    def __init__(self, fetchone_values=None, fetchall_values=None, lastrowid=1):
         self.fetchone_values = list(fetchone_values or [])
         self.fetchall_values = list(fetchall_values or [])
+        self.lastrowid = lastrowid
         self.queries = []
 
     def execute(self, query, params=None):
@@ -60,12 +61,18 @@ class FakeConnection:
     def __init__(self, cursor):
         self._cursor = cursor
         self.committed = False
+        self.commit_count = 0
+        self.rolled_back = False
 
     def cursor(self):
         return self._cursor
 
     def commit(self):
         self.committed = True
+        self.commit_count += 1
+
+    def rollback(self):
+        self.rolled_back = True
 
 
 class RouteTests(unittest.TestCase):
@@ -284,6 +291,128 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(200, resp.status_code)
         self.assertIn('eprint = {2607.01572v1}', bib)
         self.assertIn('url = {https://arxiv.org/abs/2607.01572v1}', bib)
+
+    def test_legacy_arxiv_id_can_be_starred_idempotently(self):
+        import lists as lists_module
+
+        cursor = FakeCursor(fetchone_values=[{'exists': 1}, {'id': 4, 'name': 'Starred'}])
+        conn = FakeConnection(cursor)
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 7
+
+        with mock.patch.object(lists_module, 'get_db_connection', return_value=conn):
+            resp = self.client.post(
+                '/api/lists/star/math/0601001',
+                data={'starred': 'true'},
+            )
+
+        self.assertEqual(200, resp.status_code)
+        self.assertEqual({'starred': True, 'saved': True}, resp.get_json())
+        self.assertEqual(1, conn.commit_count)
+        self.assertTrue(any('INSERT IGNORE INTO user_lists' in query
+                            for query, _ in cursor.queries))
+
+    def test_star_requires_explicit_desired_state(self):
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 7
+        resp = self.client.post('/api/lists/star/2401.00001')
+        self.assertEqual(400, resp.status_code)
+        self.assertIn('starred must be true or false', resp.get_json()['error'])
+
+    def test_unstar_without_starred_list_does_not_create_one(self):
+        import lists as lists_module
+
+        cursor = FakeCursor(fetchone_values=[{'exists': 1}, None])
+        conn = FakeConnection(cursor)
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 7
+
+        with mock.patch.object(lists_module, 'get_db_connection', return_value=conn):
+            resp = self.client.post(
+                '/api/lists/star/2401.00001',
+                data={'starred': 'false'},
+            )
+
+        self.assertEqual(200, resp.status_code)
+        self.assertEqual({'starred': False, 'saved': False}, resp.get_json())
+        self.assertEqual(0, conn.commit_count)
+        self.assertFalse(any('INSERT INTO user_categories' in query
+                             for query, _ in cursor.queries))
+
+    def test_save_to_new_list_commits_category_and_paper_together(self):
+        import lists as lists_module
+
+        cursor = FakeCursor(fetchone_values=[{'exists': 1}], lastrowid=12)
+        conn = FakeConnection(cursor)
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 7
+
+        with mock.patch.object(lists_module, 'get_db_connection', return_value=conn):
+            resp = self.client.post(
+                '/api/lists/save',
+                data={'arxiv_id': '2401.00001', 'new_name': 'Read later'},
+            )
+
+        self.assertEqual(200, resp.status_code)
+        self.assertEqual(1, conn.commit_count)
+        self.assertEqual('Read later', resp.get_json()['category_name'])
+        self.assertTrue(any('INSERT INTO user_categories' in query
+                            for query, _ in cursor.queries))
+        self.assertTrue(any('INSERT IGNORE INTO user_lists' in query
+                            for query, _ in cursor.queries))
+
+    def test_paper_detail_renders_existing_star_state(self):
+        paper = {
+            'id': 13,
+            'arxiv_id': '2607.01572v1',
+            'title': 'A Starred Paper',
+            'abstract': 'An abstract.',
+            'published_date': date(2026, 7, 1),
+            'updated_date': date(2026, 7, 2),
+            'comment': None,
+            'journal_ref': None,
+            'doi': None,
+            'doi_status': None,
+            'primary_category': 'math.CO',
+            'publication_url': None,
+            'publication_venue_key': None,
+            'publication_status': None,
+            'editor_note': None,
+        }
+        cursor = FakeCursor(
+            fetchone_values=[paper],
+            fetchall_values=[
+                [],
+                [{'category': 'math.CO'}],
+                [],
+                [],
+                [{'arxiv_id': '2607.01572v1', 'is_starred': 1}],
+            ],
+        )
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 7
+            sess['user_name'] = 'Ada Lovelace'
+
+        with mock.patch.object(app_module, 'get_db_connection',
+                               return_value=FakeConnection(cursor)), \
+                mock.patch.object(app_module, 'get_paper_authors',
+                                  return_value=['Ada Lovelace']):
+            resp = self.client.get('/paper/2607.01572v1')
+
+        html = resp.get_data(as_text=True)
+        self.assertEqual(200, resp.status_code)
+        self.assertIn('star-btn starred', html)
+        self.assertIn('aria-pressed="true"', html)
+
+    def test_fetch_rejects_query_string_secret(self):
+        resp = self.client.post('/fetch?key=test-fetch-secret', data={'days': '1'})
+        self.assertEqual(403, resp.status_code)
+
+    def test_logout_requires_post(self):
+        self.assertEqual(405, self.client.get('/logout').status_code)
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 7
+        self.assertEqual(302, self.client.post('/logout').status_code)
 
     def test_bibtex_json_fallback_uses_arxiv_entry_version(self):
         class FakeResponse:

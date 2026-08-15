@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DEFAULT_FLASK_SECRET_KEY = 'dev-secret-key-change-in-production'
+FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
 
 # Database configuration
 DB_CONFIG = {
@@ -24,8 +25,11 @@ DB_CONFIG = {
 # Flask configuration
 FLASK_CONFIG = {
     'SECRET_KEY': os.getenv('FLASK_SECRET_KEY', DEFAULT_FLASK_SECRET_KEY),
-    'DEBUG': os.getenv('FLASK_DEBUG', 'False').lower() == 'true',
+    'DEBUG': FLASK_DEBUG,
     'PREFERRED_URL_SCHEME': os.getenv('PREFERRED_URL_SCHEME', 'http'),
+    'SESSION_COOKIE_HTTPONLY': True,
+    'SESSION_COOKIE_SAMESITE': 'Lax',
+    'SESSION_COOKIE_SECURE': not FLASK_DEBUG,
 }
 
 # Secret key for triggering paper fetches via URL

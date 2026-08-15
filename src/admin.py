@@ -27,8 +27,11 @@ import csv
 import hmac
 import re
 import functools
+import time
+from collections import defaultdict, deque
 from datetime import date as date_type, datetime
 from pathlib import Path
+from threading import Lock
 from urllib.parse import urlparse, urljoin
 
 from flask import (Blueprint, render_template, request, redirect,
@@ -48,6 +51,10 @@ from title_matching import normalize_title, summarize_author_list_for_display
 logger = logging.getLogger(__name__)
 
 admin = Blueprint('admin', __name__, url_prefix='/admin')
+_LOGIN_WINDOW_SECONDS = 15 * 60
+_LOGIN_MAX_FAILURES = 5
+_login_failures = defaultdict(deque)
+_login_failures_lock = Lock()
 
 # Path to keywords.csv (one level up from src/)
 CANDIDATES_CSV = os.path.join(os.path.dirname(__file__), '..', 'keywords.csv')
@@ -240,6 +247,24 @@ def _is_safe_redirect(target):
     return test.scheme in ('http', 'https') and test.netloc == ref.netloc
 
 
+def _admin_login_limited(remote_addr, record_failure=False):
+    """Apply a small per-process failed-login limit for the admin password."""
+    now = time.monotonic()
+    key = remote_addr or 'unknown'
+    with _login_failures_lock:
+        attempts = _login_failures[key]
+        while attempts and attempts[0] <= now - _LOGIN_WINDOW_SECONDS:
+            attempts.popleft()
+        if record_failure:
+            attempts.append(now)
+        return len(attempts) >= _LOGIN_MAX_FAILURES
+
+
+def _clear_admin_login_failures(remote_addr):
+    with _login_failures_lock:
+        _login_failures.pop(remote_addr or 'unknown', None)
+
+
 @admin.route('/')
 @login_required
 def index():
@@ -249,8 +274,13 @@ def index():
 @admin.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
+        if _admin_login_limited(request.remote_addr):
+            response = render_template('admin/login.html'), 429
+            logger.warning("Rate-limited admin login from %s", request.remote_addr)
+            return response
         password = request.form.get('password', '')
         if ADMIN_PASSWORD and hmac.compare_digest(password, ADMIN_PASSWORD):
+            _clear_admin_login_failures(request.remote_addr)
             session['admin_logged_in'] = True
             logger.info("Admin login successful from %s", request.remote_addr)
             next_url = request.args.get('next', '')
@@ -259,11 +289,12 @@ def login():
                 return redirect(next_url)
             return redirect(url_for('admin.candidates'))
         logger.warning("Failed admin login attempt from %s", request.remote_addr)
+        _admin_login_limited(request.remote_addr, record_failure=True)
         flash('Wrong password.')
     return render_template('admin/login.html')
 
 
-@admin.route('/logout')
+@admin.route('/logout', methods=['POST'])
 def logout():
     session.pop('admin_logged_in', None)
     return redirect(url_for('admin.login'))
