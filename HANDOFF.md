@@ -19,7 +19,9 @@ fix requested after deployment.
   2026-08-16.
 - The authenticated logout control has been moved out of the wrapping icon row
   and placed beside the displayed user name. The authenticated-header regression
-  test and complete unit suite pass; deployment is still pending.
+  test and complete unit suite pass. Commits `f37af87` and `ce65aa0` are pushed
+  and deployed; the latter bumps the shared stylesheet URL to avoid stale browser
+  caches.
 
 ## Production migration
 
@@ -51,6 +53,9 @@ revision rows. Postflight checks show:
   against the live REST API.
 - The homepage and HTML search return 200, and the recent Passenger log has no
   traceback or error.
+- After the header deployment, the homepage and `/api/v1/status` still return
+  200, production serves `shared.css?v=3`, and the deployed authenticated
+  template contains the new `site-session`/`site-logout-form` structure.
 
 ## Next step
 
