@@ -1,0 +1,3 @@
+# Optional agent-facing MCP server (Python 3.10+).
+# The website itself continues to use requirements.txt and Python 3.9.
+mcp>=2,<3

@@ -49,7 +49,7 @@ Config loader: `src/config.py`.
 
 | Table | Purpose |
 |-------|---------|
-| `papers` | Core paper metadata (arxiv_id, title, abstract, dates, doi, doi_status, doi_confidence, doi_checked_at) |
+| `papers` | Core metadata; `arxiv_base_id` is stable identity and `arxiv_id` is the latest exact revision |
 | `authors` | Deduplicated author names with URL slugs |
 | `paper_authors` | Many-to-many with author ordering |
 | `paper_categories` | arXiv subject categories per paper |
@@ -84,7 +84,16 @@ Config loader: `src/config.py`.
 | `watch.py` | Watch blueprint — follow keywords/authors, "My Feed" |
 | `config.py` | Loads `.env` → Python constants |
 | `db.py` | Shared DB helpers: `get_db_connection()`, `require_user()`, `attach_authors()`, `attach_keywords()` |
+| `paper_repository.py` | Shared cursor pagination, paper queries, and public serialization |
+| `api_v1.py` | Public read-only REST API (`/api/v1/*`) |
 | `utils.py` | Shared utilities: `slugify()`, `arxiv2bib()`, BibTeX generation |
+
+### Agent API (`mcp_server/`)
+
+The optional MCP server requires Python 3.10+ and the separate
+`requirements-mcp.txt`. It calls the public REST API and never receives
+database credentials. The Passenger Flask application remains Python 3.9
+compatible and must not import the MCP package.
 
 ### CLI scripts (`src/`)
 

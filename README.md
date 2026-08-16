@@ -8,6 +8,9 @@ Live at **https://arxiv.symmetricfunctions.com**. Built with [Claude Code](https
 
 **Features:** Browse papers, search by author/title/keyword, one-click BibTeX export, KaTeX math rendering, keyword tagging with admin UI, DOI discovery via Crossref, ORCID login with personal paper lists and personalized feeds.
 
+The repository also provides a public read-only REST API and an optional MCP
+server for agent-assisted literature review.
+
 ---
 
 ## Quick Setup
@@ -141,6 +144,87 @@ curl -X POST -H "X-Fetch-Secret: <FETCH_SECRET>" -F days=2 \
 ```
 
 Set `FETCH_SECRET` in `.env`. The endpoint returns plain-text fetch output.
+
+---
+
+## REST API
+
+The versioned API is rooted at:
+
+```text
+https://arxiv.symmetricfunctions.com/api/v1/
+```
+
+Useful endpoints include:
+
+```text
+GET /api/v1/status
+GET /api/v1/papers?published_after=2026-08-01&order=published
+GET /api/v1/papers?keyword=schur%20functions
+GET /api/v1/papers?q=chromatic%20symmetric
+GET /api/v1/papers/2608.12345
+GET /api/v1/keywords
+GET /api/v1/openapi.yaml
+```
+
+Paper lists use opaque keyset cursors. Pass `next_cursor` back as the `cursor`
+parameter rather than constructing it yourself. Page size is capped at 100.
+The response distinguishes the stable base `arxiv_id` from the current
+`versioned_arxiv_id`, so revisions do not appear as new logical papers.
+
+Before deploying the API code to an existing database, back up the database
+and apply the identity migration:
+
+```bash
+mysql -u arxiv_user -p arxiv_frontend \
+  < database/migrate_arxiv_identity.sql
+```
+
+The migration retains the newest revision's arXiv metadata and author/category
+sets, carries forward editorial metadata and manual/system keywords, and
+preserves saved-list entries. `sync_to_prod.sh` does not run database
+migrations automatically.
+
+---
+
+## MCP Server
+
+The optional MCP adapter lives in this repository but runs separately from the
+Python 3.9 Passenger application. It requires Python 3.10 or newer:
+
+```bash
+python3 -m venv ~/.cache/arxiv-mcp-venv
+source ~/.cache/arxiv-mcp-venv/bin/activate
+pip install -r requirements-mcp.txt
+python -m mcp_server.server
+```
+
+The default stdio server exposes these read-only tools:
+
+- `get_status`
+- `list_recent_papers`
+- `search_papers`
+- `get_paper`
+- `list_keywords`
+
+It also provides a `review_recent_papers` prompt. Point it at another API
+deployment by setting `ARXIV_API_BASE_URL`, for example:
+
+```bash
+ARXIV_API_BASE_URL=http://127.0.0.1:5000/api/v1 \
+  python -m mcp_server.server
+```
+
+For a remotely reachable MCP endpoint, use Streamable HTTP:
+
+```bash
+python -m mcp_server.server --transport streamable-http \
+  --host 127.0.0.1 --port 8000
+```
+
+The MCP process only calls the REST API; it does not need database or website
+credentials. Recommendations remain editorial suggestions and do not modify
+`symmetricfunctions.com`.
 
 ---
 

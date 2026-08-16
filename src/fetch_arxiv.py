@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 import sys
 from config import DB_CONFIG, validate_config
 from site_stats import refresh_site_stats
-from utils import slugify
+from utils import slugify, split_arxiv_id_version
 
 # Max results per query
 MAX_RESULTS_RECENT = 500
@@ -50,7 +50,10 @@ def insert_or_update_paper(cursor, paper):
     """
     
     # Extract paper metadata
-    arxiv_id = paper.entry_id.split('/abs/')[-1]  # Extract ID from URL
+    arxiv_id = paper.entry_id.split('/abs/')[-1]  # Exact revision from URL
+    arxiv_base_id, arxiv_version = split_arxiv_id_version(arxiv_id)
+    if not arxiv_base_id:
+        raise ValueError(f"Invalid arXiv identifier from entry URL: {arxiv_id!r}")
     title = paper.title
     abstract = paper.summary
     published_date = paper.published.date()
@@ -61,12 +64,22 @@ def insert_or_update_paper(cursor, paper):
     primary_category = paper.primary_category
     
     # Check if paper already exists
-    cursor.execute("SELECT id FROM papers WHERE arxiv_id = %s", (arxiv_id,))
+    cursor.execute(
+        "SELECT id, arxiv_id, arxiv_version FROM papers WHERE arxiv_base_id = %s",
+        (arxiv_base_id,),
+    )
     result = cursor.fetchone()
     
     if result:
         # Update existing paper
         paper_id = result[0]
+        existing_arxiv_id = result[1]
+        if arxiv_version < result[2]:
+            print(
+                f"  Kept newer revision: {arxiv_base_id}v{result[2]} "
+                f"(ignored requested v{arxiv_version})"
+            )
+            return paper_id
         # If arXiv provides a DOI, use it (most authoritative).
         # If arXiv has no DOI but we already have one (e.g. from Crossref), keep it.
         if doi:
@@ -83,6 +96,17 @@ def insert_or_update_paper(cursor, paper):
             else:
                 update_doi, update_doi_status = None, None
                 update_publication_status = existing[2] if existing else None
+        if existing_arxiv_id != arxiv_id:
+            cursor.execute("""
+                INSERT IGNORE INTO user_lists (user_id, list_name, arxiv_id, added_at)
+                SELECT user_id, list_name, %s, added_at
+                FROM user_lists
+                WHERE arxiv_id = %s
+            """, (arxiv_id, existing_arxiv_id))
+            cursor.execute(
+                "DELETE FROM user_lists WHERE arxiv_id = %s",
+                (existing_arxiv_id,),
+            )
         cursor.execute("""
             UPDATE papers SET
                 title = %s,
@@ -94,11 +118,13 @@ def insert_or_update_paper(cursor, paper):
                 doi = %s,
                 doi_status = %s,
                 publication_status = %s,
-                primary_category = %s
+                primary_category = %s,
+                arxiv_id = %s,
+                arxiv_version = %s
             WHERE id = %s
         """, (title, abstract, published_date, updated_date, comment,
               journal_ref, update_doi, update_doi_status, update_publication_status, primary_category,
-              paper_id))
+              arxiv_id, arxiv_version, paper_id))
         
         # Clear existing author relationships
         cursor.execute("DELETE FROM paper_authors WHERE paper_id = %s", (paper_id,))
@@ -109,10 +135,12 @@ def insert_or_update_paper(cursor, paper):
         publication_status = 'published' if doi else None
         cursor.execute("""
             INSERT INTO papers
-            (arxiv_id, title, abstract, published_date, updated_date,
+            (arxiv_id, arxiv_base_id, arxiv_version,
+             title, abstract, published_date, updated_date,
              comment, journal_ref, doi, doi_status, publication_status, primary_category)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (arxiv_id, title, abstract, published_date, updated_date,
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (arxiv_id, arxiv_base_id, arxiv_version,
+              title, abstract, published_date, updated_date,
               comment, journal_ref, doi, doi_status, publication_status, primary_category))
         paper_id = cursor.lastrowid
         print(f"  Inserted: {arxiv_id} - {title[:60]}...")

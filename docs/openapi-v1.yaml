@@ -1,0 +1,146 @@
+openapi: 3.1.0
+info:
+  title: arXiv++ Combinatorics API
+  version: 1.0.0
+  description: >-
+    Public, read-only access to combinatorics papers indexed by
+    arxiv.symmetricfunctions.com. arXiv revisions share one stable arxiv_id;
+    versioned_arxiv_id identifies the currently stored revision.
+servers:
+  - url: https://arxiv.symmetricfunctions.com/api/v1
+paths:
+  /:
+    get:
+      summary: Discover API endpoints
+      operationId: discoverApi
+      responses:
+        '200':
+          description: API discovery document
+  /status:
+    get:
+      summary: Get API and data freshness information
+      operationId: getStatus
+      responses:
+        '200':
+          description: Service status
+  /papers:
+    get:
+      summary: List or search papers
+      operationId: listPapers
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [ingested, changed, published]
+            default: ingested
+        - name: ingested_after
+          in: query
+          description: Inclusive ISO-8601 timestamp filter.
+          schema: {type: string, format: date-time}
+        - name: changed_after
+          in: query
+          description: Inclusive ISO-8601 timestamp filter.
+          schema: {type: string, format: date-time}
+        - name: published_after
+          in: query
+          description: Inclusive arXiv first-submission date filter.
+          schema: {type: string, format: date}
+        - name: category
+          in: query
+          schema: {type: string, example: math.CO}
+        - name: keyword
+          in: query
+          schema: {type: string, example: schur functions}
+        - name: q
+          in: query
+          description: Search paper text, author names, and curated keywords.
+          schema: {type: string, maxLength: 200}
+      responses:
+        '200':
+          description: Cursor-paginated papers
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PaperPage'}
+        '400': {$ref: '#/components/responses/InvalidRequest'}
+  /papers/{arxiv_id}:
+    get:
+      summary: Get one logical paper and its current revision
+      operationId: getPaper
+      parameters:
+        - name: arxiv_id
+          in: path
+          required: true
+          schema: {type: string, example: '2401.12345'}
+      responses:
+        '200':
+          description: Paper record
+        '404':
+          description: Paper not found
+  /keywords:
+    get:
+      summary: List active curated keywords
+      operationId: listKeywords
+      parameters:
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 500, default: 100}
+      responses:
+        '200':
+          description: Active keywords ordered by score and usage
+components:
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque cursor from the preceding response.
+      schema: {type: string}
+    Limit:
+      name: limit
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+  responses:
+    InvalidRequest:
+      description: Invalid query parameter or cursor
+  schemas:
+    PaperPage:
+      type: object
+      required: [data, has_more, next_cursor, meta]
+      properties:
+        data:
+          type: array
+          items: {$ref: '#/components/schemas/Paper'}
+        has_more: {type: boolean}
+        next_cursor: {type: [string, 'null']}
+        meta: {type: object}
+    Paper:
+      type: object
+      required:
+        - arxiv_id
+        - arxiv_version
+        - versioned_arxiv_id
+        - title
+        - abstract
+        - authors
+        - categories
+        - keywords
+        - urls
+      properties:
+        arxiv_id: {type: string, description: Stable base arXiv identifier.}
+        arxiv_version: {type: integer, minimum: 1}
+        versioned_arxiv_id: {type: string}
+        title: {type: string}
+        abstract: {type: string}
+        authors: {type: array, items: {type: string}}
+        primary_category: {type: string}
+        categories: {type: array, items: {type: string}}
+        keywords: {type: array, items: {type: object}}
+        symcat_targets: {type: array, items: {type: object}}
+        published_at: {type: string, format: date}
+        revised_at: {type: [string, 'null'], format: date}
+        ingested_at: {type: string, format: date-time}
+        changed_at: {type: string, format: date-time}
+        publication: {type: object}
+        urls: {type: object}

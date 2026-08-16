@@ -38,6 +38,8 @@ CREATE TABLE papers (
     
     -- arXiv identifiers
     arxiv_id VARCHAR(20) UNIQUE NOT NULL,           -- e.g., "2401.12345" or "math/0601001"
+    arxiv_base_id VARCHAR(20) NOT NULL,             -- stable across revisions
+    arxiv_version SMALLINT UNSIGNED NOT NULL DEFAULT 1,
     primary_category VARCHAR(20) DEFAULT 'math.CO', -- Always math.CO for this project
     
     -- Paper metadata
@@ -66,6 +68,10 @@ CREATE TABLE papers (
     
     -- Indexes for common queries
     INDEX idx_arxiv_id (arxiv_id),
+    UNIQUE KEY idx_arxiv_base_id (arxiv_base_id),
+    INDEX idx_created_cursor (created_at, id),
+    INDEX idx_updated_cursor (updated_at, id),
+    INDEX idx_published_cursor (published_date, id),
     INDEX idx_published_date (published_date),
     INDEX idx_updated_date (updated_date),
     INDEX idx_doi_status (doi_status),

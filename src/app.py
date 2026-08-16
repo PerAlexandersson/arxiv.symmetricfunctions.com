@@ -74,6 +74,9 @@ app.register_blueprint(lists_bp)
 from watch import watch_bp
 app.register_blueprint(watch_bp)
 
+from api_v1 import configure_api
+app.register_blueprint(configure_api(lambda: sf_labels))
+
 
 @app.after_request
 def add_security_headers(response):
@@ -390,13 +393,10 @@ def _resolve_paper_arxiv_id(cursor, value):
     cursor.execute("""
         SELECT arxiv_id
         FROM papers
-        WHERE arxiv_id = %s OR arxiv_id LIKE %s
-        ORDER BY
-            CASE WHEN arxiv_id = %s THEN 0 ELSE 1 END,
-            COALESCE(updated_date, published_date) DESC,
-            id DESC
+        WHERE arxiv_base_id = %s
+        ORDER BY arxiv_version DESC, id DESC
         LIMIT 1
-    """, (base_id, f"{base_id}v%", base_id))
+    """, (base_id,))
     paper = cursor.fetchone()
     return paper['arxiv_id'] if paper else None
 
@@ -1133,7 +1133,9 @@ def _generate_bibtex(input_text, lookup_doi=False):
 @app.route('/api/generate-bibtex', methods=['POST'])
 def generate_bibtex_api():
     """POST endpoint for the tools page (requires CSRF)."""
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Request body must be a JSON object'}), 400
     lookup = data.get('lookup_doi', False)
     result, status = _generate_bibtex(data.get('input', '').strip(),
                                       lookup_doi=bool(lookup))

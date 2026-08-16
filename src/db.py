@@ -74,7 +74,7 @@ def attach_keywords(cursor, papers):
     paper_ids = [p['id'] for p in papers]
     placeholders = ','.join(['%s'] * len(paper_ids))
     cursor.execute(f"""
-        SELECT pk.paper_id, k.phrase, k.url
+        SELECT pk.paper_id, k.phrase, k.score, k.url, pk.source
         FROM paper_keywords pk
         JOIN keywords k ON pk.keyword_id = k.id
         WHERE pk.paper_id IN ({placeholders})
@@ -84,7 +84,31 @@ def attach_keywords(cursor, papers):
     by_paper = {}
     for row in cursor.fetchall():
         by_paper.setdefault(row['paper_id'], []).append(
-            {'phrase': row['phrase'], 'url': row['url']}
+            {
+                'phrase': row['phrase'],
+                'score': row.get('score'),
+                'url': row['url'],
+                'source': row.get('source'),
+            }
         )
     for paper in papers:
         paper['keywords'] = by_paper.get(paper['id'], [])
+
+
+def attach_categories(cursor, papers):
+    """Attach sorted arXiv subject categories to each paper dict."""
+    if not papers:
+        return
+    paper_ids = [p['id'] for p in papers]
+    placeholders = ','.join(['%s'] * len(paper_ids))
+    cursor.execute(f"""
+        SELECT paper_id, category
+        FROM paper_categories
+        WHERE paper_id IN ({placeholders})
+        ORDER BY paper_id, category
+    """, paper_ids)
+    by_paper = {}
+    for row in cursor.fetchall():
+        by_paper.setdefault(row['paper_id'], []).append(row['category'])
+    for paper in papers:
+        paper['categories'] = by_paper.get(paper['id'], [])

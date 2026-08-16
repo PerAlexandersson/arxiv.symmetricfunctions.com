@@ -55,6 +55,7 @@ ssh -p "$REMOTE_PORT" "$REMOTE_HOST" "
     mkdir -p ~/$REMOTE_PATH/src/static
     mkdir -p ~/$REMOTE_PATH/src/templates
     mkdir -p ~/$REMOTE_PATH/src/templates/admin
+    mkdir -p ~/$REMOTE_PATH/docs
     mkdir -p ~/$REMOTE_PATH/public_html/static
     mkdir -p ~/$REMOTE_PATH/tmp
     mkdir -p ~/$REMOTE_PATH/log
@@ -80,6 +81,8 @@ scp -P "$REMOTE_PORT" "$SCRIPT_DIR/src/templates/"*.html \
     "$REMOTE_HOST:~/$REMOTE_PATH/src/templates/"
 scp -P "$REMOTE_PORT" "$SCRIPT_DIR/src/templates/admin/"*.html \
     "$REMOTE_HOST:~/$REMOTE_PATH/src/templates/admin/"
+scp -P "$REMOTE_PORT" "$SCRIPT_DIR/docs/openapi-v1.yaml" \
+    "$REMOTE_HOST:~/$REMOTE_PATH/docs/"
 
 if [ -f "$SCRIPT_DIR/keywords.csv" ]; then
     scp -P "$REMOTE_PORT" "$SCRIPT_DIR/keywords.csv" \

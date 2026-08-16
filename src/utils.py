@@ -116,6 +116,22 @@ def extract_arxiv_id(value):
     return match.group(1) if match else None
 
 
+def split_arxiv_id_version(value):
+    """Return ``(base_id, version)`` for a valid arXiv identifier.
+
+    arXiv revisions identify versions of one logical paper, not distinct
+    papers.  Keeping this normalization in one place prevents fetchers and
+    machine-facing APIs from disagreeing about paper identity.
+    """
+    arxiv_id = extract_arxiv_id(value)
+    if not arxiv_id:
+        return None, None
+    match = re.fullmatch(r'(.+?)(?:v(\d+))?', arxiv_id, re.IGNORECASE)
+    if not match:
+        return None, None
+    return match.group(1), int(match.group(2) or 1)
+
+
 _BIBTEX_KEY_SEARCH_RE = re.compile(r'^\s*([A-Za-z0-9]+?)([12]\d{3})(x?)\s*$')
 
 
