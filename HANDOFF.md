@@ -7,13 +7,15 @@ review of recent combinatorics papers.
 
 ## Status
 
-- The database migration is live; application code has not yet been deployed.
+- The database migration and REST application are live.
 - The REST API lives under `/api/v1` with OpenAPI documentation.
 - The optional MCP server lives under `mcp_server/` and calls the REST API.
 - arXiv base IDs and revisions are now modeled separately by the fetcher.
 - The complete unit suite passes (62 tests on 2026-08-16).
 - New API/MCP Python files pass Ruff, the OpenAPI 3.1 document validates, and
   the MCP 2.x client discovers all five tools plus the review prompt.
+- GitHub commit `5818238` contains the implementation and was deployed on
+  2026-08-16.
 
 ## Production migration
 
@@ -35,12 +37,20 @@ revision rows. Postflight checks show:
 - the unique base-ID and three cursor indexes are present;
 - the existing homepage still returns HTTP 200.
 
-## Next checks
+## Live verification
 
-1. Deploy the application code.
-2. Smoke-test `/api/v1/status`, cursor pagination, a legacy arXiv ID, and one
-   SymCat keyword target.
-3. Publish or register the MCP server after the REST endpoint is live.
+- `/api/v1/`, `/status`, `/papers`, `/keywords`, and `/openapi.yaml` return 200.
+- Cursor continuation returned a disjoint second page.
+- Modern and actual legacy IDs (`math/0001175`) resolve through paper detail.
+- REST search returned results in roughly 0.1 seconds in smoke tests.
+- The MCP 2.x client called `get_status` and `list_recent_papers` successfully
+  against the live REST API.
+- The homepage and HTML search return 200, and the recent Passenger log has no
+  traceback or error.
+
+## Next step
+
+Register or publish the repository-local MCP server in the desired agent hosts.
 
 No assessment/write-back API exists yet; adding that requires an explicit
 authentication and editorial-queue design.
