@@ -3,7 +3,8 @@
 ## Current scope
 
 Public read-only REST access and a repository-local MCP adapter for agent
-review of recent combinatorics papers.
+review of recent combinatorics papers, plus a small authenticated-header layout
+fix requested after deployment.
 
 ## Status
 
@@ -11,11 +12,14 @@ review of recent combinatorics papers.
 - The REST API lives under `/api/v1` with OpenAPI documentation.
 - The optional MCP server lives under `mcp_server/` and calls the REST API.
 - arXiv base IDs and revisions are now modeled separately by the fetcher.
-- The complete unit suite passes (62 tests on 2026-08-16).
+- The complete unit suite passes (63 tests on 2026-08-16).
 - New API/MCP Python files pass Ruff, the OpenAPI 3.1 document validates, and
   the MCP 2.x client discovers all five tools plus the review prompt.
 - GitHub commit `5818238` contains the implementation and was deployed on
   2026-08-16.
+- The authenticated logout control has been moved out of the wrapping icon row
+  and placed beside the displayed user name. The authenticated-header regression
+  test and complete unit suite pass; deployment is still pending.
 
 ## Production migration
 

@@ -414,6 +414,30 @@ class RouteTests(unittest.TestCase):
             sess['user_id'] = 7
         self.assertEqual(302, self.client.post('/logout').status_code)
 
+    def test_authenticated_header_places_logout_beside_username(self):
+        cursor = FakeCursor(fetchall_values=[[], [], []])
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 7
+            sess['user_name'] = 'Ada Lovelace'
+
+        with self.client.session_transaction() as sess, \
+                app_module.app.test_request_context('/'):
+            app_module.session.update(sess)
+            with mock.patch.object(app_module, 'get_db_connection',
+                                   return_value=FakeConnection(cursor)):
+                html = app_module.render_template('base.html')
+
+        session_start = html.index('<div class="site-session">')
+        session_end = html.index('</div>', session_start)
+        session_html = html[session_start:session_end]
+        nav_start = html.index('<span class="nav-icons">')
+
+        self.assertIn('Ada Lovelace', session_html)
+        self.assertIn('site-logout-form', session_html)
+        self.assertIn('aria-label="Sign out"', session_html)
+        self.assertEqual(1, html.count('aria-label="Sign out"'))
+        self.assertLess(html.index('site-logout-form'), nav_start)
+
     def test_bibtex_json_fallback_uses_arxiv_entry_version(self):
         class FakeResponse:
             text = """<?xml version="1.0" encoding="UTF-8"?>
