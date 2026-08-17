@@ -332,3 +332,35 @@ sha256 d8e1410c5780590b0d3b5ed6fc85479c3802906f5cccb525bf4387bb45400581
 /home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch8-20260817T180500Z.sql.gz
 sha256 e95c07073e1c8d86b5ffccf539498f77592bed3e7c6fdc20c42f6be3ec7e6526
 ```
+
+A ninth guarded manual batch resolved another 125 pending candidate rows and
+assigned 96 verified publication DOIs.  The pending queue fell from 975 to
+850, and the DOI-bearing-paper count rose from 41,073 to 41,169.  The batch
+was rolled back successfully as a dry run before being committed locally.
+Postflight checks found all 96 selected DOIs approved on their intended
+papers, all 29 explicit false candidates rejected, unique ownership for every
+selected DOI, zero candidate orphans, and the unchanged 80,447-paper corpus.
+
+This batch also resolved several competing-preprint groups.  The twisted-cubic
+DOI was assigned to the later part whose abstract matches the journal article;
+the moon-polyomino DOI was assigned to the preprint explicitly identified as
+the updated version; and preliminary or separate records for the symmetric
+design, conflict-free coloring, and centrosymmetric-involution papers were
+rejected.  Other false positives included an SSRN repository copy, a FOCS
+paper whose proceedings version names a different arXiv full version, and a
+near-title Zagreb match that changed both the invariant and authorship.
+
+The fresh read-only classification is:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual9.json
+```
+
+All 850 remaining candidates are currently classified as `unresolved`.
+Production remains unchanged, and no broad test suite was run for this
+database-only batch.  The recovery checkpoint is:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch9-20260817T192310Z.sql.gz
+sha256 653c47b16c3d582c182d7de1d27cd98db0a2511b5696923a2e5ef1a0ded9f209
+```
