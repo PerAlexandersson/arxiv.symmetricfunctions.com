@@ -364,3 +364,51 @@ database-only batch.  The recovery checkpoint is:
 /home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch9-20260817T192310Z.sql.gz
 sha256 653c47b16c3d582c182d7de1d27cd98db0a2511b5696923a2e5ef1a0ded9f209
 ```
+
+### Claude-assisted manual DOI batch
+
+Six independent Claude reviewers were given ten of the strongest remaining
+cases each, with read-only web search and no filesystem write tools.  Their
+recommendations were reconciled locally against competing DOI candidates and
+the existing policy for sequels, supplements, merged preprints, and repository
+copies before any database change.
+
+The guarded tenth batch assigned 48 verified DOIs and rejected 20 false or
+competing candidates.  One exact owner (`1908.02384`) was restored from an
+earlier score-based rejection, and the DOI for a graph-decomposition paper was
+assigned to `2103.10808` instead of three related later preprints.  Merged
+publications covering two separate arXiv parts were left without a unique DOI
+owner, and a computations-only report was not treated as the journal article.
+
+Three rejected false matches also exposed exact local papers that had no DOI
+candidate row.  After a separate guarded dry run, their publication DOIs were
+recorded directly with approved audit entries:
+
+- `2307.03880`, “A matrix realization of spectral bounds”;
+- `2303.02349`, “New Upper Bounds on the Size of Permutation Codes under
+  Kendall tau-Metric”;
+- `1811.11035`, “Finding perfect matchings in random regular graphs in linear
+  time.”
+
+In total this round added 51 verified publication DOIs.  The pending queue fell
+from 850 to 783, and the DOI-bearing-paper count rose from 41,169 to 41,220.
+Both write phases were rolled back successfully as guarded dry runs before
+being committed locally.  Postflight checks found unique ownership for every
+selected DOI, all intended audit statuses, zero candidate orphans, and the
+unchanged 80,447-paper corpus.  All six Claude child processes exited normally.
+Production remains unchanged, and no broad test suite was run for this
+database-only round.
+
+The fresh read-only classification is:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual10.json
+```
+
+All 783 remaining candidates are currently classified as `unresolved`.  The
+recovery checkpoint is:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch10-20260817T194652Z.sql.gz
+sha256 953b26dc0c52400a5f28ac0cb5699e151b2ba6d9a1c1b06a9d26b48d7b7bceba
+```
