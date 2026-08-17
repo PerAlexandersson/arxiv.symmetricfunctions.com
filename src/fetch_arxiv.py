@@ -20,6 +20,7 @@ from calendar import monthrange
 from datetime import datetime, timedelta
 import sys
 from config import DB_CONFIG, validate_config
+from publication import normalize_doi
 from site_stats import refresh_site_stats
 from utils import slugify, split_arxiv_id_version
 
@@ -65,7 +66,9 @@ def insert_or_update_paper(cursor, paper):
     
     # Check if paper already exists
     cursor.execute(
-        "SELECT id, arxiv_id, arxiv_version FROM papers WHERE arxiv_base_id = %s",
+        """SELECT id, arxiv_id, arxiv_version, doi, doi_status,
+                  publication_status
+           FROM papers WHERE arxiv_base_id = %s""",
         (arxiv_base_id,),
     )
     result = cursor.fetchone()
@@ -74,28 +77,47 @@ def insert_or_update_paper(cursor, paper):
         # Update existing paper
         paper_id = result[0]
         existing_arxiv_id = result[1]
+        existing_doi = result[3]
+        existing_doi_status = result[4]
+        existing_publication_status = result[5]
         if arxiv_version < result[2]:
             print(
                 f"  Kept newer revision: {arxiv_base_id}v{result[2]} "
                 f"(ignored requested v{arxiv_version})"
             )
             return paper_id
-        # If arXiv provides a DOI, use it (most authoritative).
-        # If arXiv has no DOI but we already have one (e.g. from Crossref), keep it.
+        # A manually verified publisher DOI outranks later arXiv metadata. arXiv
+        # occasionally attaches an unrelated DOI, so never undo a correction.
         if doi:
-            update_doi, update_doi_status, update_publication_status = doi, 'arxiv', 'published'
+            arxiv_doi = normalize_doi(doi)
+            verified_doi = normalize_doi(existing_doi)
+            if (
+                existing_doi_status == 'verified'
+                and verified_doi
+                and verified_doi.casefold() != (arxiv_doi or '').casefold()
+            ):
+                update_doi = verified_doi
+                update_doi_status = 'verified'
+                update_publication_status = (
+                    existing_publication_status or 'published'
+                )
+                print(
+                    f"  Kept verified DOI {verified_doi}; ignored conflicting "
+                    f"arXiv DOI {arxiv_doi or doi}"
+                )
+            else:
+                update_doi = arxiv_doi or doi
+                update_doi_status = 'arxiv'
+                update_publication_status = 'published'
         else:
-            cursor.execute(
-                "SELECT doi, doi_status, publication_status FROM papers WHERE id = %s",
-                (paper_id,),
-            )
-            existing = cursor.fetchone()
-            if existing and existing[0]:
-                update_doi, update_doi_status = existing[0], existing[1]
-                update_publication_status = existing[2] or 'published'
+            if existing_doi:
+                update_doi, update_doi_status = existing_doi, existing_doi_status
+                update_publication_status = (
+                    existing_publication_status or 'published'
+                )
             else:
                 update_doi, update_doi_status = None, None
-                update_publication_status = existing[2] if existing else None
+                update_publication_status = existing_publication_status
         if existing_arxiv_id != arxiv_id:
             cursor.execute("""
                 INSERT IGNORE INTO user_lists (user_id, list_name, arxiv_id, added_at)

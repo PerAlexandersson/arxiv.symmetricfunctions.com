@@ -201,3 +201,28 @@ The applied reports are under
 `final-round4-pending.json`.  No paper/arXiv MCP server was configured
 in this Docker Codex session, so the triage used the official HTTP APIs and
 private local caches instead.
+
+### Erroneous arXiv DOI correction
+
+The arXiv metadata for `2607.14362v1`, “Measures and generalizations of dual
+Littlewood identities,” supplies the unrelated DOI
+`10.1007/s11401-026-0050-7`.  Live Crossref metadata identifies that DOI as a
+Chinese Annals of Mathematics paper by Pengfa Xu, Naihuan Jing, and Honglian
+Zhang.  The publisher record matching the title, all five authors, Forum of
+Mathematics Sigma volume 14, and article e106 is
+`10.1017/fms.2026.10256`.
+
+The local paper now uses the publisher DOI with `doi_status='verified'`.  Its
+candidate audit trail records the publisher DOI as approved and the erroneous
+arXiv DOI as rejected.  `fetch_arxiv.py` now preserves a verified publisher
+DOI when later arXiv metadata supplies a conflicting DOI.  A real local
+`--arxiv-id 2607.14362` refresh confirmed that the correction survives while
+the remaining metadata and tags update normally.  The complete suite passes
+(95 tests).  Production was not changed.
+
+Recovery checkpoint:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-arxiv-doi-correction-20260817T141106Z.sql.gz
+sha256 a6c9708797b76a56b98958ddada0ab43cd4f0d0917d0652d36ede115ff2ea282
+```
