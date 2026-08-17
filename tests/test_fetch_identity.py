@@ -90,6 +90,54 @@ class FetchIdentityTests(unittest.TestCase):
         self.assertEqual('10.1017/correct', update[1][6])
         self.assertEqual('verified', update[1][7])
 
+    def test_rejected_arxiv_doi_is_not_restored(self):
+        cursor = FakeCursor([
+            (
+                17,
+                '2608.12345v1',
+                1,
+                None,
+                None,
+                None,
+            ),
+            (1,),
+        ])
+        insert_or_update_paper(
+            cursor,
+            fake_paper(2, doi='10.1007/unrelated'),
+        )
+        update = next(
+            (query, params) for query, params in cursor.queries
+            if 'UPDATE papers SET' in query
+        )
+        self.assertIsNone(update[1][6])
+        self.assertIsNone(update[1][7])
+        self.assertIsNone(update[1][8])
+
+    def test_rejected_arxiv_doi_does_not_replace_an_existing_doi(self):
+        cursor = FakeCursor([
+            (
+                17,
+                '2608.12345v1',
+                1,
+                '10.1017/correct',
+                'auto',
+                'published',
+            ),
+            (1,),
+        ])
+        insert_or_update_paper(
+            cursor,
+            fake_paper(2, doi='10.1007/unrelated'),
+        )
+        update = next(
+            (query, params) for query, params in cursor.queries
+            if 'UPDATE papers SET' in query
+        )
+        self.assertEqual('10.1017/correct', update[1][6])
+        self.assertEqual('auto', update[1][7])
+        self.assertEqual('published', update[1][8])
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -106,9 +106,32 @@ def insert_or_update_paper(cursor, paper):
                     f"arXiv DOI {arxiv_doi or doi}"
                 )
             else:
-                update_doi = arxiv_doi or doi
-                update_doi_status = 'arxiv'
-                update_publication_status = 'published'
+                cursor.execute("""
+                    SELECT 1
+                    FROM doi_candidates
+                    WHERE paper_id = %s AND LOWER(doi) = LOWER(%s)
+                      AND status = 'rejected'
+                    LIMIT 1
+                """, (paper_id, arxiv_doi or doi))
+                rejected_arxiv_doi = cursor.fetchone() is not None
+                if rejected_arxiv_doi:
+                    if (verified_doi or '').casefold() == (
+                        arxiv_doi or ''
+                    ).casefold():
+                        update_doi = None
+                        update_doi_status = None
+                    else:
+                        update_doi = existing_doi
+                        update_doi_status = existing_doi_status
+                    update_publication_status = existing_publication_status
+                    print(
+                        f"  Ignored previously rejected arXiv DOI "
+                        f"{arxiv_doi or doi}"
+                    )
+                else:
+                    update_doi = arxiv_doi or doi
+                    update_doi_status = 'arxiv'
+                    update_publication_status = 'published'
         else:
             if existing_doi:
                 update_doi, update_doi_status = existing_doi, existing_doi_status

@@ -111,6 +111,42 @@ class ClassificationTests(unittest.TestCase):
         )
         self.assertEqual('metadata_exact', result['decision'])
 
+    def test_strong_renamed_metadata_is_prioritized_for_manual_review(self):
+        result = classify_candidate(
+            candidate(
+                paper_title=(
+                    'Rainbow solutions to the Sidon equation in cyclic groups'
+                ),
+                crossref_title=(
+                    'Rainbow solutions to the Sidon equation in cyclic groups '
+                    'and the interval'
+                ),
+                paper_authors=['Zhanar Berikkyzy', 'Jürgen Kritschgau'],
+                crossref_authors='Berikkyzy, Zhanar; Kritschgau, Jürgen',
+            ),
+            None,
+            set(),
+        )
+        self.assertEqual('review_high_evidence', result['decision'])
+
+    def test_high_evidence_conflict_is_not_prioritized_as_unambiguous(self):
+        result = classify_candidate(
+            candidate(
+                paper_title=(
+                    'Rainbow solutions to the Sidon equation in cyclic groups'
+                ),
+                crossref_title=(
+                    'Rainbow solutions to the Sidon equation in cyclic groups '
+                    'and the interval'
+                ),
+                paper_authors=['Zhanar Berikkyzy', 'Jürgen Kritschgau'],
+                crossref_authors='Berikkyzy, Zhanar; Kritschgau, Jürgen',
+            ),
+            None,
+            {'10.1000/example'},
+        )
+        self.assertEqual('unresolved', result['decision'])
+
     def test_arxiv_preprint_doi_is_ignored_as_external_evidence(self):
         result = classify_candidate(
             candidate(crossref_title='A different article'),

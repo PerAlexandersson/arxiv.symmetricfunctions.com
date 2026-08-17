@@ -52,6 +52,9 @@ DEFAULT_RESOLVER_CACHE = Path.home() / '.cache' / (
     'arxiv.symmetricfunctions.com/doi-triage/doi-resolver.json'
 )
 _KNOWN_DOI_LESS_JOURNALS = ('journal of integer sequences',)
+_HIGH_EVIDENCE_MIN_SCORE = 0.84
+_HIGH_EVIDENCE_MIN_TITLE = 0.78
+_HIGH_EVIDENCE_MIN_AUTHOR = 0.95
 _REFERENCE_STOPWORDS = {
     'a', 'an', 'and', 'for', 'in', 'of', 'on', 'series', 'the',
 }
@@ -162,6 +165,16 @@ def classify_candidate(candidate, record, conflicting_dois, min_evidence=0.85):
             and stored_score >= min_evidence
         ):
             result['decision'] = 'metadata_exact'
+        elif (
+            not queued_conflict
+            and stored_score >= _HIGH_EVIDENCE_MIN_SCORE
+            and stored_title_similarity >= _HIGH_EVIDENCE_MIN_TITLE
+            and stored_author_coverage >= _HIGH_EVIDENCE_MIN_AUTHOR
+        ):
+            # These are valuable manual-review candidates, but not safe for
+            # automatic approval: corrigenda, appendices, and merged papers
+            # can have the same strong title/author signal as a title rename.
+            result['decision'] = 'review_high_evidence'
         else:
             result['decision'] = 'unresolved'
     elif linked_doi == queued_doi:

@@ -226,3 +226,61 @@ Recovery checkpoint:
 /home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-arxiv-doi-correction-20260817T141106Z.sql.gz
 sha256 a6c9708797b76a56b98958ddada0ab43cd4f0d0917d0652d36ede115ff2ea282
 ```
+
+### Manual DOI backlog review, 2026-08-17
+
+Three guarded manual-review batches were applied to the local database after
+checking current Crossref/DOI-resolver metadata, arXiv comments and abstracts,
+and publisher pages for ambiguous cases.  Together they resolved 170 pending
+candidate rows and made 59 verified DOI assignments.  This is a net increase
+of 58 DOI-bearing papers because one DOI supplied by arXiv was moved from the
+wrong paper to its actual publication match.  The pending queue fell from
+1,507 to 1,337, and the number of papers with a DOI rose from 40,708 to 40,766.
+Production was not changed.
+
+The review covered all previously guarded conflict, disagreement, replacement,
+and live-metadata mismatch categories.  It selected full papers over extended
+abstracts and withdrawn duplicates, final journal versions over conference
+versions where appropriate, and actual articles over monograph-level DOIs.
+It also rejected related sequels, corrigenda/errata offered for the original
+paper, and DOIs belonging to supplements or appendices.  Where both records
+were present locally, a publication DOI was moved from the supplement/appendix
+candidate to the main arXiv paper.  The Novi Sad Journal of Mathematics article
+`math/0609135` was confirmed as DOI-less rather than being forced to one of two
+similarly titled articles.
+
+One additional erroneous arXiv DOI was corrected: arXiv assigns
+`10.1007/s11083-021-09585-0` to `2111.09588`, “Crowns as retracts,” but the
+publisher record belongs to `2105.00711`, “A generalization of a theorem of
+Erné.”  The DOI is now verified on the latter paper, and the former keeps a
+rejected audit candidate.  `fetch_arxiv.py` now consults that rejected audit
+trail so a later arXiv refresh cannot restore a known-bad DOI.  A real refresh
+of `2111.09588` confirmed the safeguard.
+
+The triage classifier now exposes strong-but-not-automatic matches as
+`review_high_evidence`.  This intentionally remains a manual category because
+corrigenda, appendices, and merged papers can score just as strongly as genuine
+publication-title changes.  The final read-only report is:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/final-manual-20260817.json
+```
+
+It contains 1,337 pending candidates: 85 `review_high_evidence` records and
+1,252 ordinary unresolved records.  No other guarded review category remains.
+Postflight checks found every one of the 59 selected DOIs on exactly one paper,
+zero candidate orphans, and the expected 80,447-paper corpus.  The complete
+suite passes (99 tests), `compileall` passes, and `git diff --check` is clean.
+
+Recovery checkpoints for the manual batches are:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch-20260817T150500Z.sql.gz
+sha256 d2dac00a818f5d30be569d9f534755c1dd47160ea401f7f13d2cafd61b04b970
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch2-20260817T160000Z.sql.gz
+sha256 861bc4abd4568f5939ccd8a89d65fbada1bfde1e267f7aa14331cb43c60025e9
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch3-20260817T161000Z.sql.gz
+sha256 52d9745b399624991dcd94abd148f5c122b04d442e1876ce22380997e9a554f6
+```
