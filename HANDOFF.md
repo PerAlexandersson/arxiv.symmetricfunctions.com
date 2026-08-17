@@ -284,3 +284,51 @@ sha256 861bc4abd4568f5939ccd8a89d65fbada1bfde1e267f7aa14331cb43c60025e9
 /home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch3-20260817T161000Z.sql.gz
 sha256 52d9745b399624991dcd94abd148f5c122b04d442e1876ce22380997e9a554f6
 ```
+
+Five further guarded manual batches continued the same review.  Across all
+eight manual batches, 532 pending rows have now been resolved and 366 verified
+DOIs assigned.  The DOI-bearing-paper count rose by 365, from 40,708 to
+41,073, because one DOI was moved from an incorrect paper to its true owner.
+The pending queue is now 975, down from 1,507; a fresh read-only classification
+places all 975 in the ordinary `unresolved` category.  Its report is:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual8.json
+```
+
+The later batches caught several same-author false matches that title-only
+scoring cannot safely decide: alternating runs versus alternating descents,
+two versus three filled cells in signed magic rectangles, different pattern
+classes, sequels, corrigenda, and later book chapters.  They also corrected
+the APN preprint `2111.04197`: the queued IEEE DOI belongs to a different
+solo-authored paper, while the verified publication DOI is
+`10.5070/C65365555`.  The three parts of Nakanishi's *Cluster Algebras and
+Scattering Diagrams* were not assigned the monograph-level DOI
+`10.1142/E073`, since that identifier cannot uniquely identify any one of the
+three arXiv records.  Duplicate candidate groups were resolved to the paper
+whose title and abstract match the publisher record.
+
+Production remains unchanged.  Per the user's direction, no new regression
+tests were added or rerun for these database-only manual batches; each batch
+was first rolled back as a guarded dry run, then committed with row-count,
+unique-ownership, and DOI-count assertions.  The live database should be
+backed up and updated only after the local pending queue reaches zero.
+
+Additional recovery checkpoints are:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch4-20260817T162000Z.sql.gz
+sha256 ebc5dc833403a79e8f5a515e61515c576e47e25bb5bb12c1d6978c7125f1b529
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch5-20260817T170000Z.sql.gz
+sha256 7c580330db622ac36284deef7537ced3558209d333797a4b377b8631c03c077d
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch6-20260817T171500Z.sql.gz
+sha256 d0119d7ca8f11624ca1f4e7b3f173872678e1083e06c467e1b241996a9880233
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch7-20260817T174000Z.sql.gz
+sha256 d8e1410c5780590b0d3b5ed6fc85479c3802906f5cccb525bf4387bb45400581
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch8-20260817T180500Z.sql.gz
+sha256 e95c07073e1c8d86b5ffccf539498f77592bed3e7c6fdc20c42f6be3ec7e6526
+```
