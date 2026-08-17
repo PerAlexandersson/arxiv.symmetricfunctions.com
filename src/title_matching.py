@@ -17,6 +17,10 @@ _TEX_UNWRAP_RES = [
     re.compile(rf'\\{re.escape(cmd)}\s*\{{([^{{}}]*)\}}', flags=re.IGNORECASE)
     for cmd in _TEX_UNWRAP_COMMANDS
 ]
+_TEX_DECLARATION_RE = re.compile(
+    r'\\(?:rm|bf|it|cal|sf|tt)\b',
+    flags=re.IGNORECASE,
+)
 _ASCII_FOLD_REPLACEMENTS = {
     'æ': 'ae',
     'ǽ': 'ae',
@@ -177,6 +181,21 @@ def _author_name_tokens(name):
     ]
 
 
+def _author_given_token(name):
+    """Return the first normalized given-name token when one is supplied."""
+    raw = str(name or '')
+    if ',' in raw:
+        given = raw.split(',', 1)[1]
+        tokens = _author_name_tokens(given)
+        return tokens[0] if tokens else ''
+
+    tokens = _author_name_tokens(raw)
+    surname_tokens = author_last_name(raw).split()
+    if surname_tokens and tokens[-len(surname_tokens):] == surname_tokens:
+        tokens = tokens[:-len(surname_tokens)]
+    return tokens[0] if tokens else ''
+
+
 def _author_name_similarity(left_name, right_name):
     """Compare one author name without assuming a given-name/surname order.
 
@@ -189,6 +208,27 @@ def _author_name_similarity(left_name, right_name):
     right = _author_name_tokens(right_name)
     if not left or not right:
         return 0.0
+
+    left_surname = author_last_name(left_name).replace(' ', '')
+    right_surname = author_last_name(right_name).replace(' ', '')
+    left_given = _author_given_token(left_name)
+    right_given = _author_given_token(right_name)
+    if (
+        left_surname
+        and left_surname == right_surname
+        and left_given
+        and right_given
+        and left_given[0] == right_given[0]
+        and (
+            left_given == right_given
+            or len(left_given) == 1
+            or len(right_given) == 1
+        )
+    ):
+        # Middle names, patronymics, and abbreviated given names vary widely
+        # between arXiv and registry deposits. An exact surname plus compatible
+        # first initial is a stable author-identity signal.
+        return 1.0
 
     shared_words = {
         token for token in set(left) & set(right)
@@ -225,8 +265,8 @@ def _author_name_similarity(left_name, right_name):
     return matched / max(len(left), len(right))
 
 
-def _author_list_name_similarity(left_authors, right_authors):
-    """Greedily pair author names and return order-independent list overlap."""
+def _author_list_name_match_total(left_authors, right_authors):
+    """Greedily pair author names and return the total matched-name score."""
     if not left_authors or not right_authors:
         return 0.0
     scores = sorted(
@@ -248,6 +288,14 @@ def _author_list_name_similarity(left_authors, right_authors):
         used_left.add(left_index)
         used_right.add(right_index)
         total += score
+    return total
+
+
+def _author_list_name_similarity(left_authors, right_authors):
+    """Return order-independent author overlap over the longer list."""
+    total = _author_list_name_match_total(left_authors, right_authors)
+    if not left_authors or not right_authors:
+        return 0.0
     return total / max(len(left_authors), len(right_authors))
 
 
@@ -268,12 +316,13 @@ def _normalize_regional_spellings(text):
 
 
 def _substring_title_similarity_boost(left_norm, right_norm):
-    """Boost when the paper title is almost contained in the published title."""
+    """Boost when one title is almost contained in the other title."""
     left_compact = left_norm.replace(' ', '')
     right_compact = right_norm.replace(' ', '')
     if not left_compact or not right_compact:
         return 0.0
-    if left_compact in right_compact and len(right_compact) <= 1.2 * len(left_compact):
+    shorter, longer = sorted((left_compact, right_compact), key=len)
+    if shorter in longer and len(longer) <= 1.35 * len(shorter):
         return 0.96
     return 0.0
 
@@ -288,6 +337,7 @@ def normalize_title(text):
     text = _DASH_RE.sub(' - ', text)
     text = _MATH_DELIM_RE.sub(' ', text)
     text = _unwrap_tex_commands(text)
+    text = _TEX_DECLARATION_RE.sub('', text)
     text = _TEX_ORDINAL_RE.sub(r'\1', text)
 
     for pattern, replacement in _TEX_GREEK_RES:
@@ -400,6 +450,19 @@ def author_similarity(left_authors, right_authors, compact=False):
     if names_are_complete:
         return name_similarity
     return max(surname_similarity, name_similarity)
+
+
+def author_coverage_similarity(left_authors, right_authors):
+    """Return matched-name coverage of the shorter author list.
+
+    This is useful as supporting evidence when a publication adds or omits
+    authors, but should not replace the stricter list similarity in fuzzy DOI
+    discovery.
+    """
+    if not left_authors or not right_authors:
+        return 0.0
+    total = _author_list_name_match_total(left_authors, right_authors)
+    return min(1.0, total / min(len(left_authors), len(right_authors)))
 
 
 def score_title_author_match(left_title, left_authors, right_title, right_authors):

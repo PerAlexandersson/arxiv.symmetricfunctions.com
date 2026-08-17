@@ -45,13 +45,12 @@ def _mark_index_cache_dirty_after_doi_changes(count):
         print(f"Warning: could not schedule cache rebuild: {e}", file=sys.stderr)
 
 
-def _crossref_date_parts(cr_item, include_created=True):
-    """Return (date_parts, field_name) from the first usable Crossref date."""
+def _crossref_date_parts(cr_item, include_created=True, target_year=None):
+    """Return a usable Crossref date, preferring one near ``target_year``."""
     fields = ['published-print', 'published-online', 'issued']
-    if include_created:
-        fields.append('created')
 
-    for field in fields:
+    candidates = []
+    for field_order, field in enumerate(fields):
         parts = (cr_item.get(field) or {}).get('date-parts', [[]])
         if not parts or not parts[0]:
             continue
@@ -62,7 +61,23 @@ def _crossref_date_parts(cr_item, include_created=True):
             except (TypeError, ValueError):
                 break
         if cleaned:
-            return cleaned, field
+            candidates.append((cleaned, field, field_order))
+    if not candidates and include_created:
+        parts = (cr_item.get('created') or {}).get('date-parts', [[]])
+        if parts and parts[0]:
+            try:
+                cleaned = [int(part) for part in parts[0][:3]]
+            except (TypeError, ValueError):
+                cleaned = []
+            if cleaned:
+                candidates.append((cleaned, 'created', len(fields)))
+    if target_year is not None and candidates:
+        candidates.sort(key=lambda item: (
+            abs(item[0][0] - target_year), item[2]
+        ))
+    if candidates:
+        parts, field, _ = candidates[0]
+        return parts, field
     return None, None
 
 
@@ -93,24 +108,6 @@ def _paper_year_and_date(paper_year, paper_published_date=None):
     return year, paper_date
 
 
-def _crossref_predates_paper(cr_item, paper_year, paper_published_date=None):
-    """Return True only when Crossref is definitely earlier than arXiv."""
-    arxiv_year, arxiv_date = _paper_year_and_date(paper_year, paper_published_date)
-    parts, _ = _crossref_date_parts(cr_item, include_created=False)
-    if not parts or arxiv_year is None:
-        return False
-
-    cr_year = parts[0]
-    if len(parts) >= 3 and arxiv_date is not None:
-        try:
-            cr_date = date(parts[0], parts[1], parts[2])
-        except ValueError:
-            return cr_year < arxiv_year
-        return cr_date < arxiv_date
-
-    return cr_year < arxiv_year
-
-
 def score_match(paper_title, paper_authors, paper_year, cr_item,
                 paper_published_date=None):
     """Compute a confidence score (0-1) for a Crossref result."""
@@ -124,13 +121,12 @@ def score_match(paper_title, paper_authors, paper_year, cr_item,
         if full_name:
             cr_authors.append(full_name)
 
-    # Crossref publication date must not be earlier than the first arXiv date.
-    paper_year_val, paper_date = _paper_year_and_date(
+    # A journal publication may legitimately predate a later arXiv upload.
+    # Treat the date as symmetric proximity evidence rather than a hard veto.
+    paper_year_val, _ = _paper_year_and_date(
         paper_year, paper_published_date)
-    parts, _ = _crossref_date_parts(cr_item)
+    parts, _ = _crossref_date_parts(cr_item, target_year=paper_year_val)
     cr_year = parts[0] if parts else None
-    if _crossref_predates_paper(cr_item, paper_year_val, paper_date):
-        return 0.0, cr_title, cr_year
 
     # Year match (weight 0.10)
     if cr_year is not None and paper_year_val is not None:

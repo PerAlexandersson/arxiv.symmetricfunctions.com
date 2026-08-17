@@ -131,3 +131,73 @@ The remaining queue consists of 2,015 records without an independent DOI,
 disagreements, 103 replacement records lacking sufficient Crossref support,
 one replacement conflict, and one exact metadata mismatch.  These records were
 left unchanged for slower review or stronger evidence.
+
+### Continued DOI backlog reduction
+
+The first matcher/triage batch is committed as `0f5426e`.  Subsequent guarded
+local passes added registration-agency-neutral DOI metadata through DOI content
+negotiation, ignored arXiv's own `10.48550/arXiv.*` preprint identifiers, used
+stronger author-list coverage for independently linked records, and compared
+stale DOI conflicts against the paper that already owns the DOI.  Those passes
+assigned 100 more publication DOIs and rejected 585 stale conflicting
+candidates without changing any existing DOI assignment.
+
+Journal-reference validation now compares the arXiv reference with live DOI
+year, volume, page/article number, and venue metadata.  It accepts changed
+publication titles only when the bibliography and authors corroborate the DOI.
+It also excludes repository-copy identifiers from publication DOI replacement
+and recognizes the Journal of Integer Sequences as a DOI-less venue.  The
+general matcher now handles extra middle initials and does not reject a valid
+journal publication merely because it predates a later arXiv upload.
+
+The final guarded local pass assigned another 42 DOIs: 35 corroborated by
+journal references, four independently linked replacements, and three exact
+external links exposed by the improved author matcher.  It also rejected one
+additional stale conflict and marked three Journal of Integer Sequences papers
+as `skipped` rather than forcing false DOIs.
+
+Through the journal-reference pass, 394 papers received publication DOIs, 586
+stale candidates were rejected, and three DOI-less papers were skipped.  The
+pending queue fell from 2,491 to 1,508.  Postflight checks found all 42
+assignments from the last pass, no duplicate assignments among their DOIs, no
+pending candidates on processed papers, and the expected DOI-less statuses.
+That round's read-only classification contains 1,375 unresolved records and
+133 guarded review cases; it proposes no further automatic changes. Production
+was not changed.
+
+A final near-exact pass fixed Crossref date selection so that the publication
+date closest to the arXiv year is used rather than always preferring print over
+online publication.  It approved one additional live-confirmed DOI whose title
+differed only by the article “the.”  The aggregate is therefore 395 DOI
+assignments, 586 stale-candidate rejections, three DOI-less skips, and 1,507
+pending candidates.  The final read-only classification has 1,374 unresolved
+records and 133 guarded review cases and proposes no further automatic
+changes.  The final complete suite passes (94 tests).
+
+Additional recovery checkpoints are:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-doi-round2-20260817T131002Z.sql.gz
+sha256 2641dbae09e4dcd46165eeaebf6bd53eff8275321002f2992a248ff15492c0bc
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-doi-conflicts-20260817T131156Z.sql.gz
+sha256 31c3e460323b39ac5f20fad9ae15cabf6e8b07fa1f6555f0d7c8238adcaeda37
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-doi-exact-external-20260817T131617Z.sql.gz
+sha256 6785a0028250ec71d445185f2ba2aa7b93d56278a760f68ac455f4ae4069c1cf
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-doi-journal-20260817T134500Z.sql.gz
+sha256 25f8b3b97ad0fd26bf113019f281b6dd6d5157f436d452dd1938d0c83d334eb2
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-doi-near-exact-20260817T133100Z.sql.gz
+sha256 11378c6748b07eed572620e9987958d19aefd3e671078866f364a9dc986f1813
+```
+
+The applied reports are under
+`/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/` as
+`backlog-round2-applied.json`, `conflicts-applied.json`,
+`exact-external-applied.json`, `journal-applied.json`, and
+`near-exact-applied.json`.  The final read-only report is
+`final-round4-pending.json`.  No paper/arXiv MCP server was configured
+in this Docker Codex session, so the triage used the official HTTP APIs and
+private local caches instead.

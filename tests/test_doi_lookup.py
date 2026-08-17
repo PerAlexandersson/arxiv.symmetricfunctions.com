@@ -6,6 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 
 from doi_lookup import score_match
 from title_matching import (
+    author_coverage_similarity,
     author_last_name,
     author_similarity,
     normalize_author_name,
@@ -124,6 +125,35 @@ class NormalizeTests(unittest.TestCase):
             2 / 3,
         )
 
+    def test_author_similarity_matches_initials_to_full_given_names(self):
+        self.assertEqual(
+            1.0,
+            author_similarity(["Ahmet Batal"], ["Batal, A."]),
+        )
+
+    def test_author_similarity_allows_extra_middle_initials(self):
+        self.assertEqual(
+            1.0,
+            author_similarity(["Anton Ayzenberg"], ["Ayzenberg, A. A."]),
+        )
+        self.assertEqual(
+            1.0,
+            author_similarity(["Igor Makhlin"], ["Makhlin, I. Yu."]),
+        )
+
+    def test_author_coverage_allows_added_publication_authors(self):
+        self.assertGreaterEqual(
+            author_coverage_similarity(
+                ["Vincent E. Coll", "Nicholas W. Mayers"],
+                [
+                    "Coll, Vincent",
+                    "Mayers, Nicholas W.",
+                    "Russoniello, Nicholas",
+                ],
+            ),
+            0.8,
+        )
+
     def test_author_similarity_does_not_equate_shared_surname_only(self):
         self.assertLess(
             author_similarity(["Jane Loth"], ["Jesse Campion Loth"]),
@@ -152,9 +182,31 @@ class NormalizeTests(unittest.TestCase):
             0.97,
         )
 
+    def test_dropped_published_suffix_boosts_near_substring_match(self):
+        self.assertGreaterEqual(
+            score_title_author_match(
+                "Bounding the multiplicities of eigenvalues of graph matrices "
+                "in terms of circuit rank using a new approach",
+                ["Ahmet Batal"],
+                "Bounding the multiplicities of eigenvalues of graph matrices "
+                "in terms of circuit rank",
+                ["Batal, A."],
+            ),
+            0.97,
+        )
+
+    def test_old_tex_font_declarations_do_not_pollute_titles(self):
+        self.assertEqual(
+            1.0,
+            title_similarity(
+                r"$q{\rm RS}t$: A probabilistic correspondence",
+                "qRSt: A probabilistic correspondence",
+            ),
+        )
+
 
 class ScoreMatchTests(unittest.TestCase):
-    def test_rejects_crossref_full_date_before_arxiv(self):
+    def test_allows_journal_publication_before_later_arxiv_upload(self):
         cr_item = {
             'title': ['Same title'],
             'author': [{'family': 'Doe'}],
@@ -168,7 +220,7 @@ class ScoreMatchTests(unittest.TestCase):
             cr_item,
             paper_published_date="2022-12-08",
         )
-        self.assertEqual(0.0, confidence)
+        self.assertGreater(confidence, 0.9)
         self.assertEqual(2022, cr_year)
 
     def test_does_not_false_reject_incomplete_crossref_month_precision(self):
@@ -187,7 +239,36 @@ class ScoreMatchTests(unittest.TestCase):
         )
         self.assertGreater(confidence, 0.0)
 
-    def test_rejects_crossref_year_before_arxiv_year(self):
+    def test_uses_online_date_when_closer_than_print_date(self):
+        cr_item = {
+            'title': ['Same title'],
+            'author': [{'family': 'Doe'}],
+            'container-title': ['Journal'],
+            'published-print': {'date-parts': [[2024, 5]]},
+            'published-online': {'date-parts': [[2023, 3, 7]]},
+        }
+        confidence, _, cr_year = score_match(
+            'Same title',
+            ['Jane Doe'],
+            2022,
+            cr_item,
+            paper_published_date='2022-02-01',
+        )
+        self.assertGreater(confidence, 0.95)
+        self.assertEqual(2023, cr_year)
+
+    def test_created_date_does_not_override_publication_date(self):
+        cr_item = {
+            'title': ['Same title'],
+            'author': [{'family': 'Doe'}],
+            'container-title': ['Journal'],
+            'issued': {'date-parts': [[2024]]},
+            'created': {'date-parts': [[2022]]},
+        }
+        _, _, cr_year = score_match('Same title', ['Jane Doe'], 2022, cr_item)
+        self.assertEqual(2024, cr_year)
+
+    def test_uses_earlier_crossref_year_as_proximity_evidence(self):
         cr_item = {
             'title': ['Same title'],
             'author': [{'family': 'Doe'}],
@@ -201,7 +282,7 @@ class ScoreMatchTests(unittest.TestCase):
             cr_item,
             paper_published_date="2022-01-02",
         )
-        self.assertEqual(0.0, confidence)
+        self.assertGreater(confidence, 0.9)
 
 
 if __name__ == '__main__':
