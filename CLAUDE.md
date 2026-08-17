@@ -103,6 +103,7 @@ compatible and must not import the MCP package.
 | `auto_tag.py` | Apply keyword tags to papers (`--days`, `--since`, `--all`) |
 | `extract_keywords.py` | Scan abstracts → `keywords.csv` for admin triage |
 | `doi_lookup.py` | Find DOIs via Crossref (`--batch`, `--from-date`, `--to-date`, `--auto-approve`) |
+| `doi_triage.py` | Dry-run-first DOI queue triage with Semantic Scholar/Crossref evidence |
 | `bib_doi_backfill.py` | Bulk DOI lookup from a .bib file |
 
 ### Shell scripts (project root)

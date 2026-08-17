@@ -169,6 +169,88 @@ def _surname_set(authors, compact=False):
     return surnames
 
 
+def _author_name_tokens(name):
+    """Return normalized name tokens, omitting generational suffixes."""
+    return [
+        token for token in normalize_author_name(name).split()
+        if token not in _AUTHOR_SUFFIXES
+    ]
+
+
+def _author_name_similarity(left_name, right_name):
+    """Compare one author name without assuming a given-name/surname order.
+
+    Crossref normally stores names as ``family, given``, but real deposits also
+    contain multiword surnames, reversed Asian names, and occasionally swapped
+    family/given fields. Token matching handles these cases while still
+    requiring a shared non-initial token before initials may match.
+    """
+    left = _author_name_tokens(left_name)
+    right = _author_name_tokens(right_name)
+    if not left or not right:
+        return 0.0
+
+    shared_words = {
+        token for token in set(left) & set(right)
+        if len(token) > 1
+    }
+    if not shared_words:
+        return 0.0
+
+    available = list(right)
+    matched_left = set()
+    matched = 0
+    # Match exact tokens first so that initials cannot consume full-name tokens.
+    for index, token in enumerate(left):
+        if token in available:
+            available.remove(token)
+            matched_left.add(index)
+            matched += 1
+    for index, token in enumerate(left):
+        if index in matched_left:
+            continue
+        match_index = next(
+            (
+                other_index
+                for other_index, other in enumerate(available)
+                if (len(token) == 1 or len(other) == 1)
+                and token[0] == other[0]
+            ),
+            None,
+        )
+        if match_index is not None:
+            available.pop(match_index)
+            matched += 1
+
+    return matched / max(len(left), len(right))
+
+
+def _author_list_name_similarity(left_authors, right_authors):
+    """Greedily pair author names and return order-independent list overlap."""
+    if not left_authors or not right_authors:
+        return 0.0
+    scores = sorted(
+        (
+            (_author_name_similarity(left, right), left_index, right_index)
+            for left_index, left in enumerate(left_authors)
+            for right_index, right in enumerate(right_authors)
+        ),
+        reverse=True,
+    )
+    used_left = set()
+    used_right = set()
+    total = 0.0
+    for score, left_index, right_index in scores:
+        if score <= 0.0:
+            break
+        if left_index in used_left or right_index in used_right:
+            continue
+        used_left.add(left_index)
+        used_right.add(right_index)
+        total += score
+    return total / max(len(left_authors), len(right_authors))
+
+
 def _title_similarity_from_normalized(left_norm, right_norm):
     """Score two already-normalized titles."""
     if left_norm and right_norm and left_norm.replace(' ', '') == right_norm.replace(' ', ''):
@@ -309,7 +391,15 @@ def author_similarity(left_authors, right_authors, compact=False):
     """Compare author lists by normalized last-name overlap."""
     left_last_names = _surname_set(left_authors, compact=compact)
     right_last_names = _surname_set(right_authors, compact=compact)
-    return _jaccard(left_last_names, right_last_names)
+    surname_similarity = _jaccard(left_last_names, right_last_names)
+    name_similarity = _author_list_name_similarity(left_authors, right_authors)
+    names_are_complete = (
+        all(len(_author_name_tokens(name)) >= 2 for name in left_authors)
+        and all(len(_author_name_tokens(name)) >= 2 for name in right_authors)
+    )
+    if names_are_complete:
+        return name_similarity
+    return max(surname_similarity, name_similarity)
 
 
 def score_title_author_match(left_title, left_authors, right_title, right_authors):
@@ -328,9 +418,14 @@ def score_title_author_match(left_title, left_authors, right_title, right_author
     if exactish_title:
         author_sim = max(author_sim, author_similarity(
             left_authors, right_authors, compact=True))
+        has_robust_name_overlap = any(
+            _author_name_similarity(left, right) >= 0.65
+            for left in left_authors
+            for right in right_authors
+        )
         left_compact = _surname_set(left_authors, compact=True)
         right_compact = _surname_set(right_authors, compact=True)
-        if left_compact & right_compact:
+        if left_compact & right_compact or has_robust_name_overlap:
             author_sim = 1.0
         elif (left_compact and right_compact
               and min(len(left_compact), len(right_compact)) >= 2

@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 from doi_lookup import score_match
 from title_matching import (
     author_last_name,
+    author_similarity,
     normalize_author_name,
     normalize_title,
     score_title_author_match,
@@ -99,6 +100,34 @@ class NormalizeTests(unittest.TestCase):
                 "Connectivity for Kite-Linked Graphs",
                 ["Liu, Runrun", "Rolek, Martin"],
             ),
+        )
+
+    def test_author_similarity_handles_reordered_multiword_names(self):
+        examples = [
+            ("Jesse Campion Loth", "Campion Loth, Jesse"),
+            ("Nguyen Thi Thanh Tam", "Thi Thanh Tam, Nguyen"),
+            ("Zhai Mingqing", "Zhai, Mingqing"),
+        ]
+        for arxiv_name, crossref_name in examples:
+            with self.subTest(arxiv_name=arxiv_name):
+                self.assertEqual(
+                    1.0,
+                    author_similarity([arxiv_name], [crossref_name]),
+                )
+
+    def test_author_similarity_allows_one_added_name_part(self):
+        self.assertGreaterEqual(
+            author_similarity(
+                ["Cetin Hakimoglu-Brown"],
+                ["Hakimoglu, Cetin"],
+            ),
+            2 / 3,
+        )
+
+    def test_author_similarity_does_not_equate_shared_surname_only(self):
+        self.assertLess(
+            author_similarity(["Jane Loth"], ["Jesse Campion Loth"]),
+            0.65,
         )
 
     def test_spacing_only_title_match_needs_one_author_overlap(self):
