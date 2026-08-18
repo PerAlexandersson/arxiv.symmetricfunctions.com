@@ -1127,3 +1127,45 @@ The remaining 39,458 unreviewed CSV phrases were deliberately left unchanged
 for subsequent batches.  The next useful pass should review the next
 frequency tier and continue to leave ambiguous phrases out of the curated
 keyword table.
+
+### Local keyword candidate triage, agent batch 2, 2026-08-18
+
+Three read-only review agents and the main worker classified the next candidate
+sets.  Their recommendation files were checked before any database write:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/keyword-triage/agent-a.json
+sha256 5df198e99a2fecc920bd7781b7887a049ef620eef2826da891caad3b0ed58435
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/keyword-triage/agent-b.json
+sha256 82b1f2aee83762a86503c2cc1594fe0e2fc61c5e3eba3b58d6e75a27905a3257
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/keyword-triage/agent-c.json
+sha256 90ddccfe0512a95f15e4a3a4431bc1b8dfbfa45161fc3c4427ab304e9b367dc2
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/keyword-triage/agent-root.json
+sha256 5e2aaf1c0902b05336b1726c12d71f5dfff4111958e7c63e02bbaf24a1c6919a
+```
+
+The agent filters were not completely identical, so 317 unique phrases were
+available after merging.  Fifteen overlapping recommendations disagreed.  The
+merged plan records each conflict and uses the more conservative explicit
+raw-position decision (precedence: root, C, B, A).  The resulting local batch
+added 120 keywords, 15 aliases, 68 `math_words`, and 114 ignored candidates.
+No production database write was made.
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/keyword-triage/batch2-merged.json
+sha256 d2958000c721000be3ad3786937c3ba27defd2970049f8f0f36fab5adda52d5d
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-keyword-triage-batch2-20260818T135221Z.sql.gz
+sha256 895f91c9cb54d4a54d9956cdc51478b3a3c57cd5cd9b1495bd47d94424be2d7d
+```
+
+After the transaction, local totals are 1,110 keywords, 58 aliases, 3,469
+math words, and 5,145 ignored candidates.  The automatic tagger was rerun for
+all 80,447 papers and produced 258,469 automatic `paper_keywords` links.  The
+remaining unreviewed CSV backlog is 39,141 phrases; its next entry is
+`leftmost`.  The local database is therefore ahead of production for these
+keyword tables and must be reviewed before any future guarded production
+migration.
