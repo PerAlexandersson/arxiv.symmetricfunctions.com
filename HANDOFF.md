@@ -832,3 +832,69 @@ no broad tests were run.
 /home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch30-20260818T074500Z.sql.gz
 sha256 f22d4de0030f24d264f641337fed942f442e6a60474354ffeee248fa7229d0af
 ```
+
+The thirty-first guarded batch resolved 20 rows: 13 approvals and seven
+rejections.  Two rejected suggestions exposed the correct full-article DOIs
+for `math/0311037` and `math/0308045`; both corrected DOIs were recorded with
+approved audit rows.  Public notes on all 20 records explain preliminary and
+subset publications, expanded manuscripts, title changes, an erratum DOI, and
+the two corrected assignments.
+
+The queue fell from 47 to 27, and the DOI-bearing-paper count rose from 41,655
+to 41,670.  All three write phases passed rollback dry runs before local
+commit.  Postflight verified both corrected owners, 80,447 papers, 496 papers
+with public editor notes, and zero candidate orphans.  Production remains
+unchanged, and no broad tests were run.
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual31.json
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch31-20260818T074100Z.sql.gz
+sha256 213210da11d459b4770f9d3c21c531f3829fca0402bba595692d36fdaa6c4262
+```
+
+The thirty-second guarded batch resolved 17 rows: 11 approvals and six
+rejections.  One false candidate exposed the correct DOI for the 2000
+Cambridge article `math/0204222`, which was recorded with an approved audit
+row.  Public notes on all 17 records explain superseded manuscripts, expanded
+versions, translated publications, title changes, distinct same-author work,
+and the corrected assignment.
+
+The queue fell from 27 to 10, and the DOI-bearing-paper count rose from 41,670
+to 41,682.  All three write phases passed rollback dry runs before local
+commit.  Postflight verified the corrected owner, 80,447 papers, 513 papers
+with public editor notes, and zero candidate orphans.  Production remains
+unchanged, and no broad tests were run.
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual32.json
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch32-20260818T075100Z.sql.gz
+sha256 62a96b58dab3c18f0bf3bb7eb32688d228ae391dbf2af9f193025f8fb6724a51
+```
+
+The thirty-third and final guarded batch resolved the remaining 10 rows: six
+approvals and four rejections.  Ten public notes distinguish full reports from
+conference subsets, a withdrawn manuscript from its short precursor, and
+closely related same-author papers.  The queue fell from 10 to zero, and the
+DOI-bearing-paper count rose from 41,682 to 41,688.  Both write phases passed
+rollback dry runs before local commit.
+
+The final read-only report examined zero pending candidates.  Postflight found
+80,447 papers, three users, 180 user-list rows, 965 keywords, 41,688 papers
+with DOIs, 523 papers with public editor notes, and zero candidate orphans.
+Production remains unchanged, and no broad tests were run.  The final report
+and last pre-write recovery checkpoint are:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual-final.json
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch33-final-20260818T075000Z.sql.gz
+sha256 c8bbdd35aa04b4cdd12216bdf294a96b7025773743734b7c2e17a9bb7591883f
+```
+
+The next operation is a separate production database update.  Before that
+operation, take and verify a fresh recoverable production backup, then transfer
+the reviewed local database changes with production-specific safeguards.  Do
+not infer authorization to perform that upload merely from this completed
+local triage pass.
