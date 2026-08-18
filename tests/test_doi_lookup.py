@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 
-from doi_lookup import score_match
+from doi_lookup import filter_rejected_doi_items, score_match
 from title_matching import (
     author_coverage_similarity,
     author_last_name,
@@ -18,6 +18,16 @@ from title_matching import (
 
 
 class NormalizeTests(unittest.TestCase):
+    def test_rejected_doi_candidates_are_not_reconsidered(self):
+        items = [
+            {'DOI': '10.1000/Rejected'},
+            {'DOI': '10.1000/alternative'},
+        ]
+        self.assertEqual(
+            [{'DOI': '10.1000/alternative'}],
+            filter_rejected_doi_items(items, {' 10.1000/rejected '}),
+        )
+
     def test_tex_math_and_unicode_titles_normalize_together(self):
         tex_title = r"Phase transitions for the minimizers of the $p^{th}$ frame potentials in $\mathbb{R}^2$"
         unicode_title = "Phase Transitions for the Minimizers of the p-Frame Potentials in R^2"

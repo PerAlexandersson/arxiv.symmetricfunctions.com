@@ -216,6 +216,28 @@ def get_paper_authors(cursor, paper_id):
     return [row['name'] for row in cursor.fetchall()]
 
 
+def get_rejected_dois(cursor, paper_id):
+    """Return normalized DOI values previously rejected for one paper."""
+    cursor.execute("""
+        SELECT LOWER(TRIM(doi)) AS doi
+        FROM doi_candidates
+        WHERE paper_id = %s AND status = 'rejected'
+    """, (paper_id,))
+    return {row['doi'] for row in cursor.fetchall() if row.get('doi')}
+
+
+def filter_rejected_doi_items(items, rejected_dois):
+    """Keep Crossref results except DOI values rejected by an editor."""
+    normalized_rejections = {
+        doi.strip().lower() for doi in rejected_dois if doi
+    }
+    return [
+        item for item in items
+        if not item.get('DOI')
+        or item['DOI'].strip().lower() not in normalized_rejections
+    ]
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Find DOIs via Crossref')
     parser.add_argument('--batch', type=int, default=50, help='papers per run')
@@ -252,6 +274,10 @@ def main(argv=None):
                 else int(str(paper['published_date'])[:4]))
 
         items = query_crossref(paper['title'], first_last)
+        items = filter_rejected_doi_items(
+            items,
+            get_rejected_dois(cursor, paper['id']),
+        )
         stats['queried'] += 1
 
         best = None

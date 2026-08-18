@@ -949,3 +949,62 @@ non-obvious relationships, and rollback dry runs.  Recheck the 42 suggested
 replacement DOI values as structured paper-to-DOI assignments rather than
 extracting them mechanically from review prose.  Production remains
 unchanged, and this audit does not itself authorize that later upload.
+
+### Shared DOI corrections applied locally, 2026-08-18
+
+The reviewed shared-DOI corrections have now been applied to the local
+`arxiv_frontend` database only.  A fresh recoverable local backup was taken and
+verified before any writes.  Forty-five paper rows received verified
+replacement DOIs, 134 wrong DOI assignments were cleared, and 258 public notes
+were added for intentional shares, withdrawn manuscripts, conference or FPSAC
+precursors, announcements, split manuscripts, combined publications,
+corrigenda/addenda, and other non-obvious relationships.  The old wrong DOI is
+also recorded as a rejected candidate on every cleared or replaced row, while
+each replacement DOI has an approved audit row.
+
+Registry and local-owner preflight exposed three cases needing special
+handling.  The Algorithmica article under DOI
+`10.1007/s00453-022-00956-6` combines arXiv:1910.00863 and arXiv:2009.06720,
+and the SIAM article under DOI `10.1137/140986980` combines arXiv:1407.8336
+and arXiv:1407.7604; both DOI values are therefore intentionally shared, with
+notes on both records.  DOI `10.5802/alco.135` was moved from the separately
+published FPSAC extended abstract arXiv:2003.12661 to the full Algebraic
+Combinatorics article arXiv:1910.02233, with an explanatory DOI-less note on
+the abstract.  The first rollback run also caught an expected-count error that
+omitted the already reviewed two-record share under
+`10.1016/j.jsc.2008.08.002`; it rolled back without changes.  After correcting
+the invariant and adding notes to those two records, the complete rollback run
+and the identical commit both passed.
+
+Postflight verified 80,447 papers, three users, 180 user-list rows, 965
+keywords, 41,554 DOI-bearing papers, 781 papers with public notes, zero pending
+DOI candidates, and zero candidate orphans.  Exactly 41 normalized DOI values
+remain shared, and their complete owner sets equal the reviewed intentional
+set.  The malformed journal-level value `10.5802/alco` has no remaining owner.
+The homepage cache was marked dirty for rebuilding.  Production was not
+queried or changed.
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-shared-doi-corrections-20260818T093052Z.sql.gz
+sha256 badcb36c1923452f908b791d4e39647fede869f96919c8bbd7c22f705fb8bc37
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/shared-doi-audit/correction-plan.json
+sha256 d43a5c8c0a51021dfbabe553d032c2bf931f8f8a8298e8823a477cfec6aa97bc
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/shared-doi-audit/apply-committed.json
+sha256 316e8d19ef325920e358009f7c3ede7c4ef750b4200cf21ce45ba44a51b812af
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/shared-doi-audit/postflight.json
+sha256 0f8ecc2869a0bbf2ebd2fb33309dd9216188b953de2ce72b007179a6d72ea042
+```
+
+`src/doi_lookup.py` now excludes DOI values previously rejected for a paper
+before scoring Crossref results.  This prevents a later automatic recheck from
+silently re-approving these audited false matches while still allowing a
+different candidate DOI to be considered.  The focused rejection-filter test
+passes; no broad test suite was run.
+
+The local DOI state is ready for the later production-table transfer.  Before
+that separate operation, take and verify a fresh production backup and use the
+production-specific merge safeguards.  This local correction pass does not
+itself authorize a production write.
