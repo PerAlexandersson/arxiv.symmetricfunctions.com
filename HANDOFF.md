@@ -1169,3 +1169,36 @@ remaining unreviewed CSV backlog is 39,141 phrases; its next entry is
 `leftmost`.  The local database is therefore ahead of production for these
 keyword tables and must be reviewed before any future guarded production
 migration.
+
+### Production keyword sync, 2026-08-18
+
+The reviewed local keyword state has now been merged into the live database.
+Before the write, a fresh production dump was made on the server, downloaded,
+and checksummed locally:
+
+```text
+~/domains/arxiv.symmetricfunctions.com/backups/pre-keyword-sync-20260818T135729Z.sql.gz
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/pre-keyword-sync-20260818T135729Z.sql.gz
+sha256 d4d131bc4fefc192a2465143d2fd530da403a97a3ef58af53b2e112fc6250e6d
+size 30992582 bytes
+```
+
+The guarded transaction upserted the local `keywords`, `keyword_aliases`,
+`math_words`, and `ignored_candidates` state.  It replaced only automatic
+`paper_keywords` links for papers present in the reviewed local snapshot;
+production-only papers and non-automatic links were preserved.  The saved
+plan is:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/production-keyword-sync/plan-20260818T135951Z.json
+sha256 e79495323584977fcf30a93f0a724dd4329575df7f9dc98e0cb9785e08fd44e4
+```
+
+Production changed from 965 keywords, 42 aliases, 3,385 math words, 4,996
+ignored candidates, and 253,719 automatic paper-keyword links to 1,110, 58,
+3,469, 5,145, and 258,698 respectively.  The additional 229 automatic links
+belong to the 73 papers fetched only in production.  An independent comparison
+joined links by stable arXiv identifier and keyword phrase: the 258,469 local
+links match production exactly on all shared papers, with no normalized
+difference.  The homepage cache was marked dirty, and the homepage plus
+`/api/v1/status` both returned HTTP 200 after the sync.
