@@ -620,3 +620,67 @@ The report and recovery checkpoint are:
 /home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch18-20260818T065508Z.sql.gz
 sha256 53bd888c50fd0b3930236349ea7d92b10a8a1f4c074a6e54f3cb9eace52d13bd
 ```
+
+The nineteenth guarded batch resolved 30 further rows: 16 approvals and 14
+rejections.  A false match between the algebraic and bijective random-matrix
+papers exposed the correct Annals of Combinatorics DOI for `1311.7690`; it was
+recorded directly with an approved audit row.  Public notes were appropriate
+for all 30 papers because the wave was dominated by revised titles, conference
+subsets, split manuscripts, companion code, changed author attribution, and
+related-but-distinct publications.
+
+The queue fell from 288 to 258, and the DOI-bearing-paper count rose from
+41,536 to 41,553.  All write phases passed rollback dry runs before local
+commit.  Postflight found all planned rows resolved, the corrected DOI in
+place, 80,447 papers, and zero candidate orphans.  Production remains
+unchanged, and no broad tests were run.  The report and recovery checkpoint
+are:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual19.json
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch19-20260818T065829Z.sql.gz
+sha256 f723df5f4c39769a4c94120767660de95408bab086b54da5d6f793f896bd33cd
+```
+
+The twentieth guarded batch resolved another 30 rows, split evenly between 15
+approvals and 15 rejections.  Three false candidates exposed the actual
+publication DOIs for `1301.7602`, `1212.0177`, and `1211.1899`; all three were
+assigned directly with approved audit rows.  Public notes on all 30 records
+capture subset papers, conference/full-version relationships, retitlings,
+later replacements, and related but distinct works.
+
+The queue fell from 258 to 228, and the DOI-bearing-paper count rose from
+41,553 to 41,571.  All phases passed rollback dry runs before local commit.
+Postflight found all planned rows resolved, all three corrected DOI assignments
+in place, 80,447 papers, and zero candidate orphans.  Production remains
+unchanged, and no broad tests were run.  The report and recovery checkpoint
+are:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual20.json
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch20-20260818T070308Z.sql.gz
+sha256 1ddd19db83d3306e078d809f01497391c1ffe88c7caf9d091fa8f0817bb47bb7
+```
+
+The twenty-first guarded batch resolved 20 further rows: seven approvals and
+13 rejections.  It also recovered the final Algorithmica DOI for `1208.5345`
+and reassigned a repeated false candidate to the exact simple-cycle paper
+`1205.0128`.  Twenty public notes explain a withdrawn successor, two-preprint
+mergers, preliminary and extended versions, DOI-less journal appearances,
+retitlings, and the corrected owner.
+
+The queue fell from 228 to 208, and the DOI-bearing-paper count rose from
+41,571 to 41,580.  Each phase passed a rollback dry run before its local
+commit.  Postflight found all 20 planned rows resolved, both recovered DOI
+assignments in place, 80,447 papers, and zero candidate orphans.  Production
+remains unchanged, and no broad tests were run.  The report and recovery
+checkpoint are:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual21.json
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch21-20260818T070614Z.sql.gz
+sha256 8327cb39b3b19a793eafecf72d0266d01c5f08e57a9248bd371137a721608c0e
+```
