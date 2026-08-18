@@ -748,3 +748,87 @@ no broad tests were run.  The report and recovery checkpoint are:
 /home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch24-20260818T071947Z.sql.gz
 sha256 1263ff008213bc1886064e0a2d6ec5842ae019211cc9ac6918d45e5b83adb598
 ```
+
+The twenty-fifth guarded batch resolved 20 rows: nine approvals and 11
+rejections.  Nineteen public notes record retitlings, partial or expanded
+versions, and related but distinct publications.  The queue fell from 137 to
+117, and the DOI-bearing-paper count rose from 41,613 to 41,622.  Rollback dry
+runs passed before the local commits; postflight found 80,447 papers and zero
+candidate orphans.  Production remains unchanged, and no broad tests were run.
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual25.json
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch25-20260818T072420Z.sql.gz
+sha256 d38e0daa7428ba47c9cad533d10d3bac3cca56ddcd2aa7287c39d5dd145f581c
+```
+
+The twenty-sixth guarded batch resolved 10 rows: four approvals and six
+rejections, with nine public notes.  The queue fell from 117 to 107, and the
+DOI-bearing-paper count rose from 41,622 to 41,626.  Rollback dry runs passed;
+postflight found 80,447 papers and zero candidate orphans.  Production remains
+unchanged, and no broad tests were run.
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual26.json
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch26-20260818T072649Z.sql.gz
+sha256 5fdbc7e55b39a861661f2c058c26b25e9af3640c79a7d0bd326714582520aea9
+```
+
+The twenty-seventh guarded batch resolved 10 rows: six approvals and four
+rejections, with 10 public notes.  The first note dry run stopped on two
+mistyped arXiv base IDs and rolled back without changing data; after correcting
+the keys, both rollback dry runs and local commits succeeded.  The queue fell
+from 107 to 97, and the DOI-bearing-paper count rose from 41,626 to 41,632.
+Postflight found 80,447 papers and zero candidate orphans.  Production remains
+unchanged, and no broad tests were run.
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual27.json
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch27-20260818T072852Z.sql.gz
+sha256 39dce5139d3490e265d285118d85566809c7cc00225a61517b5175283a38cfe6
+```
+
+The twenty-eighth guarded batch resolved 20 rows: eight approvals and 12
+rejections, with public notes on all 20 records.  The queue fell from 97 to 77,
+and the DOI-bearing-paper count rose from 41,632 to 41,640.  Rollback dry runs
+passed; postflight found 80,447 papers and zero candidate orphans.  Production
+remains unchanged, and no broad tests were run.
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual28.json
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch28-20260818T073044Z.sql.gz
+sha256 ffa15968d0619deb092517f14706ab4b939700c569ec5bfb26b368a0f90a7e14
+```
+
+The twenty-ninth guarded batch resolved 10 rows: eight approvals and two
+rejections, with public notes on all 10 records.  The queue fell from 77 to 67,
+and the DOI-bearing-paper count rose from 41,640 to 41,648.  Rollback dry runs
+passed; postflight found 80,447 papers and zero candidate orphans.  Production
+remains unchanged, and no broad tests were run.
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual29.json
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch29-20260818T073353Z.sql.gz
+sha256 aa1ae8f6f1d9d18f59ef18d5ebd3fa83c62487995df9d64445082201880d233c
+```
+
+The thirtieth guarded batch resolved 20 rows: seven approvals and 13
+rejections.  Public notes on all 20 records explain conference precursors,
+later restricted results, revised titles, expanded publications, and related
+same-author papers.  The queue fell from 67 to 47, and the DOI-bearing-paper
+count rose from 41,648 to 41,655.  Both write phases passed rollback dry runs
+before local commit.  Postflight found 80,447 papers, 476 papers with public
+editor notes, and zero candidate orphans.  Production remains unchanged, and
+no broad tests were run.
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual30.json
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch30-20260818T074500Z.sql.gz
+sha256 f22d4de0030f24d264f641337fed942f442e6a60474354ffeee248fa7229d0af
+```
