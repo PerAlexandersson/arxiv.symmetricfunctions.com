@@ -438,6 +438,16 @@ Papers that arrive without a DOI can have one found automatically via the Crossr
 cd database && ./merge_prod_doi_state.sh          # dry run
 cd database && ./merge_prod_doi_state.sh --apply  # apply
 
+# Push a reviewed local DOI state to production without replacing newer papers.
+# Plan generation is read-only and requires a fresh verified production backup.
+python3 database/push_local_doi_state.py \
+  --local-host db --plan /secure/path/doi-plan.json \
+  --backup /secure/path/fresh-production.sql.gz
+python3 database/push_local_doi_state.py \
+  --local-host db --plan /secure/path/doi-plan.json --rollback-test
+python3 database/push_local_doi_state.py \
+  --local-host db --plan /secure/path/doi-plan.json --apply
+
 # Or directly
 cd src && source ../venv/bin/activate
 python3 doi_lookup.py --batch 50 --auto-approve 0.90 --to-date 2023-01-01

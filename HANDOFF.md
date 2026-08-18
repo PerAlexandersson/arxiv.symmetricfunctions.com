@@ -1008,3 +1008,67 @@ The local DOI state is ready for the later production-table transfer.  Before
 that separate operation, take and verify a fresh production backup and use the
 production-specific merge safeguards.  This local correction pass does not
 itself authorize a production write.
+
+### Reviewed DOI state deployed to production, 2026-08-18
+
+The complete reviewed DOI state has now been merged into production without
+replacing tables or losing the 73 papers fetched after the local database was
+synchronized.  Production had 80,520 papers at preflight, compared with the
+80,447 reviewed local papers.  Its DOI-review state was still the untouched
+pre-review state: 40,313 DOI-bearing papers, 2,491 pending candidates, and
+three public editor notes.
+
+A fresh consistent production dump was created on the server, verified there,
+downloaded, and verified again locally before any write:
+
+```text
+~/domains/arxiv.symmetricfunctions.com/backups/pre-doi-merge-20260818T104653Z.sql.gz
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/pre-doi-merge-20260818T104653Z.sql.gz
+size 30708326 bytes
+sha256 0eb622c9e85d117d46abec279b661cee5d00ac986795d41392ef2dc79c358b0e
+```
+
+`database/push_local_doi_state.py` now provides the reusable production merge
+workflow.  Its default mode is read-only and writes a checksummed JSON plan.
+It connects through an SSH tunnel, maps papers by stable `arxiv_base_id`,
+preserves production-only papers and candidates, updates only DOI/publication
+review fields and candidate audit rows, preserves each paper's `updated_at`,
+locks and rechecks every target, marks the homepage cache dirty, and aborts on
+any precondition or postflight mismatch.  The same saved plan supports a full
+rollback test and the final commit.  It also refuses to run the write modes if
+the recorded backup or local desired state has changed.
+
+The final plan contained 1,920 paper updates, 251 candidate inserts, and 2,640
+candidate updates.  It preserved all 73 newer production papers and no
+production-only candidate row needed reconciliation.  Its internal plan hash
+is `aace4011a13dfbf9cda96202b479fa7225624b2fdaee458ef7f5e11c00437183`;
+the serialized plan file hash is
+`4a79595df57ac14ac5c3ac757c220853d47cd54456e28613751355bc69d4c6b8`.
+The full transaction first passed its rollback test and independently returned
+to the exact pre-test summary.  The identical plan was then committed.
+
+Before the database commit, the production source was deployed so the
+rejected-candidate filter and verified-publisher-DOI preservation safeguards
+are active for the six-hour update cron.  The deployed matcher, title matcher,
+arXiv fetcher, and cron wrapper matched their local source checksums; the
+homepage and API returned HTTP 200 after deployment.
+
+Independent postflight opened a fresh production connection and generated a
+zero-change comparison plan against the reviewed local database.  Production
+now has 80,520 papers, three users, 180 user-list rows, 965 keywords, 41,554
+DOI-bearing papers, 781 papers with public editor notes, zero pending DOI
+candidates, zero candidate orphans, and exactly 41 normalized shared DOI
+values.  The malformed journal-level value `10.5802/alco` has zero owners.
+The 73 newer production papers remain present, and the public homepage,
+`/api/v1/status`, and its reported 80,520-paper count all passed smoke tests.
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/production-doi-merge/plan-20260818T104653Z.rollback.json
+sha256 bd14d43aca8cbf4484a35b334428ec91c279ac858406849764f14cadbc91eab8
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/production-doi-merge/plan-20260818T104653Z.applied.json
+sha256 5a4dbd55dae44f28ef31beb1afbf0f860870e7a4971977e1163d1e8c21b5f656
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/production-doi-merge/postflight-20260818T104653Z.json
+sha256 48671bc7026671d43b8a4b3f6c80b1173e7d37cf9593774df3f3b592de1122aa
+```
