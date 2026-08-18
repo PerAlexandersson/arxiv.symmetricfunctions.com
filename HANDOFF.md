@@ -898,3 +898,11 @@ operation, take and verify a fresh recoverable production backup, then transfer
 the reviewed local database changes with production-specific safeguards.  Do
 not infer authorization to perform that upload merely from this completed
 local triage pass.
+
+A separate read-only pre-production check found 207 normalized DOI values used
+by more than one paper row.  Some appear to be intentional combined
+publications (one article covering several arXiv records), while at least one
+value is suspiciously prefix-only (`10.5802/alco`).  The queue work did not
+alter these established DOI assignments.  Audit and classify these shared
+values before the production update instead of applying a blanket uniqueness
+rewrite, since legitimate multi-preprint publications must be preserved.
