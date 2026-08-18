@@ -684,3 +684,67 @@ checkpoint are:
 /home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch21-20260818T070614Z.sql.gz
 sha256 8327cb39b3b19a793eafecf72d0266d01c5f08e57a9248bd371137a721608c0e
 ```
+
+The twenty-second guarded batch resolved 20 more rows: 12 approvals and eight
+rejections.  Twenty public notes document expanded or shortened publications,
+changed titles, a withdrawn erroneous preprint whose article nevertheless
+appeared, two publications combining pairs of preprints, and several DOI-less
+journal appearances.
+
+The queue fell from 208 to 188, and the DOI-bearing-paper count rose from
+41,580 to 41,592.  Both write phases passed rollback dry runs before local
+commit.  Postflight found all 20 planned rows resolved, 80,447 papers, and zero
+candidate orphans.  Production remains unchanged, and no broad tests were run.
+The report and recovery checkpoint are:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual22.json
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch22-20260818T071015Z.sql.gz
+sha256 1e3b9dd7d0837e9864610bd1b7cc1527ce1c404d3087efa07890dd6a031f537c
+```
+
+The twenty-third guarded batch resolved 30 further rows: 15 approvals and 15
+rejections.  A narrow ISIT candidate exposed the full 2019 journal DOI for
+`1012.5224`, which was recorded directly with an approved audit row.  Twenty-
+nine public notes capture translations and retitlings, conference or handbook
+versions, supporting-information records, later generalizations, merged
+preprints, and DOI-less journal appearances.
+
+The queue fell from 188 to 158, and the DOI-bearing-paper count rose from
+41,592 to 41,608.  All three phases passed rollback dry runs before local
+commit.  Postflight found all planned rows resolved, the corrected DOI in
+place, 80,447 papers, and zero candidate orphans.  Production remains
+unchanged, and no broad tests were run.  The report and recovery checkpoint
+are:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual23.json
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch23-20260818T071419Z.sql.gz
+sha256 630ea34c0344fe7dbacf8a9348ad620db930f3b46e662b1b36996173dcbc91f1
+```
+
+The twenty-fourth guarded batch resolved 20 reviewed rows: four approvals and
+16 rejections.  One rejection exposed a pending candidate on the exact local
+Eulerian-spline paper `0808.2349`; that candidate was independently promoted,
+so the round resolved 21 queue rows and added five DOIs in total.  Twenty-one
+public notes explain partial publications, thesis and supplement records,
+merged preprints, related same-author papers, DOI-less venues, and the corrected
+owner.
+
+The queue fell from 158 to 137, and the DOI-bearing-paper count rose from
+41,608 to 41,613.  Each successful write phase passed a rollback dry run before
+local commit.  The original exact-owner helper conservatively refused to act
+because the target already had its own pending candidate; no change was made by
+that failed attempt, and the target candidate was then approved through a
+guarded exact-owner transaction.  Postflight found all 21 rows resolved,
+80,447 papers, and zero candidate orphans.  Production remains unchanged, and
+no broad tests were run.  The report and recovery checkpoint are:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual24.json
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch24-20260818T071947Z.sql.gz
+sha256 1263ff008213bc1886064e0a2d6ec5842ae019211cc9ac6918d45e5b83adb598
+```
