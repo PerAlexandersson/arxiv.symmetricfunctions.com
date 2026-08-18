@@ -1072,3 +1072,29 @@ sha256 5a4dbd55dae44f28ef31beb1afbf0f860870e7a4971977e1163d1e8c21b5f656
 /home/dev/.cache/arxiv.symmetricfunctions.com/production-doi-merge/postflight-20260818T104653Z.json
 sha256 48671bc7026671d43b8a4b3f6c80b1173e7d37cf9593774df3f3b592de1122aa
 ```
+
+### Keyword, tag, and backlog comparison, 2026-08-18
+
+A read-only comparison of the auxiliary tables found no local keyword or tag
+state waiting to be uploaded.  The curated `keywords` (965 rows),
+`keyword_aliases` (42), legacy `tags` (15), empty `paper_tags`,
+`ignored_candidates` (4,996), and `math_words` (3,385) tables have identical
+content in local and production.  The `keywords.csv` candidate backlog is
+also byte-for-byte identical (48,802 rows; SHA-256
+`47dfdf31ee0a64d2ce95efff4169c6c84757f2c2288feb8f57427838e9b43624`).
+User keyword watches, user categories, and user lists have the same counts as
+well.
+
+`paper_keywords` is a production superset by 229 rows, all belonging to the
+73 papers fetched after the local snapshot; there are no local-only keyword
+links to overwrite production.  `paper_categories` is likewise ahead in
+production for the new papers (119 rows), with one local-only old row:
+`2111.09588` → `math.CO`.  The production paper still has
+`primary_category='math.CO'` but currently has no junction-row category.  This
+single discrepancy was left untouched because it may reflect an arXiv refresh
+with an empty category list rather than a safe local-to-production backlog
+transfer.  It should be checked separately if category completeness matters.
+
+The stable exports used for this comparison are under
+`/home/dev/.cache/arxiv.symmetricfunctions.com/table-audit/`.  No keyword,
+tag, or user-table production write was performed.
