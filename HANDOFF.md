@@ -475,3 +475,60 @@ read-only report and recovery checkpoint are:
 /home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch12-20260818T060500Z.sql.gz
 sha256 7305f01dcfcbfbb64418a91f1e9c3315c6c9520f48e8545edeb347ab3df59cd5
 ```
+
+The thirteenth guarded batch used another eight parallel reviewers plus two
+focused Opus second opinions.  Reconciliation resolved 82 pending rows: 49
+verified DOI assignments and 33 rejections.  This includes approving the
+already-pending candidate on the original short Kronecker-coefficient paper
+and rejecting the competing long version, as well as rejecting an additional
+vertex-distinguishing candidate competing with the correct edge-distinguishing
+paper.  Four rejected false matches exposed exact local owners without
+candidate rows; their DOIs were recorded on `1804.00068`, `1905.02387`,
+`1903.07346`, and `1904.07070`.
+
+The queue fell from 622 to 540, while the DOI-bearing-paper count rose from
+41,332 to 41,385.  Forty-four further public notes document retitlings,
+conference/full-paper relationships, split and merged preprints, sequels,
+corrections, and competing records.  In particular, the note on `2106.07808`
+explains that the suggested journal DOI publishes a theorem removed from the
+current arXiv version after a flawed proof, and links the correction DOI.
+
+All three write phases passed guarded rollback runs before local commit.
+Postflight checks found the intended statuses, unique ownership for every new
+DOI, zero candidate orphans, and 80,447 papers.  All Claude processes exited
+normally.  Production remains unchanged, and no broad test suite was run.  The
+fresh report and recovery checkpoint are:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual13.json
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch13-20260818T062000Z.sql.gz
+sha256 fe74df3c34883cf24418b060cf05d4f001bb47bc694b7dc745eb84d80ff3df73
+```
+
+The fourteenth eight-reviewer wave resolved another 80 rows: 43 verified DOI
+assignments and 37 rejections.  Two low-confidence conference publications
+covering only strict subsets of broader arXiv reports were rejected, while an
+arXiv record whose authors explicitly identify a “significantly improved
+version” as their publication was approved with a clarifying note.  Four false
+matches exposed exact local owners; their DOIs were recorded on `1812.04987`,
+`1904.02265`, `1905.01921`, and `2412.07974`.
+
+The queue fell from 540 to 460, and the DOI-bearing-paper count rose from
+41,385 to 41,432.  Fifty-one new public notes explain correction records,
+retitlings, translations, narrower conference subsets, surveys, sequels,
+withdrawn drafts, and alternate publication titles.  The note on `1806.04457`
+also records its correct COCOON DOI after rejecting the unrelated queued DOI.
+
+All write phases passed rollback dry runs before local commit.  Postflight
+checks found the intended statuses, unique ownership for each newly assigned
+DOI, zero candidate orphans, and the unchanged 80,447-paper corpus.  All eight
+Claude processes exited normally.  Production remains unchanged, and no broad
+test suite was run.  The fresh report and recovery checkpoint are:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual14.json
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch14-20260818T064000Z.sql.gz
+sha256 b4acf68bea1e4877b096da34d60bcc88839d2261fee3f3ac5332eb86c7ff6703
+```
