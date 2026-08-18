@@ -412,3 +412,66 @@ recovery checkpoint is:
 /home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch10-20260817T194652Z.sql.gz
 sha256 953b26dc0c52400a5f28ac0cb5699e151b2ba6d9a1c1b06a9d26b48d7b7bceba
 ```
+
+An eleventh Claude-assisted batch used eight parallel ten-case reviewers plus
+an independent second review of one initially uncertain publication-title
+change.  After local reconciliation, the guarded batch assigned 62 verified
+publication DOIs and rejected 19 false candidates.  Two rejected false matches
+exposed exact local owners without candidate rows, so their DOIs were recorded
+separately on `2303.04462` and `1901.07200`.  The pending queue fell from 783 to
+702, and the DOI-bearing-paper count rose from 41,220 to 41,284.
+
+The public `editor_note` field now explains eight non-binary cases from batches
+ten and eleven: merged arXiv parts, a computations-only supporting report, a
+companion paper, and two related but distinct cyclic-automorphism preprints.
+Existing notes are preserved when these annotations are applied.  Both DOI
+write phases and the note phase were rolled back successfully as guarded dry
+runs before being committed locally.
+
+Postflight checks found the intended candidate statuses, unique ownership for
+the newly selected DOIs, zero candidate orphans, all eight notes present, and
+the unchanged 80,447-paper corpus.  The fresh read-only classification is:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual11.json
+```
+
+All 702 remaining candidates are classified as `unresolved`.  Production
+remains unchanged, and no broad test suite was run for this database-only
+round.  The recovery checkpoint is:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch11-20260818T055152Z.sql.gz
+sha256 0d28f5e8290e4e6d4683416831742336f217b77f3c028f2748da92030eb125e2
+```
+
+Another parallel group of eight Claude reviewers then checked the next 80
+cases.  The guarded twelfth batch assigned 40 verified DOIs and rejected 40
+false candidates.
+Eight false matches exposed exact local owners without candidate rows; their
+DOIs were separately recorded on `2303.17278`, `2309.04892`, `2307.06752`,
+`2301.09833`, `2305.20012`, `2306.10523`, `2302.08938`, and `2401.13356`.
+The pending queue fell from 702 to 622, and the DOI-bearing-paper count rose
+from 41,284 to 41,332.
+
+Forty concise public `editor_note` annotations record the genuinely
+non-obvious relationships encountered in this wave, including retitled
+publications, companion and sequel papers, translated publications, duplicate
+submissions, a retracted earlier paper, an SSRN copy, and a journal extension
+of conference work.  The Research Square DOI exposed during review was not
+assigned because it is a repository-copy identifier rather than a publication
+DOI.  Existing notes were preserved.
+
+All three write phases were rolled back as guarded dry runs before being
+committed locally.  Postflight checks found all intended statuses, unique
+ownership of every newly selected DOI, zero candidate orphans, and the
+unchanged 80,447-paper corpus.  All eight Claude processes exited normally.
+Production remains unchanged, and no broad test suite was run.  The fresh
+read-only report and recovery checkpoint are:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual12.json
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch12-20260818T060500Z.sql.gz
+sha256 7305f01dcfcbfbb64418a91f1e9c3315c6c9520f48e8545edeb347ab3df59cd5
+```
