@@ -906,3 +906,46 @@ value is suspiciously prefix-only (`10.5802/alco`).  The queue work did not
 alter these established DOI assignments.  Audit and classify these shared
 values before the production update instead of applying a blanket uniqueness
 rewrite, since legitimate multi-preprint publications must be preserved.
+
+### Shared DOI audit, 2026-08-18
+
+The read-only audit of all 207 shared normalized DOI values is complete.  A
+first-pass agent review covered every group.  A disjoint second pass then
+checked all 100 high-risk groups: every proposed legitimate share, every
+proposed removal currently marked `verified`, the malformed DOI, and all
+lower-confidence decisions.  The two passes agreed exactly on 84 of those 100
+groups.  Sixteen disagreements were adjudicated using publisher records,
+arXiv metadata, and the same strict paper-level policy used for the completed
+candidate queue: a separately citable conference abstract, announcement, or
+earlier subset does not inherit the full journal article's DOI merely because
+the later work extends it.  Explicit duplicate, merger, replacement, and
+genuinely superseding-manuscript cases remain shared.
+
+The final classification is 37 intentional shared assignments, 169
+one-owner collisions, and one malformed journal-level DOI (`10.5802/alco`).
+Correcting the findings would remove or replace 178 paper-level DOI
+assignments: 109 currently marked `auto`, 46 marked `verified`, and 23 sourced
+from arXiv.  Review evidence mentions recoverable replacement DOI values in 42
+groups, including the three article DOIs hidden by `10.5802/alco`.  This audit
+did not mutate the database.  Post-audit read-only counts remain 80,447 papers,
+41,688 DOI-bearing papers, zero pending DOI candidates, and 523 public notes.
+
+The complete per-group decisions, evidence links, cross-check comparison, and
+reproducible audit inputs are outside the repository at:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/shared-doi-audit/final-audit.json
+sha256 0fcc1a6b73f19e5a0c6bc9355850cd49432732e5ebf599376f3a512b62309e79
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/shared-doi-audit/final-audit.md
+sha256 ceaf80752482c794c9e072083c1944d21673b7595a89e53562f55412b093df57
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/shared-doi-audit/crosscheck-comparison.json
+```
+
+Before the production database update, apply this audit as a separate guarded
+local correction pass with a fresh recoverable local backup, public notes for
+non-obvious relationships, and rollback dry runs.  Recheck the 42 suggested
+replacement DOI values as structured paper-to-DOI assignments rather than
+extracting them mechanically from review prose.  Production remains
+unchanged, and this audit does not itself authorize that later upload.
