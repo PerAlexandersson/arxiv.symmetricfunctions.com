@@ -1098,3 +1098,32 @@ transfer.  It should be checked separately if category completeness matters.
 The stable exports used for this comparison are under
 `/home/dev/.cache/arxiv.symmetricfunctions.com/table-audit/`.  No keyword,
 tag, or user-table production write was performed.
+
+### Local keyword candidate triage, batch 1, 2026-08-18
+
+The first high-frequency unreviewed keyword batch was classified locally.  The
+conservative decisions promote 25 specialized topics to `keywords`, classify
+16 generic mathematical terms as `math_words`, classify 35 prose fragments,
+author names, and non-topic noise as `ignored_candidates`, and add one alias:
+`skew diagram` → `skew young diagram`.  The local totals are now 990 curated
+keywords, 43 aliases, 3,401 math words, and 5,031 ignored phrases.
+
+The local automatic tagger was then run over all 80,447 papers.  It produced
+254,420 `paper_keywords` links, including links for every promoted topic.  No
+production database write was made; production remains at its previously
+verified keyword state.
+
+Recovery and reproducibility artifacts:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-keyword-triage-20260818T133801Z.sql.gz
+sha256 aee3bf57e32e134d2567c4174fb25de17a0a166ed2212e32d942282e45ba893c
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/keyword-triage/batch1-plan.json
+sha256 b3cd0153a95958410386729f713fc30a4e204d2b33f1ccd4af6672541657d47f
+```
+
+The remaining 39,458 unreviewed CSV phrases were deliberately left unchanged
+for subsequent batches.  The next useful pass should review the next
+frequency tier and continue to leave ambiguous phrases out of the curated
+keyword table.
