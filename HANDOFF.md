@@ -532,3 +532,91 @@ test suite was run.  The fresh report and recovery checkpoint are:
 /home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch14-20260818T064000Z.sql.gz
 sha256 b4acf68bea1e4877b096da34d60bcc88839d2261fee3f3ac5332eb86c7ff6703
 ```
+
+The fifteenth wave used eight ten-case reviewers and two focused Opus second
+opinions.  It resolved 81 pending rows: 51 reviewed assignments, 29 reviewed
+rejections, and one additional pending true-owner candidate.  A previously
+score-rejected candidate on the true skew-growth-paper owner was also restored.
+The shared DOI for two merged directed-hypergraph parts was assigned to neither
+individual record; both now carry explanatory notes.
+
+The queue fell from 460 to 379, and the DOI-bearing-paper count rose from
+41,432 to 41,485.  Thirty-five new public notes cover split and merged papers,
+expanded or subset publications, thesis/chapter mismatches, competing APN and
+skew-growth records, and the two-part shared DOI.  Guarded rollback and commit
+runs completed successfully.  Postflight checks found unique ownership of the
+two corrected DOIs, zero candidate orphans, and 80,447 papers.  Production
+remains unchanged, and no broad test suite was run.  The report and checkpoint
+are:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual15.json
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch15-20260818T070000Z.sql.gz
+sha256 505b869970da4abb874f482f6e3edb5edca59bc127daf18451927a2d1e390a5d
+```
+
+The completed portion of the sixteenth review wave resolved 31 more pending
+rows before the Claude account reached its session limit: 19 verified DOI
+assignments and 12 rejections.  One rejected false match exposed the exact
+local owner `1301.4459`, where that DOI was recorded with an approved audit
+row.  Sixteen public notes explain the non-obvious retitlings, companion
+papers, survey and dissertation mismatches, and competing-owner relationships.
+No decision was inferred from the 13 Claude jobs that stopped without output.
+
+The queue fell from 379 to 348, while the DOI-bearing-paper count rose from
+41,485 to 41,505.  Postflight checks found 80,447 papers, zero candidate
+orphans, the intended candidate statuses, and the unique corrected owner.  The
+fresh report and recovery checkpoint are:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual16-partial.json
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch16-partial-20260818T071000Z.sql.gz
+sha256 9cf682930c721fa64e220f7d7d64a6f332a9412a44f0ee747d4c0ab2d254e0df
+```
+
+Work then continued with two parallel read-only Codex reviewers, with all
+database changes still reconciled and applied by the main worker.  The guarded
+seventeenth batch resolved 30 rows: 13 approvals and 17 rejections.  A false
+match to the authors' earlier `s=1,2,3,4` paper exposed the correct publication
+DOI for `1511.04983`; that DOI was recorded separately with an approved audit
+row.  Fourteen new public notes document translations, preliminary and
+conference subsets, companion or sequel papers, a combined proceedings
+article, and other cases where a binary status alone would be misleading.
+
+The queue fell from 348 to 318, and the DOI-bearing-paper count rose from
+41,505 to 41,519.  All three phases passed rollback dry runs before local
+commit.  Postflight found 80,447 papers, zero candidate orphans, all 30 planned
+rows resolved, and the corrected DOI on `1511.04983`.  Production remains
+unchanged, and no broad test suite was run for these database-only batches.
+The report and recovery checkpoint are:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual17.json
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch17-20260818T065113Z.sql.gz
+sha256 ec43786bef35538c553abfe919821918c5a29e6723a48096b6458d839a30b4d4
+```
+
+The eighteenth guarded batch resolved another 30 rows: 15 verified DOI
+assignments and 15 rejections.  Two false candidates exposed the actual
+publication DOIs for `1410.7287` and `1407.4533`; both were assigned directly
+with approved audit rows after publisher verification.  Twenty-seven new
+public notes preserve the useful context behind retitlings, translations,
+conference subsets, follow-on papers, a proceedings article covering two
+preprints, and the corrected DOI records.
+
+The queue fell from 318 to 288, and the DOI-bearing-paper count rose from
+41,519 to 41,536.  The candidate, corrected-DOI, and note phases all passed
+rollback dry runs before local commit.  Postflight found all 30 planned rows
+resolved, the two corrected DOI assignments in place, 80,447 papers, and zero
+candidate orphans.  Production remains unchanged, and no broad tests were run.
+The report and recovery checkpoint are:
+
+```text
+/home/dev/.cache/arxiv.symmetricfunctions.com/doi-triage/post-manual18.json
+
+/home/dev/.cache/arxiv.symmetricfunctions.com/backups/local-pre-manual-doi-batch18-20260818T065508Z.sql.gz
+sha256 53bd888c50fd0b3930236349ea7d92b10a8a1f4c074a6e54f3cb9eace52d13bd
+```
