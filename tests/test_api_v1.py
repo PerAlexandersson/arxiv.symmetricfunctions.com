@@ -145,6 +145,32 @@ class RepositoryTests(unittest.TestCase):
                 cursor_token=page['next_cursor'],
             )
 
+    def test_list_papers_supports_inclusive_range_and_any_category(self):
+        cursor = FakeCursor(fetchall_values=[[], [], [], []])
+        list_papers(
+            cursor,
+            order='published',
+            published_after='2026-08-01',
+            published_before='2026-08-07',
+            category=['math.CO', 'math.AG'],
+        )
+        query, params = cursor.queries[0]
+        self.assertIn('p.published_date >= %s', query)
+        self.assertIn('p.published_date <= %s', query)
+        self.assertIn('pc.category IN (%s, %s)', query)
+        self.assertEqual(
+            [date(2026, 8, 1), date(2026, 8, 7), 'math.CO', 'math.AG'],
+            params[:-1],
+        )
+
+    def test_list_papers_rejects_reversed_publication_range(self):
+        with self.assertRaisesRegex(ValueError, 'published_after'):
+            list_papers(
+                FakeCursor(),
+                published_after='2026-08-08',
+                published_before='2026-08-07',
+            )
+
 
 class ApiRouteTests(unittest.TestCase):
     def setUp(self):
@@ -177,6 +203,27 @@ class ApiRouteTests(unittest.TestCase):
         response = self.client.get('/api/v1/papers?limit=0')
         self.assertEqual(400, response.status_code)
         self.assertEqual('invalid_request', response.get_json()['error']['code'])
+
+    def test_paper_list_passes_range_and_repeated_categories(self):
+        cursor = FakeCursor()
+        page = {'data': [], 'has_more': False, 'next_cursor': None}
+        with mock.patch.object(
+                api_v1, 'get_db_connection',
+                return_value=FakeConnection(cursor)), mock.patch.object(
+                    api_v1, 'list_papers', return_value=page) as list_mock:
+            response = self.client.get(
+                '/api/v1/papers?published_after=2026-08-01'
+                '&published_before=2026-08-07'
+                '&category=math.CO&category=math.AG&order=published'
+            )
+        self.assertEqual(200, response.status_code)
+        kwargs = list_mock.call_args.kwargs
+        self.assertEqual('2026-08-07', kwargs['published_before'])
+        self.assertEqual(['math.CO', 'math.AG'], kwargs['category'])
+        self.assertEqual(
+            ['math.CO', 'math.AG'], response.get_json()['meta']['filters']['categories']
+        )
+        self.assertTrue(cursor.closed)
 
     def test_openapi_document_is_served(self):
         response = self.client.get('/api/v1/openapi.yaml')

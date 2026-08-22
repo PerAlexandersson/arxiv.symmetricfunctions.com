@@ -29,6 +29,15 @@ class ApiClientTests(unittest.TestCase):
         self.assertIn('keyword=schur+functions', first_url)
         self.assertTrue(second_url.endswith('/papers/math/0601001'))
 
+    def test_encodes_repeated_query_parameters(self):
+        client = ArxivApiClient('https://example.test/api/v1')
+        with mock.patch(
+                'mcp_server.api_client.urlopen',
+                return_value=FakeResponse({'ok': True})) as urlopen:
+            client.papers(category=['math.CO', 'math.AG'])
+        url = urlopen.call_args.args[0].full_url
+        self.assertIn('category=math.CO&category=math.AG', url)
+
     def test_wraps_connection_errors(self):
         client = ArxivApiClient('https://example.test/api/v1')
         with mock.patch(

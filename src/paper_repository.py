@@ -3,6 +3,7 @@
 import base64
 import binascii
 import json
+import re
 from datetime import date, datetime, timezone
 from urllib.parse import quote, urlparse
 
@@ -29,6 +30,24 @@ PAPER_COLUMNS = """
 
 class CursorError(ValueError):
     """Raised when an API cursor is malformed or used with another ordering."""
+
+
+def _parse_categories(value):
+    if not value:
+        return []
+    values = [value] if isinstance(value, str) else list(value)
+    categories = []
+    for raw_category in values:
+        category = str(raw_category).strip()
+        if not category:
+            continue
+        if not re.fullmatch(r'[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*', category):
+            raise ValueError(f'category is invalid: {category!r}')
+        if category not in categories:
+            categories.append(category)
+    if len(categories) > 10:
+        raise ValueError('at most 10 category filters may be provided')
+    return categories
 
 
 def _utc_iso(value):
@@ -190,7 +209,8 @@ def _attach_related(cursor, papers):
 
 def list_papers(cursor, *, limit=50, order='ingested', cursor_token=None,
                 ingested_after=None, changed_after=None, published_after=None,
-                category=None, keyword=None, query=None, site_labels=None):
+                published_before=None, category=None, keyword=None, query=None,
+                site_labels=None):
     """Return a cursor-paginated page of papers and the next cursor."""
     if order not in ORDER_COLUMNS:
         raise ValueError('order must be ingested, changed, or published')
@@ -205,15 +225,27 @@ def list_papers(cursor, *, limit=50, order='ingested', cursor_token=None,
     if changed_after:
         conditions.append('p.updated_at >= %s')
         params.append(_parse_datetime(changed_after, 'changed_after'))
+    published_after_date = None
+    published_before_date = None
     if published_after:
+        published_after_date = _parse_date(published_after, 'published_after')
         conditions.append('p.published_date >= %s')
-        params.append(_parse_date(published_after, 'published_after'))
-    if category:
-        conditions.append("""EXISTS (
+        params.append(published_after_date)
+    if published_before:
+        published_before_date = _parse_date(published_before, 'published_before')
+        conditions.append('p.published_date <= %s')
+        params.append(published_before_date)
+    if (published_after_date and published_before_date
+            and published_after_date > published_before_date):
+        raise ValueError('published_after must not be after published_before')
+    categories = _parse_categories(category)
+    if categories:
+        placeholders = ', '.join(['%s'] * len(categories))
+        conditions.append(f"""EXISTS (
             SELECT 1 FROM paper_categories pc
-            WHERE pc.paper_id = p.id AND pc.category = %s
+            WHERE pc.paper_id = p.id AND pc.category IN ({placeholders})
         )""")
-        params.append(category)
+        params.extend(categories)
     if keyword:
         conditions.append("""EXISTS (
             SELECT 1 FROM paper_keywords filter_pk

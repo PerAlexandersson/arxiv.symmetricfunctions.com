@@ -159,7 +159,8 @@ Useful endpoints include:
 
 ```text
 GET /api/v1/status
-GET /api/v1/papers?published_after=2026-08-01&order=published
+GET /api/v1/papers?published_after=2026-08-01&published_before=2026-08-07&order=published
+GET /api/v1/papers?category=math.CO&category=math.AG&order=published
 GET /api/v1/papers?keyword=schur%20functions
 GET /api/v1/papers?q=chromatic%20symmetric
 GET /api/v1/papers/2608.12345
@@ -169,6 +170,8 @@ GET /api/v1/openapi.yaml
 
 Paper lists use opaque keyset cursors. Pass `next_cursor` back as the `cursor`
 parameter rather than constructing it yourself. Page size is capped at 100.
+Publication-date bounds are inclusive. Repeat `category` to match any of
+several categories; cursor requests must repeat the same filters.
 The response distinguishes the stable base `arxiv_id` from the current
 `versioned_arxiv_id`, so revisions do not appear as new logical papers.
 

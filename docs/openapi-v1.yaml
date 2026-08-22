@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: arXiv++ Combinatorics API
-  version: 1.0.0
+  version: 1.1.0
   description: >-
     Public, read-only access to combinatorics papers indexed by
     arxiv.symmetricfunctions.com. arXiv revisions share one stable arxiv_id;
@@ -48,9 +48,24 @@ paths:
           in: query
           description: Inclusive arXiv first-submission date filter.
           schema: {type: string, format: date}
+        - name: published_before
+          in: query
+          description: Inclusive upper arXiv first-submission date filter.
+          schema: {type: string, format: date}
         - name: category
           in: query
-          schema: {type: string, example: math.CO}
+          description: >-
+            Category filter. Repeat this parameter to match papers in any of
+            several categories.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 10
+            items: {type: string}
+          examples:
+            combinatorics:
+              value: [math.CO]
         - name: keyword
           in: query
           schema: {type: string, example: schur functions}

@@ -103,6 +103,9 @@ def status():
 @api_v1.route('/papers')
 def papers():
     limit = _int_arg('limit', 50, 1, 100)
+    categories = [
+        category for category in request.args.getlist('category') if category
+    ]
     cursor = _cursor()
     try:
         payload = list_papers(
@@ -113,7 +116,8 @@ def papers():
             ingested_after=request.args.get('ingested_after'),
             changed_after=request.args.get('changed_after'),
             published_after=request.args.get('published_after'),
-            category=request.args.get('category'),
+            published_before=request.args.get('published_before'),
+            category=categories,
             keyword=request.args.get('keyword'),
             query=request.args.get('q'),
             site_labels=_site_labels_provider(),
@@ -123,6 +127,13 @@ def papers():
     payload['meta'] = {
         'limit': limit,
         'order': request.args.get('order', 'ingested'),
+        'filters': {
+            'published_after': request.args.get('published_after'),
+            'published_before': request.args.get('published_before'),
+            'categories': categories,
+            'keyword': request.args.get('keyword'),
+            'query': request.args.get('q'),
+        },
     }
     return _json(payload)
 

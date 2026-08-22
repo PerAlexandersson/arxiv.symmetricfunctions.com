@@ -24,7 +24,7 @@ class ArxivApiClient:
         query = urlencode({
             key: value for key, value in (params or {}).items()
             if value not in (None, '')
-        })
+        }, doseq=True)
         url = f'{self.base_url}/{path.lstrip("/")}'
         if query:
             url += '?' + query

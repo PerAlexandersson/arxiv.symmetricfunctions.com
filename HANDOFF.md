@@ -3,8 +3,8 @@
 ## Current scope
 
 Public read-only REST access and a repository-local MCP adapter for agent
-review of recent combinatorics papers, plus a small authenticated-header layout
-fix requested after deployment.
+review of recent combinatorics papers. The current pending change supports the
+date-range paper-scout consumer in `tools/paper-cache-mcp`.
 
 ## Status
 
@@ -12,9 +12,9 @@ fix requested after deployment.
 - The REST API lives under `/api/v1` with OpenAPI documentation.
 - The optional MCP server lives under `mcp_server/` and calls the REST API.
 - arXiv base IDs and revisions are now modeled separately by the fetcher.
-- The complete unit suite passes (63 tests on 2026-08-16).
-- New API/MCP Python files pass Ruff, the OpenAPI 3.1 document validates, and
-  the MCP 2.x client discovers all five tools plus the review prompt.
+- The complete unit suite passes (104 tests on 2026-08-22). Focused API/MCP
+  Python files pass Ruff, the OpenAPI 3.1 document validates, and the MCP 2.x
+  client discovers all five tools plus the review prompt.
 - GitHub commit `5818238` contains the implementation and was deployed on
   2026-08-16.
 - The authenticated logout control has been moved out of the wrapping icon row
@@ -22,6 +22,16 @@ fix requested after deployment.
   test and complete unit suite pass. Commits `f37af87` and `ce65aa0` are pushed
   and deployed; the latter bumps the shared stylesheet URL to avoid stale browser
   caches.
+- The pending paper-scout API extension adds inclusive `published_before`
+  filtering, repeatable category parameters with any-category semantics, and
+  echoed filter metadata on `/api/v1/papers`. The Python API client now encodes
+  repeated query parameters correctly. This is read-only and needs no database
+  migration.
+- The paper-scout API extension has not been deployed yet.
+- A local cross-repository HTTP smoke test reached the new route, but the local
+  MariaDB service was stopped and the route returned its expected 503 response.
+  The database-backed filter SQL and Flask parameter handling are covered by
+  the passing tests; no local or production database state was changed.
 
 ## Production migration
 
@@ -59,7 +69,8 @@ revision rows. Postflight checks show:
 
 ## Next step
 
-Register or publish the repository-local MCP server in the desired agent hosts.
+Deploy the read-only paper-range API extension, then register or publish the
+repository-local MCP server in the desired agent hosts.
 
 No assessment/write-back API exists yet; adding that requires an explicit
 authentication and editorial-queue design.
