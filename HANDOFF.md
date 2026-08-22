@@ -3,8 +3,8 @@
 ## Current scope
 
 Public read-only REST access and a repository-local MCP adapter for agent
-review of recent combinatorics papers. The current pending change supports the
-date-range paper-scout consumer in `tools/paper-cache-mcp`.
+review of recent combinatorics papers. The deployed range/category filters
+support the date-range paper-scout consumer in `tools/paper-cache-mcp`.
 
 ## Status
 
@@ -22,16 +22,19 @@ date-range paper-scout consumer in `tools/paper-cache-mcp`.
   test and complete unit suite pass. Commits `f37af87` and `ce65aa0` are pushed
   and deployed; the latter bumps the shared stylesheet URL to avoid stale browser
   caches.
-- The pending paper-scout API extension adds inclusive `published_before`
+- The paper-scout API extension adds inclusive `published_before`
   filtering, repeatable category parameters with any-category semantics, and
   echoed filter metadata on `/api/v1/papers`. The Python API client now encodes
   repeated query parameters correctly. This is read-only and needs no database
   migration.
-- The paper-scout API extension has not been deployed yet.
+- Commit `20b52b4` contains the paper-scout API extension. It was deployed on
+  2026-08-22 with the repository SSH/SCP deploy script; no database migration
+  or write was performed.
 - A local cross-repository HTTP smoke test reached the new route, but the local
   MariaDB service was stopped and the route returned its expected 503 response.
   The database-backed filter SQL and Flask parameter handling are covered by
-  the passing tests; no local or production database state was changed.
+  the passing tests. The subsequent production postflight exercised the new
+  filters end to end.
 
 ## Production migration
 
@@ -66,11 +69,18 @@ revision rows. Postflight checks show:
 - After the header deployment, the homepage and `/api/v1/status` still return
   200, production serves `shared.css?v=3`, and the deployed authenticated
   template contains the new `site-session`/`site-logout-form` structure.
+- After the paper-scout API deployment, the live OpenAPI document reports API
+  version 1.1.0 and documents `published_before`. An exact one-day range for
+  2026-08-01 returned only papers from that date; repeated `math.ZZ` and
+  `math.CO` categories returned `math.CO` results and echoed both filters,
+  confirming any-category semantics. A reversed range returned HTTP 400.
+- The production homepage, status, paper-detail, and admin routes returned 200,
+  and the recent Passenger log contained no traceback, exception, or error.
 
 ## Next step
 
-Deploy the read-only paper-range API extension, then register or publish the
-repository-local MCP server in the desired agent hosts.
+Register or publish the repository-local MCP server in the desired agent
+hosts, then tune the paper-scout ranking profile from real digests.
 
 No assessment/write-back API exists yet; adding that requires an explicit
 authentication and editorial-queue design.
