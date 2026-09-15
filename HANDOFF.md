@@ -22,8 +22,47 @@ Ownership released (2026-09-15): the production-to-local DOI comparison helper
 no longer places a database password in local process arguments or failure
 exceptions. No worker owns these files.
 
+Ownership released (2026-09-15): the reviewed 2,000-paper DOI top-up is merged
+to production and verified. No worker owns the top-up or DOI-review state.
+
 ## Status
 
+- A guarded 2,000-paper DOI top-up is complete in production. Local was first
+  replaced from a fresh production snapshot after preserving its prior state.
+  Four committed 500-paper runs queried exactly 2,000 papers under the 180-day
+  minimum-age/180-day recheck policy, found 524 candidates, auto-approved 332,
+  and encountered zero Crossref request errors or 429 responses. Two disjoint
+  Luna review lanes covered all 195 pending candidates after the run. Their
+  recommendations were reconciled with a separate collision audit and an
+  independent check of the Cullis-determinant mismatch; the atomic local review
+  transaction approved 76 as verified, rejected 95, cleared/rejected two false
+  automatic assignments, and retained 24 ambiguous candidates for admin review.
+  The review plan SHA-256 is
+  `aa51af5b0160df018a44fdc376bbcbabdb89fdead47fdcfe390aac7043a2af7b`;
+  the application receipt SHA-256 is
+  `22ba7926d35d47f2a83a805cf3af12dddd7eba8569dd742b747c7cc6fadbe811`.
+  Both live-migration safeguards passed: the production plan internal digest is
+  `0f57cef3a2334491ffd966f72b59e8b84419078698cef4d9aa9abbc529d877ab`,
+  and its rollback rehearsal completed before the exact plan was committed.
+  Production postflight has 81,564 papers, 41,988 DOI-bearing papers, 28,610
+  approved, 2,333 rejected, and 24 pending candidates. The eligible queue is
+  14,639; the existing 41 shared normalized DOI values are unchanged, no new
+  shared DOI remains from the top-up, and the homepage plus REST status return
+  HTTP 200.
+- Recovery artifacts for that top-up are outside Dropbox under
+  `/home/paxinum/.cache/arxiv.symmetricfunctions.com/`. The pre-top-up local
+  backup is `backups/local-pre-topup-20260915T112054Z.sql.gz` (SHA-256
+  `19c13a1a7164b3e90490b8d93dce3660e9ff2a395f2daf0b4341d816f6d40ae9`),
+  the production seed is `backups/production-topup-seed-20260915T112054Z.sql.gz`
+  (SHA-256
+  `4f10bfffaa6c42eb91f386b4ca121ebd69618b6d2a5f365c9fc198c11c1f5227`),
+  and the pre-review local backup is
+  `backups/local-pre-agent-review-20260915T123700Z.sql.gz` (SHA-256
+  `4ee117905830c6e1bae8d41eeb98a64a9c7c446e86cbde2e4ed0115cd40f708b`).
+  The fresh pre-merge production backup is retained both remotely as
+  `~/domains/arxiv.symmetricfunctions.com/backups/pre-doi-topup-20260915T123850Z.sql.gz`
+  and locally as `backups/pre-doi-topup-20260915T123850Z.sql.gz` (SHA-256
+  `70a58340ee5d59539e28d7590340be8758a569ac1212f579050288d73f4b7f98`).
 - A read-only top-up preflight found production ahead of the current local
   database: 81,564 versus 80,447 papers, 30,443 versus 30,428 DOI candidates,
   and 282 versus 180 saved-list rows. A DOI-state dry run found 1,817 paper
@@ -31,8 +70,8 @@ exceptions. No worker owns these files.
   production-only papers relative to the local snapshot. Therefore any manual
   DOI top-up should first preserve the current local database as a dated backup
   and replace the working local database with a fresh production snapshot.
-  No top-up or database write has been run; the intended top-up size still
-  requires a deliberate choice.
+  This preflight established the backup-and-replace workflow used by the
+  completed top-up above.
 - The DOI-state comparison helper now sources database credentials only on the
   production host and reports SSH/query failures without embedding the command
   or credential. The credential previously appeared in local diagnostic output
@@ -41,8 +80,8 @@ exceptions. No worker owns these files.
 - The routine DOI queue now has a 180-day minimum paper age and a 250-paper
   batch size. Due work is ordered by explicit bands: journal-reference papers,
   never-checked papers aged 6--24 months, older never-checked papers, then due
-  rechecks. Stable within-band ordering prevents random churn. The production
-  read-only projection under this policy is 16,639 eligible papers: 250 with a
+  rechecks. Stable within-band ordering prevents random churn. The pre-top-up
+  production projection under this policy was 16,639 eligible papers: 250 with a
   journal reference, 8,954 other never-checked papers aged 6--24 months, and
   7,435 older never-checked papers; no rechecks are due. Another 4,879 DOI-less
   papers are younger than six months. Local MariaDB returned journal-reference
@@ -53,7 +92,7 @@ exceptions. No worker owns these files.
   cron with no overrides. Deployed checksums match and the homepage remains 200.
   No DOI scan or database write was run during deployment; the new policy takes
   effect at the next scheduled run.
-- A follow-up production breakdown confirmed that all 20,345 currently eligible
+- An earlier pre-policy production breakdown found that all 20,345 then-eligible
   papers have never been DOI-checked: 5,006 are from 2026, 6,042 from 2025,
   5,180 from 2024, and 4,117 from 2023. None are 180-day rechecks. The 30-day
   minimum-age rule excludes 1,173 recent DOI-less papers but imposes no maximum
@@ -69,10 +108,11 @@ exceptions. No worker owns these files.
   pass. Commit `477541a` is pushed and deployed; a Python 3.9 production-side
   simulated failure returned the distinct error state, deployed checksums match,
   and the homepage remains HTTP 200. No DOI scan or database write was run.
-- A production DOI audit found that DOI discovery is the second stage of the
-  main update wrapper, not a separate live cron entry. The live scan had not
-  run since 2026-08-25; three Crossref candidates remain pending manual review.
-  There are 20,345 papers currently eligible for automated DOI checking, versus
+- The pre-repair production DOI audit found that DOI discovery is the second
+  stage of the main update wrapper, not a separate live cron entry. The live
+  scan had not run since 2026-08-25; three Crossref candidates remained pending
+  manual review. There were 20,345 papers eligible for automated DOI checking,
+  versus
   the wrapper default of 50 per run, so throughput needs a separate deliberate
   tuning decision rather than an unreviewed production backfill.
 - An admin-only attention endpoint and asynchronously loaded compact banner are
@@ -82,9 +122,10 @@ exceptions. No worker owns these files.
   markers, and the Cron admin page exposes those markers and failures. All 113
   unit tests, Python compilation, Bash syntax, JavaScript syntax, and diff
   whitespace checks pass. Commit `66f8293` is pushed and deployed. Production
-  returns the expected three notices (latest DOI stage skipped, three manual
-  matches, and 20,345 eligible checks); the endpoint is admin-authenticated,
-  its JavaScript asset and homepage return 200, and deployed checksums match.
+  originally returned the expected three notices (latest DOI stage skipped,
+  three manual matches, and 20,345 eligible checks); the endpoint is
+  admin-authenticated, its JavaScript asset and homepage return 200, and
+  deployed checksums match.
 - The database migration and REST application are live.
 - A rate-limit-resilient recent-fetch repair was deployed on 2026-09-15 in
   commit `e49cac9`. Routine fetches now resume inclusively
