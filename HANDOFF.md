@@ -68,6 +68,10 @@ to production and verified. No worker owns the top-up or DOI-review state.
   directory already used`. Ask Inleed to reload/detach the Passenger application
   group or vhost for `arxiv.symmetricfunctions.com`; after that, verify both
   HTTP health and the worker's `VIRTUAL_ENV`, not only the cPanel display.
+  A support request describing this evidence and asking for an application-group
+  or vhost reload was sent to `support@inleed.se` on 2026-09-15 from the shared
+  agent mailbox, with replies directed to the user's Gmail address. Await their
+  response before attempting further worker recycling.
 - The backend audit repair is complete locally. Paper menus show a checked
   state for every list already containing the paper and can add/remove several
   memberships without closing. Custom-list deletion is supported and now
