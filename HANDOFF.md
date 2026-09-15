@@ -9,8 +9,24 @@ support the date-range paper-scout consumer in `tools/paper-cache-mcp`.
 Ownership released (2026-09-15): the rate-limited ingestion repair is deployed,
 verified, committed, and pushed. No worker currently owns the fetch/cron files.
 
+Ownership active (2026-09-15): the host supervisor owns the admin attention
+endpoint/banner, cron-status parsing, DOI-stage log markers, and their tests.
+
 ## Status
 
+- A production DOI audit found that DOI discovery is the second stage of the
+  main update wrapper, not a separate live cron entry. The live scan had not
+  run since 2026-08-25; three Crossref candidates remain pending manual review.
+  There are 20,345 papers currently eligible for automated DOI checking, versus
+  the wrapper default of 50 per run, so throughput needs a separate deliberate
+  tuning decision rather than an unreviewed production backfill.
+- An admin-only attention endpoint and asynchronously loaded compact banner are
+  implemented locally. They flag a missing, failed, incomplete, or stale update;
+  a skipped/incomplete DOI stage; pending DOI matches; and a configurable large
+  DOI-check backlog. The wrapper now records explicit DOI-stage start/completion
+  markers, and the Cron admin page exposes those markers and failures. All 113
+  unit tests, Python compilation, Bash syntax, JavaScript syntax, and diff
+  whitespace checks pass. Deployment is pending this checkpoint.
 - The database migration and REST application are live.
 - A rate-limit-resilient recent-fetch repair was deployed on 2026-09-15 in
   commit `e49cac9`. Routine fetches now resume inclusively

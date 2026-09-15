@@ -502,6 +502,72 @@ class RouteTests(unittest.TestCase):
         self.assertIn('fetch.log', html)
         self.assertIn('legacy fetch output', html)
 
+    def test_admin_attention_endpoint_returns_action_items(self):
+        import admin as admin_module
+
+        items = [{
+            'level': 'warning',
+            'message': '3 DOI matches need manual review.',
+            'href': '/admin/dois?show=pending',
+            'label': 'Review matches',
+        }]
+        with self.client.session_transaction() as sess:
+            sess['admin_logged_in'] = True
+        with mock.patch.object(admin_module, '_admin_attention_items',
+                               return_value=items):
+            resp = self.client.get('/admin/attention')
+
+        self.assertEqual(200, resp.status_code)
+        self.assertEqual({'ok': True, 'items': items}, resp.get_json())
+
+    def test_admin_attention_snapshot_counts_pending_and_eligible(self):
+        import admin as admin_module
+
+        cursor = FakeCursor(fetchone_values=[
+            {'pending': 3},
+            {'eligible': 20345, 'oldest': date(2023, 1, 2)},
+        ])
+        snapshot = admin_module._doi_attention_snapshot(cursor)
+
+        self.assertEqual(3, snapshot['pending'])
+        self.assertEqual(20345, snapshot['eligible'])
+        self.assertEqual(date(2023, 1, 2), snapshot['oldest_eligible'])
+        self.assertEqual((30, 180), cursor.queries[1][1])
+
+    def test_cron_summary_reports_latest_failure_and_doi_state(self):
+        import admin as admin_module
+
+        summary = admin_module._cron_log_summary(
+            '[2026-09-15T06:30:00+02:00] Starting scheduled arXiv update\n'
+            '[2026-09-15T06:31:00+02:00] Starting DOI discovery '
+            '(batch=50, min_age=30, recheck=180).\n'
+            '[2026-09-15T06:32:00+02:00] Scheduled arXiv update failed (exit 1).\n'
+        )
+
+        self.assertEqual('Last run failed', summary['status'])
+        self.assertIn('failed', summary['last_failure'])
+        self.assertIn('Starting DOI discovery', summary['last_doi_start'])
+        self.assertIsNone(summary['last_doi_complete'])
+
+    def test_cron_attention_flags_a_newer_doi_skip(self):
+        import admin as admin_module
+
+        with tempfile.TemporaryDirectory() as tmp:
+            log_path = Path(tmp) / 'arxiv-update.log'
+            log_text = (
+                '[2026-09-14T06:30:00+02:00] Starting DOI discovery.\n'
+                '[2026-09-14T06:31:00+02:00] DOI discovery complete.\n'
+                '[2026-09-15T06:31:00+02:00] DOI discovery skipped '
+                '(DOI_BATCH=0).\n'
+            )
+            log_path.write_text(log_text)
+            with app_module.app.test_request_context():
+                items = admin_module._cron_attention(
+                    log_path, log_text, now_ts=log_path.stat().st_mtime)
+
+        self.assertTrue(any('skipped DOI discovery' in item['message']
+                            for item in items))
+
     def test_admin_doi_reassign_clears_conflicts_and_approves_candidate(self):
         import admin as admin_module
 

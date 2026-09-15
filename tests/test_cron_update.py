@@ -38,6 +38,8 @@ class CronUpdateScriptTests(unittest.TestCase):
             self.script,
         )
         self.assertIn('python3 src/doi_lookup.py "${doi_args[@]}"', self.script)
+        self.assertIn('Starting DOI discovery', self.script)
+        self.assertIn('DOI discovery complete', self.script)
 
     def test_defaults_to_database_checkpoint_and_marks_outer_lock(self):
         self.assertIn('fetch_args=(--recent)', self.script)

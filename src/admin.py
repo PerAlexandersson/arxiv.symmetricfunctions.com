@@ -115,7 +115,15 @@ def _cron_log_summary(log_text):
     last_start_idx = None
     last_complete = None
     last_complete_idx = None
+    last_failure = None
+    last_failure_idx = None
     last_skip = None
+    last_doi_start = None
+    last_doi_start_idx = None
+    last_doi_complete = None
+    last_doi_complete_idx = None
+    last_doi_skip = None
+    last_doi_skip_idx = None
     for idx, line in enumerate(lines):
         if 'Starting scheduled arXiv update' in line:
             last_start = line
@@ -123,11 +131,27 @@ def _cron_log_summary(log_text):
         elif 'Scheduled arXiv update complete' in line:
             last_complete = line
             last_complete_idx = idx
+        elif 'Scheduled arXiv update failed' in line:
+            last_failure = line
+            last_failure_idx = idx
         elif 'Previous update still running' in line:
             last_skip = line
+        elif 'Starting DOI discovery' in line:
+            last_doi_start = line
+            last_doi_start_idx = idx
+        elif 'DOI discovery complete' in line:
+            last_doi_complete = line
+            last_doi_complete_idx = idx
+        elif 'DOI discovery skipped' in line:
+            last_doi_skip = line
+            last_doi_skip_idx = idx
 
     if not lines:
         status = 'No log yet'
+    elif last_failure and (
+        last_complete_idx is None or last_failure_idx > last_complete_idx
+    ):
+        status = 'Last run failed'
     elif last_complete and (
         last_start_idx is None or last_complete_idx >= last_start_idx
     ):
@@ -143,8 +167,177 @@ def _cron_log_summary(log_text):
         'status': status,
         'last_start': last_start,
         'last_complete': last_complete,
+        'last_failure': last_failure,
         'last_skip': last_skip,
+        'last_doi_start': last_doi_start,
+        'last_doi_complete': last_doi_complete,
+        'last_doi_skip': last_doi_skip,
+        '_last_start_idx': last_start_idx,
+        '_last_complete_idx': last_complete_idx,
+        '_last_failure_idx': last_failure_idx,
+        '_last_doi_start_idx': last_doi_start_idx,
+        '_last_doi_complete_idx': last_doi_complete_idx,
+        '_last_doi_skip_idx': last_doi_skip_idx,
     }
+
+
+def _doi_attention_snapshot(cursor, min_age_days=30, recheck_days=180):
+    """Return the manual-review queue and automated DOI scan backlog."""
+    cursor.execute("""
+        SELECT COUNT(*) AS pending
+        FROM doi_candidates
+        WHERE status = 'pending'
+    """)
+    pending_row = cursor.fetchone() or {}
+    cursor.execute("""
+        SELECT COUNT(*) AS eligible, MIN(p.published_date) AS oldest
+        FROM papers p
+        WHERE p.doi IS NULL
+          AND (p.doi_status IS NULL OR p.doi_status NOT IN ('skipped'))
+          AND p.published_date <= DATE_SUB(CURDATE(), INTERVAL %s DAY)
+          AND (
+              p.doi_checked_at IS NULL
+              OR p.doi_checked_at < DATE_SUB(NOW(), INTERVAL %s DAY)
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM doi_candidates dc
+              WHERE dc.paper_id = p.id
+                AND dc.status IN ('pending', 'approved')
+          )
+    """, (min_age_days, recheck_days))
+    eligible_row = cursor.fetchone() or {}
+    return {
+        'pending': int(pending_row.get('pending') or 0),
+        'eligible': int(eligible_row.get('eligible') or 0),
+        'oldest_eligible': eligible_row.get('oldest'),
+    }
+
+
+def _cron_attention(log_path, log_text, now_ts=None):
+    """Return admin attention items for missing, failed, or stale cron work."""
+    summary = _cron_log_summary(log_text)
+    href = url_for('admin.cron')
+    if not log_path.exists():
+        return [{
+            'level': 'danger',
+            'message': 'The scheduled update has no log file yet.',
+            'href': href,
+            'label': 'Check cron',
+        }]
+
+    now_ts = time.time() if now_ts is None else now_ts
+    age_hours = max(0, now_ts - log_path.stat().st_mtime) / 3600
+    complete_idx = summary['_last_complete_idx']
+    failure_idx = summary['_last_failure_idx']
+    start_idx = summary['_last_start_idx']
+    items = []
+
+    if failure_idx is not None and (
+        complete_idx is None or failure_idx > complete_idx
+    ):
+        items.append({
+            'level': 'danger',
+            'message': 'The most recent scheduled arXiv/DOI update failed.',
+            'href': href,
+            'label': 'View cron log',
+        })
+    elif start_idx is not None and (
+        complete_idx is None or start_idx > complete_idx
+    ) and age_hours > 2:
+        items.append({
+            'level': 'danger',
+            'message': 'The scheduled update started but has not completed.',
+            'href': href,
+            'label': 'View cron log',
+        })
+    elif age_hours > 80:
+        items.append({
+            'level': 'danger',
+            'message': f'The scheduled update log is stale ({age_hours / 24:.1f} days).',
+            'href': href,
+            'label': 'Check cron',
+        })
+
+    doi_complete_idx = summary['_last_doi_complete_idx']
+    doi_start_idx = summary['_last_doi_start_idx']
+    doi_skip_idx = summary['_last_doi_skip_idx']
+    if doi_skip_idx is not None and (
+        doi_complete_idx is None or doi_skip_idx > doi_complete_idx
+    ):
+        items.append({
+            'level': 'warning',
+            'message': 'The latest scheduled update skipped DOI discovery.',
+            'href': href,
+            'label': 'Check DOI cron',
+        })
+    elif doi_start_idx is not None and (
+        doi_complete_idx is None or doi_start_idx > doi_complete_idx
+    ) and age_hours > 2:
+        items.append({
+            'level': 'danger',
+            'message': 'The DOI scan started but has no completion record.',
+            'href': href,
+            'label': 'View cron log',
+        })
+    elif doi_complete_idx is None:
+        items.append({
+            'level': 'warning',
+            'message': 'No successful scheduled DOI scan is recorded in the current log.',
+            'href': href,
+            'label': 'Check DOI cron',
+        })
+
+    return items
+
+
+def _admin_attention_items():
+    """Build the small action queue displayed below the admin navigation."""
+    log_path = _cron_log_path()
+    items = _cron_attention(log_path, _tail_text_file(log_path))
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        snapshot = _doi_attention_snapshot(cursor)
+        cursor.close()
+    except Exception:
+        logger.exception('Could not read DOI attention state')
+        items.append({
+            'level': 'danger',
+            'message': 'The DOI review queue could not be read.',
+            'href': url_for('admin.cron'),
+            'label': 'Check system status',
+        })
+        return items
+
+    if snapshot['pending']:
+        noun = 'match' if snapshot['pending'] == 1 else 'matches'
+        verb = 'needs' if snapshot['pending'] == 1 else 'need'
+        items.append({
+            'level': 'warning',
+            'message': (
+                f"{snapshot['pending']:,} DOI {noun} {verb} manual review."
+            ),
+            'href': url_for('admin.dois', show='pending'),
+            'label': 'Review matches',
+        })
+
+    try:
+        backlog_warning = int(os.environ.get('DOI_BACKLOG_WARNING', '1000'))
+    except ValueError:
+        backlog_warning = 1000
+    if snapshot['eligible'] >= backlog_warning:
+        items.append({
+            'level': 'warning',
+            'message': (
+                f"{snapshot['eligible']:,} papers are waiting for automated "
+                'DOI checks.'
+            ),
+            'href': url_for('admin.cron'),
+            'label': 'Review scanner health',
+        })
+
+    return items
 
 # Simple module-level cache for the CSV
 _candidates_cache = None
@@ -927,6 +1120,13 @@ def cron():
         log_text=log_text,
         max_lines=max_lines,
     )
+
+
+@admin.route('/attention')
+@login_required
+def attention():
+    """Return actionable admin-only cron and DOI queue notifications."""
+    return jsonify({'ok': True, 'items': _admin_attention_items()})
 
 
 @admin.route('/symcat')

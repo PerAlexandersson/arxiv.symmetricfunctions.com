@@ -29,7 +29,8 @@
   </div>
 </div>
 
-{% if cron.last_start or cron.last_complete or cron.last_skip %}
+{% if cron.last_start or cron.last_complete or cron.last_failure or cron.last_skip
+      or cron.last_doi_start or cron.last_doi_complete or cron.last_doi_skip %}
 <div class="cron-status-grid cron-status-grid--compact">
   {% if cron.last_start %}
   <div class="cron-status-item">
@@ -43,10 +44,34 @@
     <code>{{ cron.last_complete }}</code>
   </div>
   {% endif %}
+  {% if cron.last_failure %}
+  <div class="cron-status-item cron-status-item--danger">
+    <span class="cron-status-label">Last failure</span>
+    <code>{{ cron.last_failure }}</code>
+  </div>
+  {% endif %}
   {% if cron.last_skip %}
   <div class="cron-status-item">
     <span class="cron-status-label">Last skip</span>
     <code>{{ cron.last_skip }}</code>
+  </div>
+  {% endif %}
+  {% if cron.last_doi_start %}
+  <div class="cron-status-item">
+    <span class="cron-status-label">Last DOI start</span>
+    <code>{{ cron.last_doi_start }}</code>
+  </div>
+  {% endif %}
+  {% if cron.last_doi_complete %}
+  <div class="cron-status-item">
+    <span class="cron-status-label">Last DOI completion</span>
+    <code>{{ cron.last_doi_complete }}</code>
+  </div>
+  {% endif %}
+  {% if cron.last_doi_skip %}
+  <div class="cron-status-item">
+    <span class="cron-status-label">Last DOI skip</span>
+    <code>{{ cron.last_doi_skip }}</code>
   </div>
   {% endif %}
 </div>

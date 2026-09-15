@@ -51,6 +51,53 @@
   color: var(--c-text-main);
 }
 
+/* Admin-only action queue, populated asynchronously from /admin/attention. */
+.admin-attention {
+  display: grid;
+  gap: 0.45rem;
+  margin: -0.65rem 0 1.25rem;
+}
+
+.admin-attention[hidden] {
+  display: none;
+}
+
+.admin-attention-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #d6b55b;
+  border-radius: 5px;
+  background: rgba(214, 181, 91, 0.14);
+  color: var(--c-text-main);
+  font-size: 0.84rem;
+}
+
+.admin-attention-item--danger {
+  border-color: var(--c-danger);
+  background: rgba(190, 61, 49, 0.12);
+}
+
+.admin-attention-link {
+  flex: 0 0 auto;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cron-status-item--danger {
+  border-color: var(--c-danger);
+}
+
+@media (max-width: 620px) {
+  .admin-attention-item {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+}
+
 /* Admin form/result primitives */
 .admin-note {
   font-size: 0.9rem;

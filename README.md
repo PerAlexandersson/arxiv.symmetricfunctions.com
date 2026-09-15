@@ -472,6 +472,10 @@ python3 bib_doi_backfill.py /path/to/file.bib   # bulk backfill from .bib file
 - Papers that predate their Crossref match are automatically filtered out
 - DOI provenance: `arxiv` (from arXiv metadata), `auto` (Crossref match), `verified` (admin-approved), `skipped` (unlikely to ever get a DOI)
 - `doi_checked_at` tracks when each paper was last queried (skipped for 180 days)
+- Admin pages show a compact action banner for failed/stale cron runs, skipped
+  DOI scans, pending DOI matches, and a large automated-check backlog. The
+  backlog warning defaults to 1,000 eligible papers and can be changed with
+  `DOI_BACKLOG_WARNING` in the web process environment.
 
 ---
 

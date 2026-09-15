@@ -76,7 +76,10 @@ if [ "$DOI_AUTO_APPROVE" != "none" ] && [ -n "$DOI_AUTO_APPROVE" ]; then
 fi
 
 if [ "$DOI_BATCH" -gt 0 ]; then
+  printf '[%s] Starting DOI discovery (batch=%s, min_age=%s, recheck=%s).\n' \
+    "$(date -Is)" "$DOI_BATCH" "$DOI_MIN_AGE" "$DOI_RECHECK"
   python3 src/doi_lookup.py "${doi_args[@]}"
+  printf '[%s] DOI discovery complete.\n' "$(date -Is)"
 else
   printf '[%s] DOI discovery skipped (DOI_BATCH=0).\n' "$(date -Is)"
 fi
