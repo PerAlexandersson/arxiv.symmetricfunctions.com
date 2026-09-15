@@ -8,7 +8,7 @@
 #   ARXIV_VENV=/path/to/venv          # optional; otherwise activate_venv.sh
 #   ARXIV_CRON_LOG_DIR=$HOME/logs     # default
 #   ARXIV_CRON_LOCK_DIR=$HOME/.cache/arxiv-cron
-#   FETCH_DAYS=3
+#   FETCH_DAYS=3                       # optional checkpoint override
 #   DOI_BATCH=50
 #   DOI_MIN_AGE=30
 #   DOI_RECHECK=180
@@ -22,7 +22,7 @@ LOCK_DIR="${ARXIV_CRON_LOCK_DIR:-$HOME/.cache/arxiv-cron}"
 LOG_FILE="$LOG_DIR/arxiv-update.log"
 LOCK_FILE="$LOCK_DIR/update.lock"
 
-FETCH_DAYS="${FETCH_DAYS:-3}"
+FETCH_DAYS="${FETCH_DAYS:-}"
 DOI_BATCH="${DOI_BATCH:-50}"
 DOI_MIN_AGE="${DOI_MIN_AGE:-30}"
 DOI_RECHECK="${DOI_RECHECK:-180}"
@@ -46,9 +46,11 @@ else
 fi
 
 exec >> "$LOG_FILE" 2>&1
+trap 'status=$?; printf "[%s] Scheduled arXiv update failed (exit %s).\n" "$(date -Is)" "$status"' ERR
 
 printf '\n[%s] Starting scheduled arXiv update\n' "$(date -Is)"
 cd "$PROJECT_DIR"
+export ARXIV_UPDATE_LOCK_HELD=1
 
 if [ -n "${ARXIV_VENV:-}" ]; then
   # shellcheck disable=SC1090
@@ -58,7 +60,11 @@ else
   source "$PROJECT_DIR/activate_venv.sh"
 fi
 
-python3 src/fetch_arxiv.py --recent --days "$FETCH_DAYS"
+fetch_args=(--recent)
+if [ -n "$FETCH_DAYS" ]; then
+  fetch_args+=(--days "$FETCH_DAYS")
+fi
+python3 src/fetch_arxiv.py "${fetch_args[@]}"
 
 doi_args=(
   --batch "$DOI_BATCH"
@@ -69,6 +75,10 @@ if [ "$DOI_AUTO_APPROVE" != "none" ] && [ -n "$DOI_AUTO_APPROVE" ]; then
   doi_args+=(--auto-approve "$DOI_AUTO_APPROVE")
 fi
 
-python3 src/doi_lookup.py "${doi_args[@]}"
+if [ "$DOI_BATCH" -gt 0 ]; then
+  python3 src/doi_lookup.py "${doi_args[@]}"
+else
+  printf '[%s] DOI discovery skipped (DOI_BATCH=0).\n' "$(date -Is)"
+fi
 
 printf '[%s] Scheduled arXiv update complete\n' "$(date -Is)"

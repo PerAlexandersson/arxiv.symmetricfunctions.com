@@ -6,16 +6,18 @@
 
 <h2 class="page-title">Fetch Papers</h2>
 <p class="admin-note">
-  Fetch new papers from arXiv. Use <em>Recent</em> for routine top-ups,
-  or <em>Date range</em> to backfill a specific period.
+  Fetch new papers from arXiv. <em>Recent</em> resumes from the newest stored
+  publication date, including that whole date so interrupted runs heal.
+  Use <em>Date range</em> only for an explicit historical backfill.
 </p>
 
 <form class="admin-form" id="fetch-form" method="post">
   <p class="admin-form-section-title">Recent papers</p>
   <div class="admin-form-row">
     <div class="admin-field">
-      <label for="days">Days back</label>
-      <input type="number" id="days" name="days" value="3" min="1" max="30" class="admin-input-narrow">
+      <label for="days">Days back (optional override)</label>
+      <input type="number" id="days" name="days" value="" min="1" max="30"
+             placeholder="Automatic" class="admin-input-narrow">
     </div>
     <div>
       <button type="submit" name="mode" value="recent" data-running-label="Fetching…" class="admin-primary-btn">

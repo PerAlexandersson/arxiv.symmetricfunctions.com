@@ -3,7 +3,10 @@
 fetch_arxiv.py - Fetch papers from arXiv and store in database
 
 Usage:
-    # Fetch papers from the last N days (default: 2)
+    # Resume from the latest publication date already stored
+    python fetch_arxiv.py --recent
+
+    # Override the checkpoint with an explicit rolling window
     python fetch_arxiv.py --recent --days 2
     
     # Backfill papers from a date range
@@ -17,8 +20,13 @@ import argparse
 import arxiv
 import pymysql
 from calendar import monthrange
+from contextlib import contextmanager
 from datetime import datetime, timedelta
+import fcntl
+import os
+from pathlib import Path
 import sys
+from arxiv_oai import PoliteRequester, fetch_oai_papers, fetch_rss_ids
 from config import DB_CONFIG, validate_config
 from publication import normalize_doi
 from site_stats import refresh_site_stats
@@ -30,6 +38,33 @@ MAX_RESULTS_BACKFILL = 5000
 
 # Validate configuration on startup
 validate_config()
+
+
+class FetchAlreadyRunning(RuntimeError):
+    """Raised when another cron or browser fetch owns the update lock."""
+
+
+@contextmanager
+def fetch_lock():
+    """Prevent cron, CLI, and browser fetches from overlapping."""
+    if os.environ.get('ARXIV_UPDATE_LOCK_HELD') == '1':
+        yield
+        return
+
+    lock_dir = Path(
+        os.environ.get('ARXIV_CRON_LOCK_DIR', Path.home() / '.cache/arxiv-cron')
+    ).expanduser()
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = lock_dir / 'update.lock'
+    with lock_path.open('a+') as lock_file:
+        try:
+            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise FetchAlreadyRunning('Another arXiv update is already running') from exc
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
 
 
 def get_db_connection():
@@ -168,7 +203,8 @@ def insert_or_update_paper(cursor, paper):
                 arxiv_version = %s
             WHERE id = %s
         """, (title, abstract, published_date, updated_date, comment,
-              journal_ref, update_doi, update_doi_status, update_publication_status, primary_category,
+              journal_ref, update_doi, update_doi_status,
+              update_publication_status, primary_category,
               arxiv_id, arxiv_version, paper_id))
         
         # Clear existing author relationships
@@ -232,7 +268,47 @@ def _auto_tag_papers(conn, cursor, papers):
     print(f"  Auto-tagged: {n_tags} keyword tags across {len(papers)} papers.")
 
 
-def _fetch_papers(query, max_results):
+def _store_papers(papers):
+    """Store an iterable of arXiv-compatible paper objects transactionally."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    count = 0
+    errors = 0
+    processed_papers = []
+    try:
+        for paper in papers:
+            cursor.execute("SAVEPOINT fetch_one_paper")
+            try:
+                paper_id = insert_or_update_paper(cursor, paper)
+                cursor.execute("RELEASE SAVEPOINT fetch_one_paper")
+                processed_papers.append((paper_id, paper.title, paper.summary))
+                count += 1
+            except Exception as e:
+                cursor.execute("ROLLBACK TO SAVEPOINT fetch_one_paper")
+                cursor.execute("RELEASE SAVEPOINT fetch_one_paper")
+                errors += 1
+                arxiv_id = (
+                    paper.entry_id.split('/abs/')[-1]
+                    if hasattr(paper, 'entry_id') else 'unknown'
+                )
+                print(f"  Error processing {arxiv_id}: {e}")
+
+        conn.commit()
+        print(f"\nSuccessfully processed {count} papers.")
+        if errors > 0:
+            print(f"Encountered {errors} errors (skipped those papers).")
+        if processed_papers:
+            _auto_tag_papers(conn, cursor, processed_papers)
+        return count, errors
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def _fetch_papers(query, max_results, client=None):
     """
     Fetch papers from arXiv matching a query and store in database.
 
@@ -249,42 +325,12 @@ def _fetch_papers(query, max_results):
         sort_order=arxiv.SortOrder.Descending
     )
 
-    client = arxiv.Client()
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    count = 0
-    errors = 0
-    processed_papers = []
+    client = client or arxiv.Client(delay_seconds=3.5)
     try:
-        for paper in client.results(search):
-            cursor.execute("SAVEPOINT fetch_one_paper")
-            try:
-                paper_id = insert_or_update_paper(cursor, paper)
-                cursor.execute("RELEASE SAVEPOINT fetch_one_paper")
-                processed_papers.append((paper_id, paper.title, paper.summary))
-                count += 1
-            except Exception as e:
-                cursor.execute("ROLLBACK TO SAVEPOINT fetch_one_paper")
-                cursor.execute("RELEASE SAVEPOINT fetch_one_paper")
-                errors += 1
-                arxiv_id = paper.entry_id.split('/abs/')[-1] if hasattr(paper, 'entry_id') else 'unknown'
-                print(f"  Error processing {arxiv_id}: {e}")
-
-        conn.commit()
-        print(f"\nSuccessfully processed {count} papers.")
-        if errors > 0:
-            print(f"Encountered {errors} errors (skipped those papers).")
-
-        if processed_papers:
-            _auto_tag_papers(conn, cursor, processed_papers)
+        return _store_papers(client.results(search))
     except Exception as e:
-        conn.rollback()
         print(f"Fatal error: {e}")
         raise
-    finally:
-        cursor.close()
-        conn.close()
 
 
 def _refresh_site_stats_after_fetch():
@@ -299,17 +345,101 @@ def _refresh_site_stats_after_fetch():
         print(f"  WARNING: Could not refresh site stats: {e}", file=sys.stderr)
 
 
-def fetch_recent_papers(days=2):
-    """Fetch papers from the last N days (new submissions and recent updates)."""
-    print(f"Fetching papers from the last {days} days...")
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=days)
-    date_range = f"[{start_date.strftime('%Y%m%d')}0000 TO {end_date.strftime('%Y%m%d')}2359]"
-    # New submissions
-    _fetch_papers(f"cat:math.CO AND submittedDate:{date_range}", MAX_RESULTS_RECENT)
-    # Updates to older papers (journal refs, new versions, etc.)
-    print("Checking for updates to older papers...")
-    _fetch_papers(f"cat:math.CO AND lastUpdatedDate:{date_range}", MAX_RESULTS_RECENT)
+def _latest_published_date():
+    """Return the newest populated publication date, used as an inclusive checkpoint."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT MAX(published_date) FROM papers")
+        row = cursor.fetchone()
+        value = row[0] if row else None
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, str):
+            return datetime.strptime(value, '%Y-%m-%d').date()
+        return value
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def _report_rss_coverage(requester):
+    """Use today's RSS announcement as an independent completeness signal."""
+    try:
+        rss_ids = fetch_rss_ids(requester)
+    except Exception as exc:
+        print(f"  WARNING: Could not check the math.CO RSS feed: {exc}")
+        return
+    if not rss_ids:
+        print("  RSS coverage: current math.CO feed is empty.")
+        return
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        placeholders = ','.join(['%s'] * len(rss_ids))
+        cursor.execute(
+            f"SELECT arxiv_base_id FROM papers WHERE arxiv_base_id IN ({placeholders})",
+            tuple(sorted(rss_ids)),
+        )
+        stored = {row[0] for row in cursor.fetchall()}
+    finally:
+        cursor.close()
+        conn.close()
+
+    missing = sorted(rss_ids - stored)
+    if missing:
+        preview = ', '.join(missing[:10])
+        suffix = ' ...' if len(missing) > 10 else ''
+        print(
+            f"  WARNING: RSS coverage found {len(missing)} missing of "
+            f"{len(rss_ids)} announced papers: {preview}{suffix}"
+        )
+    else:
+        print(f"  RSS coverage: all {len(rss_ids)} announced papers are stored.")
+
+
+def fetch_recent_papers(days=None, retry_delays=None):
+    """Resume recent ingestion from the newest stored publication date."""
+    end_date = datetime.now().date()
+    if days is None:
+        start_date = _latest_published_date() or (end_date - timedelta(days=3))
+        print(
+            f"Fetching arXiv changes from database checkpoint {start_date} "
+            f"through {end_date} (inclusive)..."
+        )
+    else:
+        if days < 1:
+            raise ValueError('days must be positive')
+        start_date = end_date - timedelta(days=days)
+        print(f"Fetching arXiv changes from explicit {days}-day window...")
+
+    requester = PoliteRequester(retry_delays=retry_delays)
+    try:
+        papers = fetch_oai_papers(start_date, end_date, requester=requester)
+        print(f"OAI-PMH returned {len(papers)} changed math.CO records.")
+        _store_papers(papers)
+    except Exception as oai_error:
+        print(f"WARNING: OAI-PMH fetch failed: {oai_error}")
+        print("Falling back to the legacy arXiv query API...")
+        date_range = (
+            f"[{start_date.strftime('%Y%m%d')}0000 TO "
+            f"{end_date.strftime('%Y%m%d')}2359]"
+        )
+        client = arxiv.Client(delay_seconds=3.5, num_retries=3)
+        _fetch_papers(
+            f"cat:math.CO AND submittedDate:{date_range}",
+            MAX_RESULTS_RECENT,
+            client=client,
+        )
+        print("Checking for updates to older papers...")
+        _fetch_papers(
+            f"cat:math.CO AND lastUpdatedDate:{date_range}",
+            MAX_RESULTS_RECENT,
+            client=client,
+        )
+
+    _report_rss_coverage(requester)
     _refresh_site_stats_after_fetch()
 
 
@@ -318,7 +448,10 @@ def fetch_date_range(start_date_str, end_date_str):
     start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
     end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
     print(f"Fetching papers from {start_date_str} to {end_date_str}...")
-    query = f"cat:math.CO AND submittedDate:[{start_date.strftime('%Y%m%d')}0000 TO {end_date.strftime('%Y%m%d')}2359]"
+    query = (
+        f"cat:math.CO AND submittedDate:[{start_date.strftime('%Y%m%d')}0000 "
+        f"TO {end_date.strftime('%Y%m%d')}2359]"
+    )
     _fetch_papers(query, MAX_RESULTS_BACKFILL)
     _refresh_site_stats_after_fetch()
 
@@ -423,8 +556,15 @@ def main():
                            help='Auto-fill the month before the earliest data')
 
     # Options for different modes
-    parser.add_argument('--days', type=int, default=2,
-                       help='Number of days to look back (for --recent mode)')
+    parser.add_argument(
+        '--days',
+        type=int,
+        default=None,
+        help=(
+            'Override the database checkpoint with a rolling lookback window '
+            '(for --recent mode)'
+        ),
+    )
     parser.add_argument('--start-date', type=str,
                        help='Start date in YYYY-MM-DD format (for --backfill mode)')
     parser.add_argument('--end-date', type=str,
@@ -433,17 +573,18 @@ def main():
     args = parser.parse_args()
 
     try:
-        if args.recent:
-            fetch_recent_papers(args.days)
-        elif args.backfill:
-            if not args.start_date or not args.end_date:
-                print("Error: --backfill requires --start-date and --end-date")
-                sys.exit(1)
-            fetch_date_range(args.start_date, args.end_date)
-        elif args.arxiv_id:
-            fetch_by_arxiv_id(args.arxiv_id)
-        elif args.fill_gap:
-            fill_gap()
+        with fetch_lock():
+            if args.recent:
+                fetch_recent_papers(args.days)
+            elif args.backfill:
+                if not args.start_date or not args.end_date:
+                    print("Error: --backfill requires --start-date and --end-date")
+                    sys.exit(1)
+                fetch_date_range(args.start_date, args.end_date)
+            elif args.arxiv_id:
+                fetch_by_arxiv_id(args.arxiv_id)
+            elif args.fill_gap:
+                fill_gap()
     except Exception as e:
         print(f"Fatal error: {e}")
         sys.exit(1)

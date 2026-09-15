@@ -79,7 +79,10 @@ source ../venv/bin/activate
 # Test with a single paper
 python3 fetch_arxiv.py --arxiv-id 2401.12345
 
-# Fetch recent papers (last 7 days)
+# Resume from the newest publication date already stored (inclusive)
+python3 fetch_arxiv.py --recent
+
+# Optional explicit rolling-window override
 python3 fetch_arxiv.py --recent --days 7
 
 # Backfill historical data (optional)
@@ -125,7 +128,7 @@ Then visit **http://localhost:5000** in your browser.
 
 ## Daily Updates (Cron Job)
 
-To automatically fetch new papers daily:
+To fetch after each Tuesday-Saturday arXiv announcement:
 
 ```bash
 crontab -e
@@ -133,8 +136,13 @@ crontab -e
 
 Add this line (adjust the path to match your setup):
 ```
-0 2 * * * cd /path/to/arxiv.symmetricfunctions.com/src && source ../venv/bin/activate && python3 fetch_arxiv.py --recent --days 2 >> ~/arxiv_fetch.log 2>&1
+30 6 * * 2-6 ARXIV_VENV=/path/to/venv /path/to/arxiv.symmetricfunctions.com/cron_update.sh
 ```
+
+Routine fetches derive an inclusive checkpoint from the newest publication
+date in the database, so interrupted or rate-limited runs catch up without a
+manually chosen lookback. They use arXiv OAI-PMH first, retain the Atom API as a
+fallback, and compare the result with the current math.CO RSS announcement.
 
 Alternatively, trigger a fetch via HTTP (useful on shared hosting without cron access):
 

@@ -734,11 +734,12 @@ def retag_keyword(kid):
 
 def _refetch_arxiv_paper(arxiv_id):
     """Re-fetch a single paper from arXiv and return the fetch log."""
-    from fetch_arxiv import fetch_by_arxiv_id
+    from fetch_arxiv import fetch_by_arxiv_id, fetch_lock
     import io, contextlib
     output = io.StringIO()
     with contextlib.redirect_stdout(output):
-        fetch_by_arxiv_id(arxiv_id)
+        with fetch_lock():
+            fetch_by_arxiv_id(arxiv_id)
     return output.getvalue()
 
 
@@ -873,13 +874,18 @@ def fetch():
         buf = io.StringIO()
         try:
             with contextlib.redirect_stdout(buf):
-                if mode == 'range' and from_date:
-                    from fetch_arxiv import fetch_date_range
-                    fetch_date_range(from_date, to_date)
-                else:
-                    days = int(request.form.get('days', 1))
-                    from fetch_arxiv import fetch_recent_papers
-                    fetch_recent_papers(days)
+                from fetch_arxiv import (
+                    fetch_date_range,
+                    fetch_lock,
+                    fetch_recent_papers,
+                )
+                with fetch_lock():
+                    if mode == 'range' and from_date:
+                        fetch_date_range(from_date, to_date)
+                    else:
+                        raw_days = request.form.get('days', '').strip()
+                        days = int(raw_days) if raw_days else None
+                        fetch_recent_papers(days, retry_delays=())
             rebuild_index_cache = current_app.extensions.get('rebuild_index_cache')
             if rebuild_index_cache:
                 rebuild_index_cache()

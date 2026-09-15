@@ -1909,18 +1909,24 @@ def fetch_papers():
         abort(403)
 
     payload = request.get_json(silent=True) or {}
-    raw_days = request.form.get('days', payload.get('days', 1))
+    raw_days = request.form.get('days', payload.get('days'))
     try:
-        days = int(raw_days)
+        days = int(raw_days) if raw_days not in (None, '') else None
     except (TypeError, ValueError):
         return jsonify({'error': 'days must be an integer'}), 400
-    days = max(1, min(days, 30))
-    logger.info("/fetch triggered: days=%d from %s", days, request.remote_addr)
+    if days is not None:
+        days = max(1, min(days, 30))
+    logger.info(
+        "/fetch triggered: %s from %s",
+        f'days={days}' if days is not None else 'database checkpoint',
+        request.remote_addr,
+    )
 
-    from fetch_arxiv import fetch_recent_papers
+    from fetch_arxiv import fetch_lock, fetch_recent_papers
     output = io.StringIO()
     with contextlib.redirect_stdout(output):
-        fetch_recent_papers(days=days)
+        with fetch_lock():
+            fetch_recent_papers(days=days, retry_delays=())
 
     # Rebuild the index page cache with fresh data
     rebuild_index_cache()

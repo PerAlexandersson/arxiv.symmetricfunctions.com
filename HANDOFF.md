@@ -6,9 +6,24 @@ Public read-only REST access and a repository-local MCP adapter for agent
 review of recent combinatorics papers. The deployed range/category filters
 support the date-range paper-scout consumer in `tools/paper-cache-mcp`.
 
+Active ownership (2026-09-15): the host supervisor owns `src/fetch_arxiv.py`,
+the new OAI/RSS ingestion helper and tests, `cron_update.sh`, the fetch/cron
+admin surfaces, and the corresponding scheduling documentation while repairing
+rate-limited production updates. No Docker worker currently owns these files.
+
 ## Status
 
 - The database migration and REST application are live.
+- A rate-limit-resilient recent-fetch repair is implemented locally on
+  2026-09-15 and awaiting deployment. Routine fetches now resume inclusively
+  from `MAX(published_date)`, ingest full current metadata through arXiv's
+  OAI-PMH `math:math:CO` set, retain one shared throttled Atom fallback, and
+  compare the result with the current math.CO RSS announcement. Cron, CLI,
+  secret HTTP, and admin fetches share one nonblocking lock. The cron wrapper
+  records explicit failures and can skip DOI discovery with `DOI_BATCH=0` for
+  fetch-only recovery. The complete unit suite passes (109 tests), Python 3.9
+  grammar parsing passes, Bash syntax passes, and a cached live OAI sample of
+  437 records parses with exact v1--v7 revisions and no missing core metadata.
 - The REST API lives under `/api/v1` with OpenAPI documentation.
 - The optional MCP server lives under `mcp_server/` and calls the REST API.
 - arXiv base IDs and revisions are now modeled separately by the fetcher.

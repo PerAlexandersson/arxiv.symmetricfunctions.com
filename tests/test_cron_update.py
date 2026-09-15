@@ -29,15 +29,24 @@ class CronUpdateScriptTests(unittest.TestCase):
         self.assertIn('LOG_FILE="$LOG_DIR/arxiv-update.log"', self.script)
 
     def test_runs_fetch_then_doi_lookup_with_overrides(self):
-        self.assertIn('FETCH_DAYS="${FETCH_DAYS:-3}"', self.script)
+        self.assertIn('FETCH_DAYS="${FETCH_DAYS:-}"', self.script)
         self.assertIn('DOI_BATCH="${DOI_BATCH:-50}"', self.script)
         self.assertIn('DOI_MIN_AGE="${DOI_MIN_AGE:-30}"', self.script)
         self.assertIn('DOI_RECHECK="${DOI_RECHECK:-180}"', self.script)
         self.assertIn(
-            'python3 src/fetch_arxiv.py --recent --days "$FETCH_DAYS"',
+            'python3 src/fetch_arxiv.py "${fetch_args[@]}"',
             self.script,
         )
         self.assertIn('python3 src/doi_lookup.py "${doi_args[@]}"', self.script)
+
+    def test_defaults_to_database_checkpoint_and_marks_outer_lock(self):
+        self.assertIn('fetch_args=(--recent)', self.script)
+        self.assertIn('if [ -n "$FETCH_DAYS" ]', self.script)
+        self.assertIn('export ARXIV_UPDATE_LOCK_HELD=1', self.script)
+
+    def test_doi_discovery_can_be_skipped_for_fetch_only_recovery(self):
+        self.assertIn('if [ "$DOI_BATCH" -gt 0 ]', self.script)
+        self.assertIn('DOI_BATCH=0', self.script)
 
     def test_auto_approve_can_be_disabled(self):
         self.assertIn('DOI_AUTO_APPROVE="${DOI_AUTO_APPROVE:-0.95}"', self.script)
