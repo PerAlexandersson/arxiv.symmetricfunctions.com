@@ -15,8 +15,8 @@ are deployed, verified, committed, and pushed. No worker owns these files.
 Ownership released (2026-09-15): Crossref failure-state handling is deployed,
 verified, committed, and pushed. No worker owns these files.
 
-Ownership active (2026-09-15): the host supervisor owns the six-month DOI
-eligibility policy, priority ordering, cron batch defaults, and their tests.
+Ownership released (2026-09-15): the six-month DOI priority policy is deployed,
+verified, committed, and pushed. No worker owns these files.
 
 ## Status
 
@@ -29,7 +29,12 @@ eligibility policy, priority ordering, cron batch defaults, and their tests.
   7,435 older never-checked papers; no rechecks are due. Another 4,879 DOI-less
   papers are younger than six months. Local MariaDB returned journal-reference
   records for the first ten queue positions. All 117 tests and syntax/whitespace
-  checks pass; deployment is pending this checkpoint.
+  checks pass. Commit `507ae2e` is pushed and deployed. Production imports the
+  250/180 defaults under Python 3.9, returns journal-reference papers in the
+  first five queue positions, and has the unchanged Tuesday--Saturday wrapper
+  cron with no overrides. Deployed checksums match and the homepage remains 200.
+  No DOI scan or database write was run during deployment; the new policy takes
+  effect at the next scheduled run.
 - A follow-up production breakdown confirmed that all 20,345 currently eligible
   papers have never been DOI-checked: 5,006 are from 2026, 6,042 from 2025,
   5,180 from 2024, and 4,117 from 2023. None are 180-day rechecks. The 30-day
