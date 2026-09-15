@@ -2,10 +2,11 @@
 
 ## Current scope
 
-Ownership active (2026-09-15): the host supervisor completed the saved-list
-migration and application rollout. The only remaining item is confirming the
-user's in-progress cPanel Python 3.11 selector change; do not edit cPanel's
-selector files directly.
+Ownership released (2026-09-15): the host supervisor completed the saved-list
+migration and application rollout. Python 3.11 is prepared, but the live
+Passenger group remains cached on 3.9 despite the cPanel selector change; this
+now needs an Inleed/Passenger hosting reload. Do not edit cPanel's selector
+files directly or keep recycling application workers.
 
 Ownership released (2026-09-15): the complete 414-row pending DOI admin review,
 guarded local application, and production merge are finished. No worker owns
@@ -56,9 +57,17 @@ to production and verified. No worker owns the top-up or DOI-review state.
 - Python 3.11.16 now exists at the expected cPanel virtualenv, all pinned
   requirements are installed there, the application imports successfully, and
   the generated `.htaccess` plus deploy default point to 3.11. However,
-  `~/.cl.selector/python-selector.json` still reports Python 3.9 and Passenger
-  is spawning 3.9 workers. The user is updating this through cPanel; wait for
-  that action, then verify live worker command lines and HTTP/database health.
+  cPanel now reports Python 3.11 with application status `started` while live
+  Passenger workers still expose a 3.9 `VIRTUAL_ENV` and execute
+  `3.9/bin/python3.9_bin`. CloudLinux's supported restart and full stop/start
+  commands, followed by termination of only the exact verified stale arXiv
+  workers, still caused Passenger to spawn fresh 3.9 workers. A temporary
+  application-group directive returned HTTP 500 and was immediately reverted;
+  production is back to HTTP 200 on the cached 3.9 worker, with 282 memberships
+  and zero orphans. The CloudLinux property command also returned `Specified
+  directory already used`. Ask Inleed to reload/detach the Passenger application
+  group or vhost for `arxiv.symmetricfunctions.com`; after that, verify both
+  HTTP health and the worker's `VIRTUAL_ENV`, not only the cPanel display.
 - The backend audit repair is complete locally. Paper menus show a checked
   state for every list already containing the paper and can add/remove several
   memberships without closing. Custom-list deletion is supported and now
