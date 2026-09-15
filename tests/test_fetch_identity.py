@@ -45,16 +45,13 @@ def fake_paper(version, doi=None):
 
 
 class FetchIdentityTests(unittest.TestCase):
-    def test_new_revision_updates_existing_logical_paper_and_saved_lists(self):
+    def test_new_revision_keeps_stable_paper_id_for_saved_lists(self):
         cursor = FakeCursor([
             (17, '2608.12345v1', 1, None, None, None),
         ])
         paper_id = insert_or_update_paper(cursor, fake_paper(2))
         self.assertEqual(17, paper_id)
-        self.assertTrue(any(
-            'INSERT IGNORE INTO user_lists' in query
-            for query, _ in cursor.queries
-        ))
+        self.assertFalse(any('user_lists' in query for query, _ in cursor.queries))
         update = next(
             (query, params) for query, params in cursor.queries
             if 'UPDATE papers SET' in query

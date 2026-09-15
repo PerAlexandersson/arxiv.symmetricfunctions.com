@@ -671,7 +671,14 @@ function invalidateListCategories() {
     listCategoriesPromise = null;
 }
 
-function getListCategories() {
+function getListCategories(arxivId = null) {
+    if (arxivId) {
+        const params = new URLSearchParams({ counts: '0', arxiv_id: arxivId });
+        return fetchJson(`/api/lists/categories?${params}`).then(data => {
+            if (!Array.isArray(data)) throw new Error(data.error || 'Invalid list response');
+            return data;
+        });
+    }
     if (!listCategoriesPromise) {
         listCategoriesPromise = fetchJson('/api/lists/categories?counts=0').then(data => {
             if (!Array.isArray(data)) throw new Error(data.error || 'Invalid list response');
@@ -682,6 +689,21 @@ function getListCategories() {
         });
     }
     return listCategoriesPromise;
+}
+
+function updatePaperMembershipButtons(arxivId, data) {
+    document.querySelectorAll('.star-btn[data-arxiv-id]').forEach(starBtn => {
+        if (starBtn.dataset.arxivId !== arxivId) return;
+        starBtn.classList.toggle('starred', Boolean(data.starred));
+        starBtn.setAttribute('aria-pressed', data.starred ? 'true' : 'false');
+        starBtn.title = data.starred ? 'Remove from Starred' : 'Star this paper';
+        starBtn.setAttribute('aria-label', starBtn.title);
+    });
+    document.querySelectorAll('.save-btn[data-arxiv-id]').forEach(saveBtn => {
+        if (saveBtn.dataset.arxivId !== arxivId) return;
+        saveBtn.classList.toggle('saved', Boolean(data.saved));
+        saveBtn.title = data.saved ? 'Saved to a list' : 'Save to list';
+    });
 }
 
 function showPaperActionMessage(btn, message, isError = false) {
@@ -777,7 +799,7 @@ async function renameListPrompt(catId, currentName) {
 }
 
 async function deleteListConfirm(catId, name) {
-    if (!confirm(`Delete list "${name}" and all its saved papers?`)) return;
+    if (!confirm(`Delete list "${name}" and remove its saved-paper links? The papers themselves will remain on the site.`)) return;
     try {
         const data = await csrfJsonFetch(`/api/lists/categories/${catId}/delete`, {});
         if (data.error) {
@@ -814,18 +836,7 @@ async function toggleStar(btn, arxivId) {
         );
         if (data.error) throw new Error(data.error);
 
-        document.querySelectorAll('.star-btn[data-arxiv-id]').forEach(starBtn => {
-            if (starBtn.dataset.arxivId !== arxivId) return;
-            starBtn.classList.toggle('starred', data.starred);
-            starBtn.setAttribute('aria-pressed', data.starred ? 'true' : 'false');
-            starBtn.title = data.starred ? 'Remove from Starred' : 'Star this paper';
-            starBtn.setAttribute('aria-label', starBtn.title);
-        });
-        document.querySelectorAll('.save-btn[data-arxiv-id]').forEach(saveBtn => {
-            if (saveBtn.dataset.arxivId !== arxivId) return;
-            saveBtn.classList.toggle('saved', data.saved);
-            saveBtn.title = data.saved ? 'Saved to a list' : 'Save to list';
-        });
+        updatePaperMembershipButtons(arxivId, data);
         if (!data.starred && btn.dataset.starredList === '1') {
             btn.closest('.list-paper-row')?.remove();
         } else {
@@ -902,7 +913,7 @@ async function showSaveMenu(btn, arxivId) {
 
     let categories;
     try {
-        categories = await getListCategories();
+        categories = await getListCategories(arxivId);
     } catch (err) {
         if (err.message !== 'AUTH_REQUIRED') {
             console.error('showSaveMenu failed:', err);
@@ -924,28 +935,43 @@ async function showSaveMenu(btn, arxivId) {
             const item = document.createElement('button');
             item.type = 'button';
             item.className = 'save-dropdown-item';
-            item.setAttribute('role', 'menuitem');
-            item.textContent = cat.name;
+            item.classList.toggle('save-dropdown-item--selected', cat.contains_paper);
+            item.setAttribute('role', 'menuitemcheckbox');
+            item.setAttribute('aria-checked', cat.contains_paper ? 'true' : 'false');
+            const indicator = document.createElement('span');
+            indicator.className = 'save-dropdown-check';
+            indicator.textContent = cat.contains_paper ? '\u2713' : '';
+            indicator.setAttribute('aria-hidden', 'true');
+            const label = document.createElement('span');
+            label.textContent = cat.name;
+            item.append(indicator, label);
             item.addEventListener('click', async () => {
-                closeDropdown();
-                btn.disabled = true;
-                btn.setAttribute('aria-busy', 'true');
+                if (item.disabled) return;
+                const desired = !cat.contains_paper;
+                item.disabled = true;
+                item.setAttribute('aria-busy', 'true');
                 try {
-                    const data = await csrfJsonFetch('/api/lists/save', {
-                        arxiv_id: arxivId,
-                        category_id: cat.id,
-                    });
+                    const data = await csrfJsonFetch(
+                        desired ? '/api/lists/save' : '/api/lists/remove',
+                        { arxiv_id: arxivId, category_id: cat.id }
+                    );
                     if (data.error) throw new Error(data.error);
-                    btn.classList.add('saved');
-                    btn.title = `Saved to ${cat.name}`;
-                    showPaperActionMessage(btn, `Saved to ${cat.name}`);
+                    cat.contains_paper = desired;
+                    item.classList.toggle('save-dropdown-item--selected', desired);
+                    item.setAttribute('aria-checked', desired ? 'true' : 'false');
+                    indicator.textContent = desired ? '\u2713' : '';
+                    updatePaperMembershipButtons(arxivId, data);
+                    showPaperActionMessage(
+                        btn,
+                        desired ? `Saved to ${cat.name}` : `Removed from ${cat.name}`
+                    );
                 } catch (err) {
                     if (err.message !== 'AUTH_REQUIRED') {
-                        showPaperActionMessage(btn, err.message || 'Failed to save', true);
+                        showPaperActionMessage(btn, err.message || 'Failed to update list', true);
                     }
                 } finally {
-                    btn.disabled = false;
-                    btn.removeAttribute('aria-busy');
+                    item.disabled = false;
+                    item.removeAttribute('aria-busy');
                 }
             });
             dropdown.appendChild(item);
@@ -969,8 +995,7 @@ async function showSaveMenu(btn, arxivId) {
                 new_name: name.trim(),
             });
             if (data.error) throw new Error(data.error);
-            btn.classList.add('saved');
-            btn.title = `Saved to ${data.category_name}`;
+            updatePaperMembershipButtons(arxivId, data);
             invalidateListCategories();
             showPaperActionMessage(btn, `Saved to ${data.category_name}`);
         } catch (err) {

@@ -14,6 +14,7 @@ DROP TABLE IF EXISTS user_watched_authors;
 DROP TABLE IF EXISTS user_lists;
 DROP TABLE IF EXISTS user_categories;
 DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS doi_candidates;
 DROP TABLE IF EXISTS paper_keywords;
 DROP TABLE IF EXISTS keyword_aliases;
 DROP TABLE IF EXISTS paper_authors;
@@ -25,6 +26,7 @@ DROP TABLE IF EXISTS tags;         -- legacy, unused
 DROP TABLE IF EXISTS keywords;
 DROP TABLE IF EXISTS ignored_candidates;
 DROP TABLE IF EXISTS math_words;
+DROP TABLE IF EXISTS site_stats;
 
 -- Re-enable foreign key checks
 SET FOREIGN_KEY_CHECKS = 1;
@@ -356,12 +358,32 @@ CREATE TABLE user_watched_authors (
 -- Personal paper lists (Favorites, To read, etc.) linked to a user
 -- ============================================================================
 CREATE TABLE user_lists (
-    id         INT AUTO_INCREMENT PRIMARY KEY,
-    user_id    INT NOT NULL,
-    list_name  VARCHAR(100) NOT NULL DEFAULT 'Favorites',
-    arxiv_id   VARCHAR(20) NOT NULL,
-    added_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY idx_user_list_paper (user_id, list_name, arxiv_id),
-    INDEX idx_user_list (user_id, list_name),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    category_id INT NOT NULL,
+    paper_id    INT NOT NULL,
+    added_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE KEY idx_user_list_paper (category_id, paper_id),
+    INDEX idx_user_list_paper_lookup (paper_id, category_id),
+    FOREIGN KEY (category_id) REFERENCES user_categories(id) ON DELETE CASCADE,
+    FOREIGN KEY (paper_id) REFERENCES papers(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================================
+-- Persisted Homepage Statistics
+-- Created by schema/migrations, never as a web-process startup side effect
+-- ============================================================================
+CREATE TABLE site_stats (
+    id                  TINYINT NOT NULL DEFAULT 1,
+    paper_count         INT     NOT NULL DEFAULT 0,
+    author_count        INT     NOT NULL DEFAULT 0,
+    latest_date         DATE,
+    updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    cache_dirty_at      DATETIME NULL DEFAULT NULL,
+    cache_rebuild_after DATETIME NULL DEFAULT NULL,
+    PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO site_stats (id, paper_count, author_count, latest_date)
+SELECT 1, COUNT(*), (SELECT COUNT(*) FROM authors), MAX(published_date)
+FROM papers;

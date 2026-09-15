@@ -5,6 +5,7 @@ Loads configuration from environment variables (.env file)
 """
 
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
 # Load .env file if it exists
@@ -44,6 +45,12 @@ ADMIN_ORCID = os.getenv('ADMIN_ORCID', '')
 # ORCID OAuth credentials (register at https://orcid.org/developer-tools)
 ORCID_CLIENT_ID     = os.getenv('ORCID_CLIENT_ID', '')
 ORCID_CLIENT_SECRET = os.getenv('ORCID_CLIENT_SECRET', '')
+
+_cache_root = Path(os.getenv('XDG_CACHE_HOME', Path.home() / '.cache'))
+SF_LABEL_CACHE_PATH = Path(os.getenv(
+    'SF_LABEL_CACHE_PATH',
+    _cache_root / 'arxiv-symmetricfunctions' / 'site-labels.json',
+))
 
 def validate_config(require_web_security=False):
     """Validate required configuration, with optional strict web-app checks."""

@@ -22,7 +22,7 @@ import logging
 from flask import (Blueprint, render_template, request, jsonify,
                    redirect, url_for, session, abort)
 from utils import arxiv2bib, slugify
-from db import require_user
+from db import attach_authors, attach_keywords, require_user
 from db import get_db_connection
 
 logger = logging.getLogger(__name__)
@@ -58,38 +58,53 @@ def _ensure_starred(cursor, user_id):
     return cursor.lastrowid, STARRED_NAME
 
 
-def _get_user_categories(user_id, include_counts=True):
-    """Return user categories, optionally including the more expensive counts."""
+def _get_user_categories(user_id, include_counts=True, arxiv_id=None):
+    """Return user categories and optional membership state for one paper."""
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
         if include_counts:
             cursor.execute(
                 """SELECT uc.id, uc.name, uc.is_starred,
-                          COUNT(ul.id) AS paper_count
+                          COUNT(ul.id) AS paper_count,
+                          EXISTS(
+                              SELECT 1
+                              FROM user_lists selected
+                              JOIN papers selected_paper
+                                ON selected_paper.id = selected.paper_id
+                              WHERE selected.category_id = uc.id
+                                AND selected_paper.arxiv_id = %s
+                          ) AS contains_paper
                    FROM user_categories uc
                    LEFT JOIN user_lists ul
-                          ON ul.user_id = uc.user_id AND ul.list_name = uc.name
+                          ON ul.category_id = uc.id
                    WHERE uc.user_id = %s
                    GROUP BY uc.id, uc.name, uc.is_starred, uc.created_at
                    ORDER BY uc.is_starred DESC, uc.created_at ASC""",
-                (user_id,)
+                (arxiv_id, user_id)
             )
         else:
             cursor.execute(
-                """SELECT id, name, is_starred
-                   FROM user_categories
-                   WHERE user_id = %s
-                   ORDER BY is_starred DESC, created_at ASC""",
-                (user_id,)
+                """SELECT uc.id, uc.name, uc.is_starred,
+                          CASE WHEN selected.id IS NULL THEN 0 ELSE 1 END
+                               AS contains_paper
+                   FROM user_categories uc
+                   LEFT JOIN papers selected_paper
+                          ON selected_paper.arxiv_id = %s
+                   LEFT JOIN user_lists selected
+                          ON selected.category_id = uc.id
+                         AND selected.paper_id = selected_paper.id
+                   WHERE uc.user_id = %s
+                   ORDER BY uc.is_starred DESC, uc.created_at ASC""",
+                (arxiv_id, user_id)
             )
         return cursor.fetchall()
     finally:
         cursor.close()
 
 
-def _get_papers_in_category(user_id, cat_id):
-    """Return (category_row, [paper_rows]) or (None, None) if not found."""
+def _get_papers_in_category(user_id, cat_id, page=None, per_page=50):
+    """Return ``(category, papers, total)`` with optional pagination."""
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -99,51 +114,53 @@ def _get_papers_in_category(user_id, cat_id):
         )
         cat = cursor.fetchone()
         if not cat:
-            return None, None
+            return None, None, 0
 
         cursor.execute(
-            """SELECT p.arxiv_id, p.title, p.abstract, p.published_date,
+            "SELECT COUNT(*) AS n FROM user_lists WHERE category_id = %s",
+            (cat_id,),
+        )
+        total = cursor.fetchone()['n']
+
+        limit_sql = ''
+        params = [cat_id]
+        if page is not None:
+            offset = (page - 1) * per_page
+            limit_sql = ' LIMIT %s OFFSET %s'
+            params.extend((per_page, offset))
+
+        cursor.execute(
+            """SELECT p.id, p.arxiv_id, p.title, p.abstract, p.published_date,
+                      p.updated_date, p.comment, p.primary_category,
                       p.journal_ref, p.doi, p.publication_url,
                       p.publication_venue_key, p.publication_status,
-                      ul.added_at AS saved_at,
-                      GROUP_CONCAT(a.name ORDER BY pa.author_order SEPARATOR '\t') AS authors_str
+                      ul.added_at AS saved_at
                FROM user_lists ul
-               JOIN papers p ON p.arxiv_id = ul.arxiv_id
-               LEFT JOIN paper_authors pa ON pa.paper_id = p.id
-               LEFT JOIN authors a ON a.id = pa.author_id
-               WHERE ul.user_id = %s AND ul.list_name = %s
-               GROUP BY p.arxiv_id, p.title, p.abstract, p.published_date,
-                        p.journal_ref, p.doi, p.publication_url,
-                        p.publication_venue_key, p.publication_status, ul.added_at
-               ORDER BY ul.added_at DESC""",
-            (user_id, cat['name'])
+               JOIN papers p ON p.id = ul.paper_id
+               WHERE ul.category_id = %s
+               ORDER BY ul.added_at DESC""" + limit_sql,
+            params,
         )
-        rows = cursor.fetchall()
-
-        # Fetch keywords for these papers in one query
-        if rows:
-            arxiv_ids = [r['arxiv_id'] for r in rows]
-            fmt = ','.join(['%s'] * len(arxiv_ids))
-            cursor.execute(
-                f"""SELECT p.arxiv_id, k.phrase
-                    FROM paper_keywords pk
-                    JOIN papers p ON p.id = pk.paper_id
-                    JOIN keywords k ON k.id = pk.keyword_id
-                    WHERE p.arxiv_id IN ({fmt}) AND k.active = 1
-                    ORDER BY k.score DESC""",
-                arxiv_ids
-            )
-            kw_map = {}
-            for kw in cursor.fetchall():
-                kw_map.setdefault(kw['arxiv_id'], []).append({'phrase': kw['phrase']})
-
-            for r in rows:
-                r['authors'] = [a for a in (r['authors_str'] or '').split('\t') if a]
-                r['keywords'] = kw_map.get(r['arxiv_id'], [])
-
-        return cat, rows
+        rows = list(cursor.fetchall())
+        attach_authors(cursor, rows)
+        attach_keywords(cursor, rows)
+        return cat, rows, total
     finally:
         cursor.close()
+
+
+def _paper_membership_state(cursor, user_id, paper_id):
+    """Return aggregate saved/starred state for one user's paper."""
+    cursor.execute(
+        """SELECT COUNT(*) > 0 AS saved,
+                  COALESCE(MAX(uc.is_starred), 0) AS starred
+           FROM user_lists ul
+           JOIN user_categories uc ON uc.id = ul.category_id
+           WHERE uc.user_id = %s AND ul.paper_id = %s""",
+        (user_id, paper_id),
+    )
+    row = cursor.fetchone() or {}
+    return bool(row.get('saved')), bool(row.get('starred'))
 
 
 # ── Page routes ────────────────────────────────────────────────────────────────
@@ -197,15 +214,23 @@ def list_detail(cat_id):
     if not user_id:
         session['login_next'] = request.url
         return redirect(url_for('auth.login'))
-    cat, papers = _get_papers_in_category(user_id, cat_id)
+    page = max(1, request.args.get('page', 1, type=int))
+    per_page = 50
+    cat, papers, total = _get_papers_in_category(
+        user_id, cat_id, page=page, per_page=per_page
+    )
     if cat is None:
         abort(404)
-    categories = _get_user_categories(user_id)
+    if total and not papers:
+        abort(404)
     return render_template('list_detail.html',
                            category=cat,
                            cat_id=cat_id,
                            papers=papers,
-                           categories=categories)
+                           page=page,
+                           total=total,
+                           has_prev=page > 1,
+                           has_next=page * per_page < total)
 
 
 # ── API routes ─────────────────────────────────────────────────────────────────
@@ -221,43 +246,37 @@ def toggle_star(arxiv_id):
     cursor = conn.cursor()
     try:
         cursor.execute(
-            "SELECT 1 FROM papers WHERE arxiv_id=%s",
+            "SELECT id FROM papers WHERE arxiv_id=%s",
             (arxiv_id,)
         )
-        if not cursor.fetchone():
+        paper = cursor.fetchone()
+        if not paper:
             return jsonify({'error': 'Paper not found'}), 404
 
         if desired:
-            _, cat_name = _ensure_starred(cursor, user_id)
+            cat_id, _ = _ensure_starred(cursor, user_id)
             cursor.execute(
-                "INSERT IGNORE INTO user_lists (user_id, list_name, arxiv_id) VALUES (%s,%s,%s)",
-                (user_id, cat_name, arxiv_id)
+                """INSERT INTO user_lists (category_id, paper_id)
+                   VALUES (%s, %s)
+                   ON DUPLICATE KEY UPDATE added_at = added_at""",
+                (cat_id, paper['id'])
             )
         else:
             cursor.execute(
-                "SELECT name FROM user_categories WHERE user_id=%s AND is_starred=1 LIMIT 1",
+                "SELECT id FROM user_categories WHERE user_id=%s AND is_starred=1 LIMIT 1",
                 (user_id,)
             )
             row = cursor.fetchone()
             if not row:
-                cursor.execute(
-                    "SELECT 1 FROM user_lists WHERE user_id=%s AND arxiv_id=%s LIMIT 1",
-                    (user_id, arxiv_id)
-                )
-                return jsonify({'starred': False, 'saved': bool(cursor.fetchone())})
+                saved, _ = _paper_membership_state(cursor, user_id, paper['id'])
+                return jsonify({'starred': False, 'saved': saved})
             cursor.execute(
-                "DELETE FROM user_lists WHERE user_id=%s AND list_name=%s AND arxiv_id=%s",
-                (user_id, row['name'], arxiv_id)
+                "DELETE FROM user_lists WHERE category_id=%s AND paper_id=%s",
+                (row['id'], paper['id'])
             )
-        saved = True
-        if not desired:
-            cursor.execute(
-                "SELECT 1 FROM user_lists WHERE user_id=%s AND arxiv_id=%s LIMIT 1",
-                (user_id, arxiv_id)
-            )
-            saved = bool(cursor.fetchone())
+        saved, starred = _paper_membership_state(cursor, user_id, paper['id'])
         conn.commit()
-        return jsonify({'starred': desired, 'saved': saved})
+        return jsonify({'starred': starred, 'saved': saved})
     except Exception:
         conn.rollback()
         raise
@@ -280,8 +299,9 @@ def save_paper():
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT 1 FROM papers WHERE arxiv_id=%s", (arxiv_id,))
-        if not cursor.fetchone():
+        cursor.execute("SELECT id FROM papers WHERE arxiv_id=%s", (arxiv_id,))
+        paper = cursor.fetchone()
+        if not paper:
             return jsonify({'error': 'Paper not found'}), 404
 
         if new_name:
@@ -304,11 +324,21 @@ def save_paper():
             return jsonify({'error': 'category_id or new_name required'}), 400
 
         cursor.execute(
-            "INSERT IGNORE INTO user_lists (user_id, list_name, arxiv_id) VALUES (%s,%s,%s)",
-            (user_id, cat_name, arxiv_id)
+            """INSERT INTO user_lists (category_id, paper_id)
+               VALUES (%s, %s)
+               ON DUPLICATE KEY UPDATE added_at = added_at""",
+            (cat_id, paper['id'])
         )
+        already_present = cursor.rowcount == 0
+        saved, starred = _paper_membership_state(cursor, user_id, paper['id'])
         conn.commit()
-        return jsonify({'saved': True, 'category_id': cat_id, 'category_name': cat_name})
+        return jsonify({
+            'saved': saved,
+            'starred': starred,
+            'already_present': already_present,
+            'category_id': cat_id,
+            'category_name': cat_name,
+        })
     except pymysql.err.IntegrityError:
         conn.rollback()
         return jsonify({'error': 'List name already exists'}), 409
@@ -332,19 +362,30 @@ def remove_paper():
     cursor = conn.cursor()
     try:
         cursor.execute(
-            "SELECT name FROM user_categories WHERE id=%s AND user_id=%s",
+            "SELECT id FROM user_categories WHERE id=%s AND user_id=%s",
             (cat_id, user_id)
         )
         row = cursor.fetchone()
         if not row:
             return jsonify({'error': 'Category not found'}), 404
 
+        cursor.execute("SELECT id FROM papers WHERE arxiv_id=%s", (arxiv_id,))
+        paper = cursor.fetchone()
+        if not paper:
+            return jsonify({'error': 'Paper not found'}), 404
+
         cursor.execute(
-            "DELETE FROM user_lists WHERE user_id=%s AND list_name=%s AND arxiv_id=%s",
-            (user_id, row['name'], arxiv_id)
+            "DELETE FROM user_lists WHERE category_id=%s AND paper_id=%s",
+            (cat_id, paper['id'])
         )
+        removed = cursor.rowcount > 0
+        saved, starred = _paper_membership_state(cursor, user_id, paper['id'])
         conn.commit()
-        return jsonify({'removed': True})
+        return jsonify({
+            'removed': removed,
+            'saved': saved,
+            'starred': starred,
+        })
     except Exception:
         conn.rollback()
         raise
@@ -356,8 +397,16 @@ def remove_paper():
 def get_categories():
     user_id = _require_user()
     include_counts = request.args.get('counts', '1') != '0'
-    cats = _get_user_categories(user_id, include_counts=include_counts)
-    return jsonify([dict(c) for c in cats])
+    arxiv_id = request.args.get('arxiv_id', '').strip() or None
+    cats = _get_user_categories(
+        user_id, include_counts=include_counts, arxiv_id=arxiv_id
+    )
+    payload = []
+    for cat in cats:
+        item = dict(cat)
+        item['contains_paper'] = bool(item.get('contains_paper'))
+        payload.append(item)
+    return jsonify(payload)
 
 
 @lists_bp.route('/api/lists/categories/new', methods=['POST'])
@@ -411,11 +460,6 @@ def rename_category(cat_id):
         if row['is_starred']:
             return jsonify({'error': 'Cannot rename the Starred list'}), 403
 
-        old_name = row['name']
-        cursor.execute(
-            "UPDATE user_lists SET list_name=%s WHERE user_id=%s AND list_name=%s",
-            (new_name, user_id, old_name)
-        )
         cursor.execute(
             "UPDATE user_categories SET name=%s WHERE id=%s AND user_id=%s",
             (new_name, cat_id, user_id)
@@ -450,10 +494,6 @@ def delete_category(cat_id):
             return jsonify({'error': 'Cannot delete the Starred list'}), 403
 
         cursor.execute(
-            "DELETE FROM user_lists WHERE user_id=%s AND list_name=%s",
-            (user_id, row['name'])
-        )
-        cursor.execute(
             "DELETE FROM user_categories WHERE id=%s AND user_id=%s",
             (cat_id, user_id)
         )
@@ -470,7 +510,7 @@ def delete_category(cat_id):
 def list_bibtex(cat_id):
     """Return all BibTeX entries for a list as plain text."""
     user_id = _require_user()
-    cat, papers = _get_papers_in_category(user_id, cat_id)
+    cat, papers, _ = _get_papers_in_category(user_id, cat_id)
     if cat is None:
         abort(404)
     entries = [arxiv2bib(p) for p in papers]

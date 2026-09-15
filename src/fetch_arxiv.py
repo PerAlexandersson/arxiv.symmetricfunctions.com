@@ -176,17 +176,6 @@ def insert_or_update_paper(cursor, paper):
             else:
                 update_doi, update_doi_status = None, None
                 update_publication_status = existing_publication_status
-        if existing_arxiv_id != arxiv_id:
-            cursor.execute("""
-                INSERT IGNORE INTO user_lists (user_id, list_name, arxiv_id, added_at)
-                SELECT user_id, list_name, %s, added_at
-                FROM user_lists
-                WHERE arxiv_id = %s
-            """, (arxiv_id, existing_arxiv_id))
-            cursor.execute(
-                "DELETE FROM user_lists WHERE arxiv_id = %s",
-                (existing_arxiv_id,),
-            )
         cursor.execute("""
             UPDATE papers SET
                 title = %s,

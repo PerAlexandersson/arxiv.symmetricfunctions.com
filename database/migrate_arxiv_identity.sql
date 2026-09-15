@@ -3,6 +3,7 @@
 -- Safe to re-run on MariaDB.  Back up the database before applying migrations.
 -- This migration merges relationships from duplicate vN rows into the newest
 -- row for each base arXiv ID, then enforces one row per logical paper.
+-- Existing installations must apply migrate_normalize_user_lists.sql first.
 
 ALTER TABLE papers
   ADD COLUMN IF NOT EXISTS arxiv_base_id VARCHAR(20) NULL AFTER arxiv_id,
@@ -155,18 +156,14 @@ ON DUPLICATE KEY UPDATE
   END,
   reviewed_at = COALESCE(doi_candidates.reviewed_at, VALUES(reviewed_at));
 
--- Saved lists store the public versioned identifier rather than papers.id.
--- Move saves to the retained row first so no list becomes orphaned.
-INSERT IGNORE INTO user_lists (user_id, list_name, arxiv_id, added_at)
-SELECT ul.user_id, ul.list_name, keep_paper.arxiv_id, ul.added_at
+-- Move saved-list memberships to the retained stable paper row.
+INSERT IGNORE INTO user_lists (category_id, paper_id, added_at)
+SELECT ul.category_id, m.keep_id, ul.added_at
 FROM user_lists ul
-JOIN papers old_paper ON old_paper.arxiv_id = ul.arxiv_id
-JOIN paper_identity_map m ON m.old_id = old_paper.id
-JOIN papers keep_paper ON keep_paper.id = m.keep_id
+JOIN paper_identity_map m ON m.old_id = ul.paper_id
 WHERE m.old_id <> m.keep_id;
 DELETE ul FROM user_lists ul
-JOIN papers old_paper ON old_paper.arxiv_id = ul.arxiv_id
-JOIN paper_identity_map m ON m.old_id = old_paper.id
+JOIN paper_identity_map m ON m.old_id = ul.paper_id
 WHERE m.old_id <> m.keep_id;
 
 DELETE pa FROM paper_authors pa

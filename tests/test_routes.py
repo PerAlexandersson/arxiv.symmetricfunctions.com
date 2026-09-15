@@ -31,21 +31,28 @@ config.FETCH_SECRET = os.environ['FETCH_SECRET']
 
 with mock.patch('requests.get') as _mock_get, \
         mock.patch('pymysql.connect',
-                   side_effect=pymysql.err.OperationalError('DB disabled in tests')):
+                   side_effect=pymysql.err.OperationalError(
+                       'DB disabled in tests')) as _mock_connect:
     _mock_get.return_value.ok = True
     _mock_get.return_value.json.return_value = {}
     app_module = importlib.import_module('app')
+    _startup_network_called = _mock_get.called
+    _startup_db_called = _mock_connect.called
 
 
 class FakeCursor:
-    def __init__(self, fetchone_values=None, fetchall_values=None, lastrowid=1):
+    def __init__(self, fetchone_values=None, fetchall_values=None, lastrowid=1,
+                 rowcounts=None):
         self.fetchone_values = list(fetchone_values or [])
         self.fetchall_values = list(fetchall_values or [])
         self.lastrowid = lastrowid
+        self.rowcount = 0
+        self.rowcounts = list(rowcounts or [])
         self.queries = []
 
     def execute(self, query, params=None):
         self.queries.append((query, params))
+        self.rowcount = self.rowcounts.pop(0) if self.rowcounts else 1
 
     def fetchone(self):
         return self.fetchone_values.pop(0) if self.fetchone_values else None
@@ -76,6 +83,10 @@ class FakeConnection:
 
 
 class RouteTests(unittest.TestCase):
+    def test_app_import_has_no_network_or_database_side_effects(self):
+        self.assertFalse(_startup_network_called)
+        self.assertFalse(_startup_db_called)
+
     def setUp(self):
         app_module.app.config.update(TESTING=True, WTF_CSRF_ENABLED=False)
         self.client = app_module.app.test_client()
@@ -295,7 +306,11 @@ class RouteTests(unittest.TestCase):
     def test_legacy_arxiv_id_can_be_starred_idempotently(self):
         import lists as lists_module
 
-        cursor = FakeCursor(fetchone_values=[{'exists': 1}, {'id': 4, 'name': 'Starred'}])
+        cursor = FakeCursor(fetchone_values=[
+            {'id': 19},
+            {'id': 4, 'name': 'Starred'},
+            {'saved': 1, 'starred': 1},
+        ])
         conn = FakeConnection(cursor)
         with self.client.session_transaction() as sess:
             sess['user_id'] = 7
@@ -309,7 +324,7 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(200, resp.status_code)
         self.assertEqual({'starred': True, 'saved': True}, resp.get_json())
         self.assertEqual(1, conn.commit_count)
-        self.assertTrue(any('INSERT IGNORE INTO user_lists' in query
+        self.assertTrue(any('INSERT INTO user_lists' in query
                             for query, _ in cursor.queries))
 
     def test_star_requires_explicit_desired_state(self):
@@ -322,7 +337,11 @@ class RouteTests(unittest.TestCase):
     def test_unstar_without_starred_list_does_not_create_one(self):
         import lists as lists_module
 
-        cursor = FakeCursor(fetchone_values=[{'exists': 1}, None])
+        cursor = FakeCursor(fetchone_values=[
+            {'id': 19},
+            None,
+            {'saved': 0, 'starred': 0},
+        ])
         conn = FakeConnection(cursor)
         with self.client.session_transaction() as sess:
             sess['user_id'] = 7
@@ -342,7 +361,10 @@ class RouteTests(unittest.TestCase):
     def test_save_to_new_list_commits_category_and_paper_together(self):
         import lists as lists_module
 
-        cursor = FakeCursor(fetchone_values=[{'exists': 1}], lastrowid=12)
+        cursor = FakeCursor(
+            fetchone_values=[{'id': 19}, {'saved': 1, 'starred': 0}],
+            lastrowid=12,
+        )
         conn = FakeConnection(cursor)
         with self.client.session_transaction() as sess:
             sess['user_id'] = 7
@@ -358,8 +380,109 @@ class RouteTests(unittest.TestCase):
         self.assertEqual('Read later', resp.get_json()['category_name'])
         self.assertTrue(any('INSERT INTO user_categories' in query
                             for query, _ in cursor.queries))
-        self.assertTrue(any('INSERT IGNORE INTO user_lists' in query
+        self.assertTrue(any('INSERT INTO user_lists' in query
                             for query, _ in cursor.queries))
+
+    def test_categories_report_membership_for_selected_paper(self):
+        import lists as lists_module
+
+        cursor = FakeCursor(fetchall_values=[[{
+            'id': 4,
+            'name': 'Reading',
+            'is_starred': 0,
+            'contains_paper': 1,
+        }]])
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 7
+
+        with mock.patch.object(
+                lists_module, 'get_db_connection',
+                return_value=FakeConnection(cursor)):
+            resp = self.client.get(
+                '/api/lists/categories?counts=0&arxiv_id=2401.00001'
+            )
+
+        self.assertEqual(200, resp.status_code)
+        self.assertTrue(resp.get_json()[0]['contains_paper'])
+        self.assertEqual(('2401.00001', 7), cursor.queries[0][1])
+
+    def test_remove_from_list_returns_remaining_aggregate_state(self):
+        import lists as lists_module
+
+        cursor = FakeCursor(
+            fetchone_values=[
+                {'id': 4},
+                {'id': 19},
+                {'saved': 1, 'starred': 0},
+            ],
+            rowcounts=[1, 1, 1, 1],
+        )
+        conn = FakeConnection(cursor)
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 7
+
+        with mock.patch.object(lists_module, 'get_db_connection', return_value=conn):
+            resp = self.client.post(
+                '/api/lists/remove',
+                data={'arxiv_id': '2401.00001', 'category_id': 4},
+            )
+
+        self.assertEqual(200, resp.status_code)
+        self.assertEqual(
+            {'removed': True, 'saved': True, 'starred': False},
+            resp.get_json(),
+        )
+        self.assertEqual(1, conn.commit_count)
+
+    def test_delete_custom_list_relies_on_category_cascade(self):
+        import lists as lists_module
+
+        cursor = FakeCursor(fetchone_values=[{
+            'name': 'Reading', 'is_starred': 0,
+        }])
+        conn = FakeConnection(cursor)
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 7
+
+        with mock.patch.object(lists_module, 'get_db_connection', return_value=conn):
+            resp = self.client.post('/api/lists/categories/4/delete')
+
+        self.assertEqual(200, resp.status_code)
+        self.assertEqual({'deleted': True}, resp.get_json())
+        self.assertEqual(1, conn.commit_count)
+        delete_queries = [q for q, _ in cursor.queries if 'DELETE FROM' in q]
+        self.assertEqual(1, len(delete_queries))
+        self.assertIn('user_categories', delete_queries[0])
+
+    def test_starred_list_cannot_be_deleted(self):
+        import lists as lists_module
+
+        cursor = FakeCursor(fetchone_values=[{
+            'name': 'Starred', 'is_starred': 1,
+        }])
+        conn = FakeConnection(cursor)
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 7
+
+        with mock.patch.object(lists_module, 'get_db_connection', return_value=conn):
+            resp = self.client.post('/api/lists/categories/4/delete')
+
+        self.assertEqual(403, resp.status_code)
+        self.assertEqual(0, conn.commit_count)
+
+    def test_list_mutation_requires_csrf_when_enabled(self):
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 7
+        app_module.app.config['WTF_CSRF_ENABLED'] = True
+        try:
+            resp = self.client.post(
+                '/api/lists/save',
+                data={'arxiv_id': '2401.00001', 'category_id': 4},
+            )
+        finally:
+            app_module.app.config['WTF_CSRF_ENABLED'] = False
+
+        self.assertEqual(400, resp.status_code)
 
     def test_paper_detail_renders_existing_star_state(self):
         paper = {
@@ -384,9 +507,11 @@ class RouteTests(unittest.TestCase):
             fetchall_values=[
                 [],
                 [{'category': 'math.CO'}],
-                [],
-                [],
-                [{'arxiv_id': '2607.01572v1', 'is_starred': 1}],
+                [{
+                    'kind': 'paper',
+                    'value': '2607.01572v1',
+                    'is_starred': 1,
+                }],
             ],
         )
         with self.client.session_transaction() as sess:
@@ -413,6 +538,37 @@ class RouteTests(unittest.TestCase):
         with self.client.session_transaction() as sess:
             sess['user_id'] = 7
         self.assertEqual(302, self.client.post('/logout').status_code)
+
+    def test_browser_security_headers_include_frame_protection(self):
+        resp = self.client.get('/login')
+
+        self.assertEqual('DENY', resp.headers['X-Frame-Options'])
+        self.assertIn("frame-ancestors 'none'", resp.headers['Content-Security-Policy'])
+        self.assertIn("object-src 'none'", resp.headers['Content-Security-Policy'])
+
+    def test_symcat_refresh_persists_a_local_snapshot(self):
+        class Response:
+            ok = True
+
+            @staticmethod
+            def json():
+                return {'schur': {'href': '/schur', 'title': 'Schur functions'}}
+
+        previous_labels = app_module.sf_labels
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(
+                    app_module, 'SF_LABEL_CACHE_PATH',
+                    Path(tmp) / 'site-labels.json',
+                ), \
+                mock.patch.object(app_module.requests, 'get', return_value=Response()):
+            try:
+                count, error = app_module.refresh_sf_labels()
+                cache_text = (Path(tmp) / 'site-labels.json').read_text()
+            finally:
+                app_module.sf_labels = previous_labels
+
+        self.assertEqual((1, None), (count, error))
+        self.assertIn('"schur"', cache_text)
 
     def test_authenticated_header_places_logout_beside_username(self):
         cursor = FakeCursor(fetchall_values=[[], [], []])

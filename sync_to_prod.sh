@@ -5,7 +5,8 @@
 #   1. Upload source code, templates, static assets, and passenger_wsgi.py
 #   2. Upload .env.production as the remote .env
 #   3. Install Python dependencies on the server
-#   4. Restart Passenger
+#   4. Refresh the persistent SymCat label snapshot
+#   5. Restart Passenger
 #
 # What this does NOT do:
 #   - apply SQL migrations
@@ -22,7 +23,9 @@ set -euo pipefail
 REMOTE_HOST="symmetricf@ns12.inleed.net"
 REMOTE_PORT="2020"
 REMOTE_PATH="domains/arxiv.symmetricfunctions.com"
-REMOTE_VENV="~/virtualenv/domains/arxiv.symmetricfunctions.com/3.9/bin/activate"
+ARXIV_PYTHON_VERSION="${ARXIV_PYTHON_VERSION:-3.9}"
+REMOTE_VENV="~/virtualenv/domains/arxiv.symmetricfunctions.com/$ARXIV_PYTHON_VERSION/bin/activate"
+PASSENGER_PYTHON="/home/symmetricf/virtualenv/domains/arxiv.symmetricfunctions.com/$ARXIV_PYTHON_VERSION/bin/python3"
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROD_ENV="$SCRIPT_DIR/.env.production"
@@ -46,6 +49,35 @@ printf '%b\n' "${YELLOW}Preflight: checking SSH command execution...${NC}"
 if ! ssh -p "$REMOTE_PORT" "$REMOTE_HOST" "printf '%s\n' ssh-ok" >/dev/null; then
     printf '%s\n' "Error: SSH login worked poorly or remote command execution is disabled."
     printf '%s\n' "Try: ssh -p $REMOTE_PORT $REMOTE_HOST 'echo ok'"
+    exit 1
+fi
+if ! ssh -p "$REMOTE_PORT" "$REMOTE_HOST" "test -x '$PASSENGER_PYTHON'"; then
+    printf '%s\n' "Error: cPanel Python $ARXIV_PYTHON_VERSION is not available at $PASSENGER_PYTHON"
+    exit 1
+fi
+ssh -p "$REMOTE_PORT" "$REMOTE_HOST" "'$PASSENGER_PYTHON' --version"
+if [[ "$ARXIV_PYTHON_VERSION" == 3.9 ]]; then
+    printf '%b\n' "${YELLOW}Warning: Python 3.9 is end-of-life; select a newer cPanel runtime when the host offers one.${NC}"
+fi
+
+printf '%b\n' "${YELLOW}Preflight: checking the production list schema...${NC}"
+LIST_SCHEMA_COLUMNS="$(ssh -p "$REMOTE_PORT" "$REMOTE_HOST" "
+    set -a
+    . ~/$REMOTE_PATH/.env
+    set +a
+    MYSQL_PWD=\"\$DB_PASSWORD\" mariadb \
+      --host=\"\${DB_HOST:-localhost}\" \
+      --user=\"\$DB_USER\" \
+      --database=\"\$DB_NAME\" \
+      --batch --skip-column-names \
+      --execute=\"SELECT COUNT(*) FROM information_schema.COLUMNS
+                  WHERE TABLE_SCHEMA = DATABASE()
+                    AND TABLE_NAME = 'user_lists'
+                    AND COLUMN_NAME IN ('category_id', 'paper_id')\"
+")"
+if [[ "$LIST_SCHEMA_COLUMNS" != "2" ]]; then
+    printf '%s\n' "Error: production user_lists is not normalized."
+    printf '%s\n' "Back it up and apply database/migrate_normalize_user_lists.sql before deploying."
     exit 1
 fi
 
@@ -89,10 +121,21 @@ if [ -f "$SCRIPT_DIR/keywords.csv" ]; then
         "$REMOTE_HOST:~/$REMOTE_PATH/keywords.csv"
 fi
 
-if [ -f "$SCRIPT_DIR/deployment/.htaccess" ]; then
-    scp -P "$REMOTE_PORT" "$SCRIPT_DIR/deployment/.htaccess" \
-        "$REMOTE_HOST:~/$REMOTE_PATH/public_html/.htaccess"
-fi
+HTACCESS_TMP="$(mktemp)"
+trap 'rm -f "$HTACCESS_TMP"' EXIT
+cat > "$HTACCESS_TMP" <<EOF
+PassengerEnabled on
+PassengerAppType wsgi
+PassengerStartupFile passenger_wsgi.py
+PassengerAppRoot /home/symmetricf/$REMOTE_PATH
+PassengerPython $PASSENGER_PYTHON
+PassengerAppEnv production
+<FilesMatch "\\.(jpg|jpeg|png|gif|css|js|ico|svg|woff|woff2|ttf|eot)\$">
+    PassengerEnabled off
+</FilesMatch>
+EOF
+scp -P "$REMOTE_PORT" "$HTACCESS_TMP" \
+    "$REMOTE_HOST:~/$REMOTE_PATH/public_html/.htaccess"
 
 if [ -f "$SCRIPT_DIR/deployment/static_htaccess" ]; then
     scp -P "$REMOTE_PORT" "$SCRIPT_DIR/deployment/static_htaccess" \
@@ -112,7 +155,16 @@ ssh -p "$REMOTE_PORT" "$REMOTE_HOST" "
     chmod 664 public_html/static/*.css public_html/static/*.js 2>/dev/null || true
 "
 
-printf '%b\n' "${YELLOW}Step 4: Restarting Passenger...${NC}"
+printf '%b\n' "${YELLOW}Step 4: Refreshing the SymCat label snapshot...${NC}"
+if ! ssh -p "$REMOTE_PORT" "$REMOTE_HOST" "
+    . $REMOTE_VENV
+    cd ~/$REMOTE_PATH/src
+    python -c \"from app import refresh_sf_labels; count, error = refresh_sf_labels(); print('SymCat labels:', count); raise SystemExit(1 if error else 0)\"
+"; then
+    printf '%b\n' "${YELLOW}Warning: SymCat labels could not be refreshed; the last cached snapshot will remain active.${NC}"
+fi
+
+printf '%b\n' "${YELLOW}Step 5: Restarting Passenger...${NC}"
 ssh -p "$REMOTE_PORT" "$REMOTE_HOST" \
     "touch ~/$REMOTE_PATH/passenger_wsgi.py ~/$REMOTE_PATH/tmp/restart.txt"
 

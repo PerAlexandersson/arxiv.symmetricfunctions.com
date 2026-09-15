@@ -986,7 +986,8 @@ def users():
         FROM users u
         LEFT JOIN user_watched_keywords wk ON wk.user_id = u.id
         LEFT JOIN user_watched_authors  wa ON wa.user_id = u.id
-        LEFT JOIN user_lists            ul ON ul.user_id = u.id
+        LEFT JOIN user_categories       uc ON uc.user_id = u.id
+        LEFT JOIN user_lists            ul ON ul.category_id = uc.id
         GROUP BY u.id, u.provider, u.provider_id, u.display_name, u.created_at
         ORDER BY u.created_at DESC
     """)

@@ -122,7 +122,9 @@ Then visit **http://localhost:5000** in your browser.
 
 - **My Feed** — `/my-feed` shows recent papers matching watched keywords and authors
 - **Watch keywords / authors** — Follow topics or researchers to build a personalized feed
-- **My Lists** — `/lists` lets users organize papers into custom named lists (plus a special "Starred" list)
+- **My Lists** — `/lists` lets users organize papers into custom named lists
+  (plus a special "Starred" list); the paper menu shows and toggles existing
+  memberships
 
 ---
 
@@ -183,18 +185,32 @@ several categories; cursor requests must repeat the same filters.
 The response distinguishes the stable base `arxiv_id` from the current
 `versioned_arxiv_id`, so revisions do not appear as new logical papers.
 
-Before deploying the API code to an existing database, back up the database
-and apply the identity migration:
+Before deploying the API code to an existing database, back up the database.
+If the installation still has the legacy `user_lists(user_id, list_name,
+arxiv_id)` schema, apply the saved-list migration first:
+
+```bash
+mysql -u arxiv_user -p arxiv_frontend \
+  < database/migrate_normalize_user_lists.sql
+```
+
+Then apply the identity migration:
 
 ```bash
 mysql -u arxiv_user -p arxiv_frontend \
   < database/migrate_arxiv_identity.sql
 ```
 
-The migration retains the newest revision's arXiv metadata and author/category
-sets, carries forward editorial metadata and manual/system keywords, and
-preserves saved-list entries. `sync_to_prod.sh` does not run database
-migrations automatically.
+The list migration replaces name-based saved-list references with foreign keys to
+`user_categories.id` and `papers.id`. It aborts if any legacy row cannot be
+mapped and retains the verified old table as `user_lists_legacy_20260915` for
+the deployment checkpoint. Drop that backup table only after the new code and
+saved-list counts have been verified. The identity migration then retains the
+newest revision's arXiv metadata and author/category sets, carries forward
+editorial metadata and manual/system keywords, and preserves saved-list
+entries. `sync_to_prod.sh` does not run database migrations automatically and
+will refuse this application version until it detects the normalized list
+schema.
 
 ---
 
@@ -301,15 +317,15 @@ arxiv.symmetricfunctions.com/
 │   ├── pull_prod_db.sh       # Pull production DB to local
 │   ├── migrate_doi_status.sql    # Migration: add DOI status tracking
 │   ├── migrate_doi_checked.sql   # Migration: add DOI lookup timestamp
-│   └── migrate_doi_skipped.sql   # Migration: add 'skipped' DOI status
+│   ├── migrate_doi_skipped.sql   # Migration: add 'skipped' DOI status
+│   └── migrate_normalize_user_lists.sql # Stable list/category relationships
 ├── deployment/
 │   ├── QUICKSTART.md         # Quick deployment guide
 │   ├── SETUP_STEPS.md        # Detailed setup instructions
 │   ├── SHARED_HOSTING.md     # Passenger/cPanel deployment docs
 │   ├── CHECKLIST.md          # Pre-deployment checklist
 │   ├── deploy_shared.sh      # Deployment script for shared hosting
-│   ├── .htaccess             # Apache config for shared hosting
-│   ├── htaccess_template     # Template for .htaccess
+│   ├── htaccess_template     # Deploy-time template for .htaccess
 │   └── static_htaccess       # Static files .htaccess
 └── src/
     ├── app.py                # Flask web application (main routes)
@@ -387,6 +403,15 @@ arxiv.symmetricfunctions.com/
 **Different paper counts / keyword changes not visible on other machine**
 - Pull the production database locally: `cd database && ./pull_prod_db.sh`
 - Then apply any pending migrations (see `database/migrate_*.sql`)
+
+**Changing the production Python runtime**
+
+- The interpreter is selected by cPanel's application configuration and the
+  generated `PassengerPython` directive.
+- Create/select a supported Python virtualenv in cPanel first, then deploy with
+  `ARXIV_PYTHON_VERSION=<major.minor>`.
+- `passenger_wsgi.py` intentionally does not inject a version-specific
+  `site-packages` directory; Passenger's selected interpreter owns that path.
 
 ---
 
@@ -515,7 +540,8 @@ See `database/schema.sql` for the complete schema.
 
 - **`users`** — Authenticated users (ORCID login)
 - **`user_categories`** — Named list buckets per user (includes special "Starred" list)
-- **`user_lists`** — Papers saved to specific lists
+- **`user_lists`** — Memberships linking `user_categories.id` to stable
+  `papers.id` values, with cascading cleanup
 - **`user_watched_keywords`** — Keywords a user follows (powers "My Feed")
 - **`user_watched_authors`** — Authors a user follows (powers "My Feed")
 

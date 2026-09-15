@@ -26,7 +26,7 @@
 </div>
 
 {% if papers %}
-<p class="lists-count">{{ papers|length }} paper{% if papers|length != 1 %}s{% endif %}</p>
+<p class="lists-count">{{ total }} paper{% if total != 1 %}s{% endif %}</p>
 {% for paper in papers %}
 <div class="list-paper-row" id="list-row-{{ paper.arxiv_id }}">
     {{ render_paper(paper, list_cat_id=cat_id, list_is_starred=category.is_starred) }}
@@ -34,5 +34,17 @@
 {% endfor %}
 {% else %}
 <p class="lists-empty">This list is empty. Star papers or use the bookmark icon to save them here.</p>
+{% endif %}
+
+{% if has_prev or has_next %}
+<nav class="pagination" aria-label="List pages">
+    {% if has_prev %}
+    <a href="{{ url_for('lists.list_detail', cat_id=cat_id, page=page - 1) }}">&larr; Newer</a>
+    {% endif %}
+    <span>Page {{ page }}</span>
+    {% if has_next %}
+    <a href="{{ url_for('lists.list_detail', cat_id=cat_id, page=page + 1) }}">Older &rarr;</a>
+    {% endif %}
+</nav>
 {% endif %}
 {% endblock %}

@@ -2,6 +2,12 @@
 
 ## Current scope
 
+Ownership released (2026-09-15): the saved-list membership picker,
+normalized-list migration, backend audit repairs, and deployment guard are
+implemented and verified locally. No worker owns these files. Production was
+not changed; its list schema is still legacy and the deploy guard correctly
+refuses rollout until the migration is applied.
+
 Ownership released (2026-09-15): the complete 414-row pending DOI admin review,
 guarded local application, and production merge are finished. No worker owns
 the DOI admin-review state or this handoff entry.
@@ -35,6 +41,35 @@ to production and verified. No worker owns the top-up or DOI-review state.
 
 ## Status
 
+- The backend audit repair is complete locally. Paper menus show a checked
+  state for every list already containing the paper and can add/remove several
+  memberships without closing. Custom-list deletion is supported and now
+  explicitly says that only saved links, not papers, are removed; Starred
+  remains protected. Saved memberships now use category/paper foreign keys,
+  so list renames and arXiv revisions no longer require fragile string rewrites.
+  The guarded migration preserved all 282 local memberships with zero orphans,
+  is safe to rerun, retains an immediate rollback table, and passed a separate
+  legacy-schema rehearsal. The pre-migration local backup is
+  `/home/paxinum/.cache/arxiv.symmetricfunctions.com/backups/local-user-lists-pre-normalize-20260915.sql`
+  (mode 600).
+- List pages are paginated at 50 papers and use batched author/keyword queries
+  rather than `GROUP_CONCAT`. Authenticated template state uses one query and
+  logs failures. Web import no longer performs network requests, schema DDL,
+  author backfills, or a full cache rebuild; SymCat labels use a persistent
+  snapshot refreshed explicitly by admin/deploy. Browser responses add frame,
+  base-URI, and object-source protection, and direct dependencies are pinned.
+  The deploy script selects/verifies the cPanel interpreter, generates its
+  Passenger path, checks the normalized production schema before upload, and
+  refreshes the label snapshot explicitly. The host currently offers only
+  Python 3.9.23; the system Python is 3.6.8, so a supported runtime upgrade
+  remains hosting-controlled and is recorded under `suggestions/`.
+- Verification: 129 unit tests, Python 3.9 grammar parsing, Python compilation,
+  JavaScript/Bash syntax, whitespace, and `pip check` pass. The complete pinned
+  dependency set resolves under the actual remote Python 3.9.23 interpreter.
+  Real MariaDB checks passed for all 282 migrated rows, authenticated list page
+  rendering, list membership reporting, and create/save/remove/delete behavior.
+  The production deploy preflight was exercised read-only and stopped at the
+  expected legacy-schema guard; no production files or data were changed.
 - The 414-row DOI admin queue is completely reviewed and merged to production.
   A fresh read-only triage supplied 26 deterministic approvals/replacements and
   74 stale-conflict rejections; three read-only evidence lanes then covered all

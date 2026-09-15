@@ -13,17 +13,26 @@ import contextlib
 import calendar
 import html
 import hmac
+import json
 import logging
 import random
 import re
+import tempfile
+from pathlib import Path
+from threading import Lock
 import pymysql
 import requests
-from config import DB_CONFIG, FLASK_CONFIG, FETCH_SECRET, validate_config
+from config import (
+    DB_CONFIG,
+    FETCH_SECRET,
+    FLASK_CONFIG,
+    SF_LABEL_CACHE_PATH,
+    validate_config,
+)
 from db import get_db_connection, close_db_connection, get_paper_authors, attach_authors, attach_keywords
 from datetime import datetime, date, timedelta
 from publication import publication_venue_label
 from site_stats import (
-    ensure_site_stats,
     get_site_stats,
     index_cache_rebuild_due,
     refresh_site_stats,
@@ -82,7 +91,12 @@ app.register_blueprint(configure_api(lambda: sf_labels))
 def add_security_headers(response):
     """Apply browser security headers that are safe for every response."""
     response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    response.headers.setdefault('X-Frame-Options', 'DENY')
     response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+    response.headers.setdefault(
+        'Content-Security-Policy',
+        "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
+    )
     response.headers.setdefault(
         'Permissions-Policy',
         'camera=(), geolocation=(), microphone=()',
@@ -105,42 +119,52 @@ def inject_current_user():
             'name':     session.get('user_name', ''),
             'orcid_id': session.get('orcid_id', ''),
         }
+        cursor = None
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT k.phrase
+                SELECT 'keyword' AS kind, k.phrase AS value, 0 AS is_starred
                 FROM user_watched_keywords uwk
                 JOIN keywords k ON k.id = uwk.keyword_id
                 WHERE uwk.user_id = %s
-            """, (user_id,))
-            ctx['watched_kw_phrases'] = frozenset(row['phrase'] for row in cursor.fetchall())
-            cursor.execute("""
-                SELECT a.name
+                UNION ALL
+                SELECT 'author' AS kind, a.name AS value, 0 AS is_starred
                 FROM user_watched_authors uwa
                 JOIN authors a ON a.id = uwa.author_id
                 WHERE uwa.user_id = %s
-            """, (user_id,))
-            ctx['watched_author_names'] = frozenset(row['name'] for row in cursor.fetchall())
-            cursor.execute("""
-                SELECT ul.arxiv_id, MAX(uc.is_starred) AS is_starred
+                UNION ALL
+                SELECT 'paper' AS kind, p.arxiv_id AS value,
+                       MAX(uc.is_starred) AS is_starred
                 FROM user_lists ul
-                JOIN user_categories uc
-                  ON uc.user_id = ul.user_id AND uc.name = ul.list_name
-                WHERE ul.user_id = %s
-                GROUP BY ul.arxiv_id
-            """, (user_id,))
-            list_rows = cursor.fetchall()
-            ctx['saved_arxiv_ids'] = frozenset(row['arxiv_id'] for row in list_rows)
-            ctx['starred_arxiv_ids'] = frozenset(
-                row['arxiv_id'] for row in list_rows if row['is_starred']
+                JOIN user_categories uc ON uc.id = ul.category_id
+                JOIN papers p ON p.id = ul.paper_id
+                WHERE uc.user_id = %s
+                GROUP BY p.arxiv_id
+            """, (user_id, user_id, user_id))
+            personalized_rows = cursor.fetchall()
+            ctx['watched_kw_phrases'] = frozenset(
+                row['value'] for row in personalized_rows
+                if row['kind'] == 'keyword'
             )
-            cursor.close()
+            ctx['watched_author_names'] = frozenset(
+                row['value'] for row in personalized_rows
+                if row['kind'] == 'author'
+            )
+            list_rows = [row for row in personalized_rows if row['kind'] == 'paper']
+            ctx['saved_arxiv_ids'] = frozenset(row['value'] for row in list_rows)
+            ctx['starred_arxiv_ids'] = frozenset(
+                row['value'] for row in list_rows if row['is_starred']
+            )
         except Exception:
+            logger.exception('Could not load personalized template state')
             ctx['watched_kw_phrases']   = frozenset()
             ctx['watched_author_names'] = frozenset()
             ctx['saved_arxiv_ids']      = frozenset()
             ctx['starred_arxiv_ids']    = frozenset()
+        finally:
+            if cursor is not None:
+                cursor.close()
     else:
         ctx['current_user']          = None
         ctx['watched_kw_phrases']    = frozenset()
@@ -259,13 +283,39 @@ app.jinja_env.filters['slugify'] = lambda name: slugify(name) if name else ''
 SF_BASE = 'https://www.symmetricfunctions.com/'
 sf_labels = {}
 
+
+def load_sf_labels_cache():
+    """Load the last successful SymCat label snapshot without network I/O."""
+    global sf_labels
+    try:
+        data = json.loads(Path(SF_LABEL_CACHE_PATH).read_text(encoding='utf-8'))
+        if not isinstance(data, dict):
+            raise ValueError('label cache must contain a JSON object')
+        sf_labels = data
+        logger.info("Loaded %d cached site-labels", len(sf_labels))
+    except FileNotFoundError:
+        logger.info("No cached site-labels snapshot is available")
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        logger.warning("Could not load cached site-labels: %s", exc)
+
 def refresh_sf_labels():
-    """Fetch site-labels.json and update the global cache. Returns (count, error)."""
+    """Fetch and persist site-labels.json. Return ``(count, error)``."""
     global sf_labels
     try:
         resp = requests.get(SF_BASE + 'site-labels.json', timeout=5)
         if resp.ok:
-            sf_labels = resp.json()
+            data = resp.json()
+            if not isinstance(data, dict):
+                raise ValueError('site-labels response must be a JSON object')
+            cache_path = Path(SF_LABEL_CACHE_PATH)
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(
+                    mode='w', encoding='utf-8', dir=cache_path.parent,
+                    prefix='.site-labels-', delete=False) as temporary:
+                json.dump(data, temporary, ensure_ascii=False, sort_keys=True)
+                temporary_path = Path(temporary.name)
+            temporary_path.replace(cache_path)
+            sf_labels = data
             logger.info("Loaded %d site-labels from symmetricfunctions.com", len(sf_labels))
             return len(sf_labels), None
         return 0, f'HTTP {resp.status_code}'
@@ -273,7 +323,7 @@ def refresh_sf_labels():
         logger.warning("Could not fetch site-labels.json: %s", e)
         return 0, str(e)
 
-refresh_sf_labels()
+load_sf_labels_cache()
 
 def _sf_url(value):
     if not value:
@@ -408,6 +458,7 @@ _index_cache_version = None
 _index_cache_last_checked = None
 _index_cache_rebuild_after = None
 _INDEX_CACHE_CHECK_INTERVAL = timedelta(seconds=60)
+_index_cache_lock = Lock()
 
 def _build_index_page(cursor, page, per_page, stats):
     """Query one page of papers and attach authors + keywords."""
@@ -433,27 +484,28 @@ def _build_index_page(cursor, page, per_page, stats):
         'latest_date': stats['latest_date'],
     }
 
-def rebuild_index_cache():
+def rebuild_index_cache(refresh_stats=True):
     """Pre-warm the index cache for pages 1-2. Call after data changes."""
     global _index_cache, _index_cache_version
     global _index_cache_last_checked, _index_cache_rebuild_after
-    row = refresh_site_stats()
-    conn = pymysql.connect(**DB_CONFIG, cursorclass=pymysql.cursors.DictCursor)
-    cursor = conn.cursor()
-    try:
-        stats = {'total': row['paper_count'], 'total_authors': row['author_count'],
-                 'latest_date': row['latest_date']}
-        new_cache = {}
-        for pg in (1, 2):
-            new_cache[pg] = _build_index_page(cursor, pg, 20, stats)
-    finally:
-        cursor.close()
-        conn.close()
-    _index_cache = new_cache
-    _index_cache_version = row['updated_at']
-    _index_cache_last_checked = datetime.now()
-    _index_cache_rebuild_after = None
-    logger.info("Index cache rebuilt (pages 1-2, %d papers)", stats['total'])
+    with _index_cache_lock:
+        row = refresh_site_stats() if refresh_stats else get_site_stats()
+        conn = pymysql.connect(**DB_CONFIG, cursorclass=pymysql.cursors.DictCursor)
+        cursor = conn.cursor()
+        try:
+            stats = {'total': row['paper_count'], 'total_authors': row['author_count'],
+                     'latest_date': row['latest_date']}
+            new_cache = {}
+            for pg in (1, 2):
+                new_cache[pg] = _build_index_page(cursor, pg, 20, stats)
+        finally:
+            cursor.close()
+            conn.close()
+        _index_cache = new_cache
+        _index_cache_version = row['updated_at']
+        _index_cache_last_checked = datetime.now()
+        _index_cache_rebuild_after = None
+        logger.info("Index cache rebuilt (pages 1-2, %d papers)", stats['total'])
 
 
 def _index_cache_is_fresh():
@@ -489,12 +541,6 @@ def _index_cache_is_fresh():
 
 
 app.extensions['rebuild_index_cache'] = rebuild_index_cache
-
-# Warm cache on startup
-try:
-    rebuild_index_cache()
-except Exception:
-    logger.warning("Could not pre-warm index cache on startup")
 
 
 def _clean_doi_title(title):
@@ -672,46 +718,6 @@ def doi2bib(doi, paper_data=None):
 app.teardown_appcontext(close_db_connection)
 
 
-def ensure_author_slugs():
-    """Add slug column if missing and populate any NULL slugs. Uses its own connection (runs at startup)."""
-    conn = pymysql.connect(**DB_CONFIG, cursorclass=pymysql.cursors.DictCursor)
-    cursor = conn.cursor()
-    try:
-        # Add slug column if it doesn't exist
-        cursor.execute("SHOW COLUMNS FROM authors LIKE 'slug'")
-        if not cursor.fetchone():
-            cursor.execute("ALTER TABLE authors ADD COLUMN slug VARCHAR(255)")
-            cursor.execute("CREATE INDEX idx_author_slug ON authors(slug)")
-            conn.commit()
-
-        # Populate missing slugs
-        cursor.execute("SELECT id, name FROM authors WHERE slug IS NULL")
-        authors = cursor.fetchall()
-        if authors:
-            for author in authors:
-                cursor.execute("UPDATE authors SET slug = %s WHERE id = %s",
-                               (slugify(author['name']), author['id']))
-            conn.commit()
-    finally:
-        cursor.close()
-        conn.close()
-
-
-# Populate slugs on startup
-try:
-    ensure_author_slugs()
-except pymysql.Error as e:
-    logger.warning("ensure_author_slugs skipped (DB unavailable): %s", e)
-
-
-try:
-    ensure_site_stats()
-except pymysql.Error as e:
-    logger.warning("ensure_site_stats skipped (DB unavailable): %s", e)
-
-
-
-
 @app.route('/')
 def index():
     """Homepage - list recent papers."""
@@ -722,7 +728,7 @@ def index():
     if not session.get('user_id') and page in (1, 2):
         if page not in _index_cache or not _index_cache_is_fresh():
             try:
-                rebuild_index_cache()
+                rebuild_index_cache(refresh_stats=False)
             except Exception as e:
                 logger.warning("Could not refresh index cache: %s", e)
         if page in _index_cache:

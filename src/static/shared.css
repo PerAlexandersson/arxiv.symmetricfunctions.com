@@ -604,7 +604,9 @@ body.modal-open { overflow: hidden; }
   box-shadow: 0 4px 14px rgba(0,0,0,0.15);
 }
 .save-dropdown-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   width: 100%;
   border: 0;
   background: transparent;
@@ -615,6 +617,14 @@ body.modal-open { overflow: hidden; }
   color: var(--c-text-main);
   white-space: nowrap;
 }
+.save-dropdown-check {
+  display: inline-block;
+  width: 0.8rem;
+  color: var(--c-link);
+  font-weight: 700;
+  text-align: center;
+}
+.save-dropdown-item--selected { color: var(--c-link); }
 .save-dropdown-item:hover,
 .save-dropdown-item:focus-visible { background: var(--c-bg-gray); color: var(--c-brand); }
 .save-dropdown-new       { color: var(--c-link); border-top: 1px solid var(--c-border); }

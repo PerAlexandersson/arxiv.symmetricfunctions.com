@@ -1,5 +1,6 @@
--- Migration: add user/personalization tables used by auth, lists, and feed
--- Safe to run on an existing database (uses IF NOT EXISTS and additive backfills)
+-- Historical prerequisite: add user/personalization tables used by auth,
+-- lists, and feed. After this script, run migrate_normalize_user_lists.sql to
+-- replace its legacy name/arXiv-ID membership table with stable foreign keys.
 -- Run: mysql -u arxiv_user -p arxiv_frontend < database/migrate_users.sql
 
 CREATE TABLE IF NOT EXISTS users (
