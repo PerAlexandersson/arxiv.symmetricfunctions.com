@@ -2,9 +2,9 @@
 
 ## Current scope
 
-Active ownership (2026-09-15): the host supervisor owns the remaining
-six-month DOI queue top-up, its local review state, production merge, and this
-handoff entry. No project source file is being edited for the operation.
+Ownership released (2026-09-15): the remaining six-month DOI queue top-up,
+Luna review, production merge, and postflight verification are complete. No
+worker owns the DOI top-up state or this handoff entry.
 
 Public read-only REST access and a repository-local MCP adapter for agent
 review of recent combinatorics papers. The deployed range/category filters
@@ -31,6 +31,42 @@ to production and verified. No worker owns the top-up or DOI-review state.
 
 ## Status
 
+- The remaining six-month DOI queue has been cleared and merged to production.
+  The guarded run made 14,657 Crossref queries, including retries and records
+  reopened after collision correction; it found 7,715 candidates and
+  auto-approved 6,025. Luna parity-review lanes and a separate collision audit
+  covered all 1,690 lower-confidence candidates: the reconciled plans approved
+  734, rejected 568, and retained 388 for admin review. Two auto-approved Part
+  I/II candidates were also reopened for admin, so production now has 414
+  pending candidates including the 24 that predated this run. Collision review
+  cleared 55 false assignments in total. The ambiguous restricted-signed-
+  sumsets Part I/II records have reciprocal public editor notes and no journal
+  DOI assignment; their two candidates remain pending. The hypercube
+  same-title collision was resolved from authoritative author/abstract data:
+  DOI `10.1137/24M1670093` remains on arXiv `2401.01769`, while the distinct
+  arXiv `2501.19029` assignment was cleared/rejected and given an editor note.
+- Four concurrent Crossref lanes initially produced 16 retryable request
+  errors. The guard stopped the affected runs, all 16 papers remained eligible,
+  and a cooldown followed by three disjoint year lanes completed without any
+  further request errors. The final 180-day-age/180-day-recheck eligible count
+  is zero. Production has 81,564 papers, 48,692 DOI-bearing papers, 35,315
+  approved candidates, 2,953 rejected candidates, 414 pending candidates, no
+  candidate orphans, and the original 41 shared normalized DOI owner sets.
+- The signed production plan performed 14,666 paper updates, 7,715 candidate
+  inserts, and 26 candidate updates while preserving all production papers,
+  users, lists, and keywords. Its internal SHA-256 is
+  `c0112001f1548e8ee011db2e0e4313ce9775038fdadd4d5071f2314caf33a09c`.
+  The full rollback rehearsal passed before the exact plan committed. The fresh
+  pre-merge production backup is retained remotely as
+  `~/domains/arxiv.symmetricfunctions.com/backups/pre-doi-remaining-topup-20260915T171300Z.sql.gz`
+  and locally under `.cache/arxiv.symmetricfunctions.com/backups/` with SHA-256
+  `cbcae7b5be4264578957c32922731f98f1e2f9df6789f9248cf717db8f7eca61`.
+  The run plans, review artifacts, receipts, and logs are under
+  `.cache/arxiv.symmetricfunctions.com/doi-topup-remaining-20260915T135307Z/`;
+  the initial local backup has SHA-256
+  `0eee6ebd6224b92e3fcb9e1dcabc1ea5bc278b2b3ca52f691625ee89ad1fa1fe`.
+  Independent production SQL postflight matches the committed receipt, and the
+  homepage plus `/api/v1/status` both return HTTP 200.
 - A guarded 2,000-paper DOI top-up is complete in production. Local was first
   replaced from a fresh production snapshot after preserving its prior state.
   Four committed 500-paper runs queried exactly 2,000 papers under the 180-day
