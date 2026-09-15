@@ -461,17 +461,23 @@ python3 database/push_local_doi_state.py \
 
 # Or directly
 cd src && source ../venv/bin/activate
-python3 doi_lookup.py --batch 50 --auto-approve 0.90 --to-date 2023-01-01
+python3 doi_lookup.py --batch 250 --auto-approve 0.95
 python3 bib_doi_backfill.py /path/to/file.bib   # bulk backfill from .bib file
 ```
 
-- Matches ≥ 90% are auto-approved; ≤ 60% are auto-rejected
+- Routine matches at least 95% are auto-approved; lower-confidence matches at
+  least 60% are staged for review, while weaker results are not staged. The
+  CLI threshold remains configurable.
 - 61-89% go to `/admin/dois` for manual review
 - Admin UI has date range controls; defaults to 1 year ago → today
 - Admin can manually set DOIs on individual paper pages
 - Papers that predate their Crossref match are automatically filtered out
 - DOI provenance: `arxiv` (from arXiv metadata), `auto` (Crossref match), `verified` (admin-approved), `skipped` (unlikely to ever get a DOI)
 - `doi_checked_at` tracks when each paper was last queried (skipped for 180 days)
+- Routine discovery waits until a preprint is at least 180 days old and takes
+  the top 250 due papers. Priority order is: journal reference present,
+  never-checked papers aged 6--24 months, older never-checked papers, then due
+  rechecks. Explicit CLI date filters can still narrow a recovery batch.
 - Crossref request failures do not update `doi_checked_at`; the paper remains
   eligible for the next run, and the DOI command exits nonzero after preserving
   any successful results from the same batch.

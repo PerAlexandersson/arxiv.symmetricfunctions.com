@@ -532,7 +532,7 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(3, snapshot['pending'])
         self.assertEqual(20345, snapshot['eligible'])
         self.assertEqual(date(2023, 1, 2), snapshot['oldest_eligible'])
-        self.assertEqual((30, 180), cursor.queries[1][1])
+        self.assertEqual((180, 180), cursor.queries[1][1])
 
     def test_cron_summary_reports_latest_failure_and_doi_state(self):
         import admin as admin_module

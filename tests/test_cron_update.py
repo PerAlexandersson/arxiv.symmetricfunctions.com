@@ -30,8 +30,8 @@ class CronUpdateScriptTests(unittest.TestCase):
 
     def test_runs_fetch_then_doi_lookup_with_overrides(self):
         self.assertIn('FETCH_DAYS="${FETCH_DAYS:-}"', self.script)
-        self.assertIn('DOI_BATCH="${DOI_BATCH:-50}"', self.script)
-        self.assertIn('DOI_MIN_AGE="${DOI_MIN_AGE:-30}"', self.script)
+        self.assertIn('DOI_BATCH="${DOI_BATCH:-250}"', self.script)
+        self.assertIn('DOI_MIN_AGE="${DOI_MIN_AGE:-180}"', self.script)
         self.assertIn('DOI_RECHECK="${DOI_RECHECK:-180}"', self.script)
         self.assertIn(
             'python3 src/fetch_arxiv.py "${fetch_args[@]}"',

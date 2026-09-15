@@ -181,7 +181,7 @@ def _cron_log_summary(log_text):
     }
 
 
-def _doi_attention_snapshot(cursor, min_age_days=30, recheck_days=180):
+def _doi_attention_snapshot(cursor, min_age_days=180, recheck_days=180):
     """Return the manual-review queue and automated DOI scan backlog."""
     cursor.execute("""
         SELECT COUNT(*) AS pending

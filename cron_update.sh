@@ -9,8 +9,8 @@
 #   ARXIV_CRON_LOG_DIR=$HOME/logs     # default
 #   ARXIV_CRON_LOCK_DIR=$HOME/.cache/arxiv-cron
 #   FETCH_DAYS=3                       # optional checkpoint override
-#   DOI_BATCH=50
-#   DOI_MIN_AGE=30
+#   DOI_BATCH=250
+#   DOI_MIN_AGE=180
 #   DOI_RECHECK=180
 #   DOI_AUTO_APPROVE=0.95             # set to "none" to only stage candidates
 
@@ -23,8 +23,8 @@ LOG_FILE="$LOG_DIR/arxiv-update.log"
 LOCK_FILE="$LOCK_DIR/update.lock"
 
 FETCH_DAYS="${FETCH_DAYS:-}"
-DOI_BATCH="${DOI_BATCH:-50}"
-DOI_MIN_AGE="${DOI_MIN_AGE:-30}"
+DOI_BATCH="${DOI_BATCH:-250}"
+DOI_MIN_AGE="${DOI_MIN_AGE:-180}"
 DOI_RECHECK="${DOI_RECHECK:-180}"
 DOI_AUTO_APPROVE="${DOI_AUTO_APPROVE:-0.95}"
 

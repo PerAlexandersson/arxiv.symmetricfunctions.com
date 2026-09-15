@@ -15,8 +15,21 @@ are deployed, verified, committed, and pushed. No worker owns these files.
 Ownership released (2026-09-15): Crossref failure-state handling is deployed,
 verified, committed, and pushed. No worker owns these files.
 
+Ownership active (2026-09-15): the host supervisor owns the six-month DOI
+eligibility policy, priority ordering, cron batch defaults, and their tests.
+
 ## Status
 
+- The routine DOI queue now has a 180-day minimum paper age and a 250-paper
+  batch size. Due work is ordered by explicit bands: journal-reference papers,
+  never-checked papers aged 6--24 months, older never-checked papers, then due
+  rechecks. Stable within-band ordering prevents random churn. The production
+  read-only projection under this policy is 16,639 eligible papers: 250 with a
+  journal reference, 8,954 other never-checked papers aged 6--24 months, and
+  7,435 older never-checked papers; no rechecks are due. Another 4,879 DOI-less
+  papers are younger than six months. Local MariaDB returned journal-reference
+  records for the first ten queue positions. All 117 tests and syntax/whitespace
+  checks pass; deployment is pending this checkpoint.
 - A follow-up production breakdown confirmed that all 20,345 currently eligible
   papers have never been DOI-checked: 5,006 are from 2026, 6,042 from 2025,
   5,180 from 2024, and 4,117 from 2023. None are 180-day rechecks. The 30-day

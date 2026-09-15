@@ -8,7 +8,12 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 
 import doi_lookup as doi_lookup_module
-from doi_lookup import filter_rejected_doi_items, query_crossref, score_match
+from doi_lookup import (
+    filter_rejected_doi_items,
+    get_papers_needing_doi,
+    query_crossref,
+    score_match,
+)
 from title_matching import (
     author_coverage_similarity,
     author_last_name,
@@ -22,6 +27,19 @@ from title_matching import (
 
 
 class NormalizeTests(unittest.TestCase):
+    def test_doi_queue_uses_explicit_priority_bands(self):
+        cursor = mock.Mock()
+        cursor.fetchall.return_value = []
+
+        self.assertEqual([], get_papers_needing_doi(cursor, 250, 180))
+
+        sql, params = cursor.execute.call_args.args
+        self.assertIn("TRIM(p.journal_ref) <> '' THEN 0", sql)
+        self.assertIn('INTERVAL 730 DAY', sql)
+        self.assertIn('ORDER BY queue_priority', sql)
+        self.assertIn('p.doi_checked_at ASC', sql)
+        self.assertEqual([180, 180, 250], params)
+
     def test_rejected_doi_candidates_are_not_reconsidered(self):
         items = [
             {'DOI': '10.1000/Rejected'},

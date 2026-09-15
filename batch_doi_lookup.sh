@@ -4,7 +4,7 @@
 # Usage:
 #   ./batch_doi_lookup.sh                        # 500 papers from 2023-01-01 backwards
 #   ./batch_doi_lookup.sh 200                    # custom batch size
-#   ./batch_doi_lookup.sh 500 0.85               # custom batch + threshold
+#   ./batch_doi_lookup.sh 500 0.95               # custom batch + threshold
 #   ./batch_doi_lookup.sh 500 0.90 2020-01-01    # start from a specific date backwards
 
 set -e
@@ -13,7 +13,7 @@ cd "$SCRIPT_DIR"
 source activate_venv.sh
 
 BATCH=${1:-500}
-THRESHOLD=${2:-0.90}
+THRESHOLD=${2:-0.95}
 START_DATE=${3:-2023-01-01}
 
 echo "============================================="
@@ -30,5 +30,5 @@ cd src
 python3 doi_lookup.py \
     --batch "$BATCH" \
     --auto-approve "$THRESHOLD" \
-    --min-age 60 \
+    --min-age 180 \
     --to-date "$START_DATE"

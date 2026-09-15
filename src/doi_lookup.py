@@ -6,9 +6,9 @@ Queries Crossref for papers that lack a DOI, scores matches by title/author
 similarity, and inserts candidates into doi_candidates for admin review.
 
 Usage:
-    python3 doi_lookup.py                     # 50 papers (default)
+    python3 doi_lookup.py                     # top 250 queued papers (default)
     python3 doi_lookup.py --batch 100         # process 100 papers
-    python3 doi_lookup.py --min-age 30        # only papers published >30 days ago
+    python3 doi_lookup.py --min-age 180       # only papers published >6 months ago
     python3 doi_lookup.py --dry-run           # print matches without writing
     python3 doi_lookup.py --auto-approve 0.95 # auto-promote high-confidence matches
 """
@@ -32,6 +32,10 @@ from site_stats import mark_index_cache_dirty
 CROSSREF_API = "https://api.crossref.org/works"
 USER_AGENT = "arxiv-symmetricfunctions/1.0 (mailto:per.alexandersson@math.su.se)"
 REQUEST_DELAY = 0.5  # seconds between Crossref requests
+DEFAULT_BATCH_SIZE = 250
+DEFAULT_MIN_AGE_DAYS = 180
+DEFAULT_RECHECK_DAYS = 180
+RECENT_PRIORITY_DAYS = 730
 
 
 def _mark_index_cache_dirty_after_doi_changes(count):
@@ -174,10 +178,12 @@ def query_crossref(title, first_author_last):
 
 def get_papers_needing_doi(cursor, batch_size, min_age_days,
                            recheck_days=180, from_date=None, to_date=None):
-    """Find papers without DOI that haven't been checked recently.
+    """Return the highest-priority papers currently due for a DOI check.
 
     Skips papers with doi_checked_at within the last recheck_days,
-    and papers with pending/approved candidates.
+    and papers with pending/approved candidates. Within the due queue, journal
+    references come first, followed by never-checked papers between the minimum
+    age and two years, older never-checked papers, and finally due rechecks.
     """
     conditions = [
         "p.doi IS NULL",
@@ -201,10 +207,23 @@ def get_papers_needing_doi(cursor, batch_size, min_age_days,
 
     params.append(batch_size)
     cursor.execute(f"""
-        SELECT p.id, p.arxiv_id, p.title, p.published_date
+        SELECT p.id, p.arxiv_id, p.title, p.published_date,
+               CASE
+                 WHEN p.journal_ref IS NOT NULL AND TRIM(p.journal_ref) <> '' THEN 0
+                 WHEN p.doi_checked_at IS NULL
+                  AND p.published_date > DATE_SUB(
+                      CURDATE(), INTERVAL {RECENT_PRIORITY_DAYS} DAY
+                  ) THEN 1
+                 WHEN p.doi_checked_at IS NULL THEN 2
+                 ELSE 3
+               END AS queue_priority
         FROM papers p
         WHERE {' AND '.join(conditions)}
-        ORDER BY p.published_date DESC
+        ORDER BY queue_priority,
+                 CASE WHEN p.doi_checked_at IS NULL
+                      THEN p.published_date END DESC,
+                 p.doi_checked_at ASC,
+                 p.id ASC
         LIMIT %s
     """, params)
     return cursor.fetchall()
@@ -245,10 +264,11 @@ def filter_rejected_doi_items(items, rejected_dois):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Find DOIs via Crossref')
-    parser.add_argument('--batch', type=int, default=50, help='papers per run')
-    parser.add_argument('--min-age', type=int, default=30,
+    parser.add_argument('--batch', type=int, default=DEFAULT_BATCH_SIZE,
+                        help='papers per run')
+    parser.add_argument('--min-age', type=int, default=DEFAULT_MIN_AGE_DAYS,
                         help='skip papers published fewer than N days ago')
-    parser.add_argument('--recheck', type=int, default=180,
+    parser.add_argument('--recheck', type=int, default=DEFAULT_RECHECK_DAYS,
                         help='skip papers checked within N days (default 180)')
     parser.add_argument('--from-date', type=str, default=None,
                         help='only papers published on or after this date (YYYY-MM-DD)')
