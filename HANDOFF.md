@@ -2,6 +2,10 @@
 
 ## Current scope
 
+Active ownership (2026-09-15): the host supervisor owns the remaining
+six-month DOI queue top-up, its local review state, production merge, and this
+handoff entry. No project source file is being edited for the operation.
+
 Public read-only REST access and a repository-local MCP adapter for agent
 review of recent combinatorics papers. The deployed range/category filters
 support the date-range paper-scout consumer in `tools/paper-cache-mcp`.
