@@ -6,16 +6,14 @@ Public read-only REST access and a repository-local MCP adapter for agent
 review of recent combinatorics papers. The deployed range/category filters
 support the date-range paper-scout consumer in `tools/paper-cache-mcp`.
 
-Active ownership (2026-09-15): the host supervisor owns `src/fetch_arxiv.py`,
-the new OAI/RSS ingestion helper and tests, `cron_update.sh`, the fetch/cron
-admin surfaces, and the corresponding scheduling documentation while repairing
-rate-limited production updates. No Docker worker currently owns these files.
+Ownership released (2026-09-15): the rate-limited ingestion repair is deployed,
+verified, committed, and pushed. No worker currently owns the fetch/cron files.
 
 ## Status
 
 - The database migration and REST application are live.
-- A rate-limit-resilient recent-fetch repair is implemented locally on
-  2026-09-15 and awaiting deployment. Routine fetches now resume inclusively
+- A rate-limit-resilient recent-fetch repair was deployed on 2026-09-15 in
+  commit `e49cac9`. Routine fetches now resume inclusively
   from `MAX(published_date)`, ingest full current metadata through arXiv's
   OAI-PMH `math:math:CO` set, retain one shared throttled Atom fallback, and
   compare the result with the current math.CO RSS announcement. Cron, CLI,
@@ -24,6 +22,17 @@ rate-limited production updates. No Docker worker currently owns these files.
   fetch-only recovery. The complete unit suite passes (109 tests), Python 3.9
   grammar parsing passes, Bash syntax passes, and a cached live OAI sample of
   437 records parses with exact v1--v7 revisions and no missing core metadata.
+- Production source checksums match the committed files and import successfully
+  under Python 3.9.23. The cron entry now runs the locked wrapper at 06:30 on
+  Tuesday--Saturday; the 03:00 backup entry is unchanged. Before catch-up, the
+  2026-09-15 daily production backup passed `gzip -t`.
+- The fetch-only production catch-up processed 437 OAI records without a
+  per-paper error and added 186 missing papers. Paper count rose from 81,378 to
+  81,564, latest publication advanced from 2026-09-10 to 2026-09-14, all 190
+  IDs in the current math.CO RSS feed are stored, and formerly missing
+  `2609.13214` resolves through the public API. DOI discovery was deliberately
+  skipped for this recovery run. The timestamped wrapper log records a clean
+  completion, and no fetch-related process remains.
 - The REST API lives under `/api/v1` with OpenAPI documentation.
 - The optional MCP server lives under `mcp_server/` and calls the REST API.
 - arXiv base IDs and revisions are now modeled separately by the fetcher.
