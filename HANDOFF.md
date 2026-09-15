@@ -2,9 +2,9 @@
 
 ## Current scope
 
-Active ownership (2026-09-15): the host supervisor owns the complete 414-row
-pending DOI admin review, its guarded local decisions, production merge, and
-this handoff entry. Luna agents are read-only evidence reviewers only.
+Ownership released (2026-09-15): the complete 414-row pending DOI admin review,
+guarded local application, and production merge are finished. No worker owns
+the DOI admin-review state or this handoff entry.
 
 Ownership released (2026-09-15): the remaining six-month DOI queue top-up,
 Luna review, production merge, and postflight verification are complete. No
@@ -35,6 +35,44 @@ to production and verified. No worker owns the top-up or DOI-review state.
 
 ## Status
 
+- The 414-row DOI admin queue is completely reviewed and merged to production.
+  A fresh read-only triage supplied 26 deterministic approvals/replacements and
+  74 stale-conflict rejections; three read-only evidence lanes then covered all
+  314 remaining records exactly once. Their raw recommendations were 45
+  approvals and 269 rejections. Supervisor adjudication rejected six
+  near-title false matches (including an SSRN copy, k-CSP part V versus VII,
+  completely simple versus completely 0-simple semigroups, a companion
+  exercise sheet, different drug families, and strong versus super-stable
+  roommates) and approved the deliberately shared JNT Part I/II publication
+  after checking that the publisher article contains both sections. The signed
+  final plan therefore made 62 direct approvals, four independently confirmed
+  DOI replacements, and 348 rejections. Six concise false-match notes were
+  added, and the two temporary JNT notes were replaced with definitive
+  reciprocal publication notes.
+- The local review plan SHA-256 is
+  `7f1ff0de349432106b803bb067c4d725acb3bee994981924ee0ab1cf1311f300`;
+  its rollback rehearsal passed before local commit. The exact production plan
+  updated 72 paper rows, inserted four replacement candidates, and updated all
+  414 reviewed candidate rows. Its internal SHA-256 is
+  `47ae94b5525a2eb28be7762000d3b620e1541072bd883ff575c691f86812d7a6`;
+  its full production rollback rehearsal also passed before commit. Production
+  now has 81,564 papers, 48,758 DOI-bearing papers, 35,381 approved candidates,
+  3,305 rejected candidates, zero pending candidates, zero candidate orphans,
+  790 public editor notes, and exactly 42 shared normalized DOI owner sets. The
+  only new shared set is the documented JNT combined publication. The
+  180-day-age/180-day-recheck eligible queue remains zero, users/lists/keywords
+  were preserved, and the homepage plus `/api/v1/status` both return HTTP 200.
+- Review plans, evidence artifacts, adjudications, receipts, and merge results
+  are under
+  `/home/paxinum/.cache/arxiv.symmetricfunctions.com/doi-admin-review-20260915T172500Z/`.
+  The fresh pre-review local backup is
+  `backups/local-pre-admin-review-20260915T193700Z.sql.gz` with SHA-256
+  `243de5767ee39fced1f9039c001acd78e4a4fb52e5a274d8a440cf5e43fdd176`.
+  The fresh pre-merge production backup is retained remotely as
+  `~/domains/arxiv.symmetricfunctions.com/backups/pre-doi-admin-review-20260915T194300Z.sql.gz`
+  and locally under `.cache/arxiv.symmetricfunctions.com/backups/`, with
+  SHA-256
+  `299652e47e228cdc5939cb222d9ab4e6ac7e1fcea8f552f98b731d3459da3d0c`.
 - The remaining six-month DOI queue has been cleared and merged to production.
   The guarded run made 14,657 Crossref queries, including retries and records
   reopened after collision correction; it found 7,715 candidates and
