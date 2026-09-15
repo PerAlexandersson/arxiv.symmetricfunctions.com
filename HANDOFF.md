@@ -2,6 +2,10 @@
 
 ## Current scope
 
+Active ownership (2026-09-15): the host supervisor owns the complete 414-row
+pending DOI admin review, its guarded local decisions, production merge, and
+this handoff entry. Luna agents are read-only evidence reviewers only.
+
 Ownership released (2026-09-15): the remaining six-month DOI queue top-up,
 Luna review, production merge, and postflight verification are complete. No
 worker owns the DOI top-up state or this handoff entry.
