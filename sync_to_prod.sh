@@ -23,7 +23,7 @@ set -euo pipefail
 REMOTE_HOST="symmetricf@ns12.inleed.net"
 REMOTE_PORT="2020"
 REMOTE_PATH="domains/arxiv.symmetricfunctions.com"
-ARXIV_PYTHON_VERSION="${ARXIV_PYTHON_VERSION:-3.9}"
+ARXIV_PYTHON_VERSION="${ARXIV_PYTHON_VERSION:-3.11}"
 REMOTE_VENV="~/virtualenv/domains/arxiv.symmetricfunctions.com/$ARXIV_PYTHON_VERSION/bin/activate"
 PASSENGER_PYTHON="/home/symmetricf/virtualenv/domains/arxiv.symmetricfunctions.com/$ARXIV_PYTHON_VERSION/bin/python3"
 

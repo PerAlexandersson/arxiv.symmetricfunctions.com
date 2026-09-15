@@ -2,11 +2,10 @@
 
 ## Current scope
 
-Ownership released (2026-09-15): the saved-list membership picker,
-normalized-list migration, backend audit repairs, and deployment guard are
-implemented and verified locally. No worker owns these files. Production was
-not changed; its list schema is still legacy and the deploy guard correctly
-refuses rollout until the migration is applied.
+Ownership active (2026-09-15): the host supervisor completed the saved-list
+migration and application rollout. The only remaining item is confirming the
+user's in-progress cPanel Python 3.11 selector change; do not edit cPanel's
+selector files directly.
 
 Ownership released (2026-09-15): the complete 414-row pending DOI admin review,
 guarded local application, and production merge are finished. No worker owns
@@ -41,6 +40,25 @@ to production and verified. No worker owns the top-up or DOI-review state.
 
 ## Status
 
+- The saved-list/backend audit release is live. Before migration, production
+  had 81,564 papers, three users, 12 list categories, 282 memberships, and zero
+  unmappable rows. The remote and local gzip-verified backup is
+  `pre-list-normalization-20260915T204535Z.sql.gz`, SHA-256
+  `bf93d67020e8e5f7013a90c4f53b91ad314e33acb16cc521821f580bbb453ede`.
+  The migration committed 282 normalized memberships, retained 282 immediate
+  rollback rows in `user_lists_legacy_20260915`, and has zero foreign-key
+  orphans. Deployed checksums match commit `0f5398a`; the homepage, API status,
+  and login page return HTTP 200, security headers are present, and the SymCat
+  cache contains 2,112 labels. A disposable production route test passed save,
+  membership reporting, list rendering, rename, remove, and delete, then
+  cleaned itself up; final counts remain three users, 12 categories, and 282
+  memberships.
+- Python 3.11.16 now exists at the expected cPanel virtualenv, all pinned
+  requirements are installed there, the application imports successfully, and
+  the generated `.htaccess` plus deploy default point to 3.11. However,
+  `~/.cl.selector/python-selector.json` still reports Python 3.9 and Passenger
+  is spawning 3.9 workers. The user is updating this through cPanel; wait for
+  that action, then verify live worker command lines and HTTP/database health.
 - The backend audit repair is complete locally. Paper menus show a checked
   state for every list already containing the paper and can add/remove several
   memberships without closing. Custom-list deletion is supported and now

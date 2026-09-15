@@ -217,7 +217,7 @@ schema.
 ## MCP Server
 
 The optional MCP adapter lives in this repository but runs separately from the
-Python 3.9 Passenger application. It requires Python 3.10 or newer:
+Passenger application. It requires Python 3.10 or newer:
 
 ```bash
 python3 -m venv ~/.cache/arxiv-mcp-venv

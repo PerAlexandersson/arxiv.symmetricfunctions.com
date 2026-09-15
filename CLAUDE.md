@@ -92,8 +92,7 @@ Config loader: `src/config.py`.
 
 The optional MCP server requires Python 3.10+ and the separate
 `requirements-mcp.txt`. It calls the public REST API and never receives
-database credentials. The Passenger Flask application remains Python 3.9
-compatible and must not import the MCP package.
+database credentials. It stays isolated from the Passenger Flask application.
 
 ### CLI scripts (`src/`)
 
@@ -127,7 +126,7 @@ compatible and must not import the MCP package.
 
 - **Server:** `symmetricf@ns12.inleed.net` (SSH port 2020)
 - **Remote path:** `~/domains/arxiv.symmetricfunctions.com/`
-- **Remote venv:** `~/virtualenv/domains/arxiv.symmetricfunctions.com/3.9/`
+- **Remote venv:** `~/virtualenv/domains/arxiv.symmetricfunctions.com/3.11/`
 - **Deploy:** `./sync_to_prod.sh` (scp-based code/config deploy, restarts via `touch passenger_wsgi.py`)
 - **Cron:** fetch every 6h, daily DB backup at 3am (see `CRONJOBS.md`)
 
