@@ -18,8 +18,26 @@ verified, committed, and pushed. No worker owns these files.
 Ownership released (2026-09-15): the six-month DOI priority policy is deployed,
 verified, committed, and pushed. No worker owns these files.
 
+Ownership released (2026-09-15): the production-to-local DOI comparison helper
+no longer places a database password in local process arguments or failure
+exceptions. No worker owns these files.
+
 ## Status
 
+- A read-only top-up preflight found production ahead of the current local
+  database: 81,564 versus 80,447 papers, 30,443 versus 30,428 DOI candidates,
+  and 282 versus 180 saved-list rows. A DOI-state dry run found 1,817 paper
+  updates, 283 candidate inserts, 3,016 candidate updates, and two
+  production-only papers relative to the local snapshot. Therefore any manual
+  DOI top-up should first preserve the current local database as a dated backup
+  and replace the working local database with a fresh production snapshot.
+  No top-up or database write has been run; the intended top-up size still
+  requires a deliberate choice.
+- The DOI-state comparison helper now sources database credentials only on the
+  production host and reports SSH/query failures without embedding the command
+  or credential. The credential previously appeared in local diagnostic output
+  and should be rotated separately. The repaired dry run completed successfully,
+  Bash syntax and whitespace checks pass, and all 118 tests pass.
 - The routine DOI queue now has a 180-day minimum paper age and a 250-paper
   batch size. Due work is ordered by explicit bands: journal-reference papers,
   never-checked papers aged 6--24 months, older never-checked papers, then due

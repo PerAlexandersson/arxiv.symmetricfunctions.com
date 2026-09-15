@@ -39,11 +39,6 @@ if [[ ! -f "$ROOT_DIR/.env" ]]; then
     echo "Error: $ROOT_DIR/.env not found."
     exit 1
 fi
-if [[ ! -f "$ROOT_DIR/.env.production" ]]; then
-    echo "Error: $ROOT_DIR/.env.production not found."
-    exit 1
-fi
-
 source "$ROOT_DIR/activate_venv.sh"
 
 python3 - "$MODE" "$ROOT_DIR" <<'PY'
@@ -74,18 +69,24 @@ def decode_b64(value):
     return base64.b64decode(value).decode("utf-8")
 
 
-def fetch_prod_rows(prod_env, sql):
+def fetch_prod_rows(sql):
     remote_cmd = (
-        f"MYSQL_PWD={shlex.quote(prod_env['DB_PASSWORD'])} "
-        f"mysql -N -B --raw -u {shlex.quote(prod_env['DB_USER'])} "
-        f"{shlex.quote(prod_env['DB_NAME'])} -e {shlex.quote(sql)}"
+        ". \"$HOME/domains/arxiv.symmetricfunctions.com/.env\"; "
+        "MYSQL_PWD=\"$DB_PASSWORD\" mysql -N -B --raw "
+        "-u \"$DB_USER\" \"$DB_NAME\" "
+        f"-e {shlex.quote(sql)}"
     )
     res = subprocess.run(
         ["ssh", "-p", REMOTE_PORT, REMOTE_HOST, remote_cmd],
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
     )
+    if res.returncode:
+        detail = res.stderr.strip() or "no diagnostic output"
+        raise RuntimeError(
+            f"production DOI query failed (exit {res.returncode}): {detail}"
+        )
     if not res.stdout.strip():
         return []
     return list(csv.reader(io.StringIO(res.stdout), delimiter="\t"))
@@ -141,16 +142,13 @@ def sample_lines(label, items, formatter):
 mode = sys.argv[1]
 root_dir = sys.argv[2]
 
-prod_env = dotenv_values(f"{root_dir}/.env.production")
 local_env = dotenv_values(f"{root_dir}/.env")
-for name, env in (("production", prod_env), ("local", local_env)):
-    for key in ("DB_USER", "DB_PASSWORD", "DB_NAME"):
-        if not env.get(key):
-            raise SystemExit(f"Missing {key} in {name} env")
+for key in ("DB_USER", "DB_PASSWORD", "DB_NAME"):
+    if not local_env.get(key):
+        raise SystemExit(f"Missing {key} in local env")
 
 print("Fetching production DOI papers...")
 prod_papers_rows = fetch_prod_rows(
-    prod_env,
     "SELECT arxiv_id, doi, doi_status, "
     "COALESCE(CAST(doi_confidence AS CHAR), ''), "
     "COALESCE(DATE_FORMAT(doi_checked_at, '%Y-%m-%d %H:%i:%s'), '') "
@@ -162,7 +160,6 @@ print(f"  {len(prod_papers_rows)} rows")
 
 print("Fetching production reviewed DOI candidates...")
 prod_candidates_rows = fetch_prod_rows(
-    prod_env,
     "SELECT p.arxiv_id, dc.doi, COALESCE(CAST(dc.confidence AS CHAR), ''), "
     "REPLACE(TO_BASE64(COALESCE(dc.crossref_title, '')), '\n', ''), "
     "REPLACE(TO_BASE64(COALESCE(dc.crossref_authors, '')), '\n', ''), "
