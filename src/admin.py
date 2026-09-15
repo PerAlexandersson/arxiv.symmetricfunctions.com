@@ -1499,7 +1499,13 @@ def run_doi_lookup():
         # Default: only papers up to end of 2023 (older papers more likely to have DOIs)
         argv += ['--to-date', to_date or '2023-12-31']
         with contextlib.redirect_stdout(buf):
-            doi_main(argv)
+            exit_code = doi_main(argv)
+        if exit_code:
+            return jsonify({
+                'ok': False,
+                'error': 'One or more Crossref requests failed; affected papers remain eligible.',
+                'log': buf.getvalue(),
+            }), 502
         _mark_index_cache_dirty()
         return jsonify({'ok': True, 'log': buf.getvalue()})
     except Exception as e:

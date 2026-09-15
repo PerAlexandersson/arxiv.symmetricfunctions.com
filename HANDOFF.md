@@ -12,8 +12,25 @@ verified, committed, and pushed. No worker currently owns the fetch/cron files.
 Ownership released (2026-09-15): the admin attention banner and DOI/cron audit
 are deployed, verified, committed, and pushed. No worker owns these files.
 
+Ownership active (2026-09-15): the host supervisor owns Crossref failure-state
+handling in the DOI lookup paths and its regression tests.
+
 ## Status
 
+- A follow-up production breakdown confirmed that all 20,345 currently eligible
+  papers have never been DOI-checked: 5,006 are from 2026, 6,042 from 2025,
+  5,180 from 2024, and 4,117 from 2023. None are 180-day rechecks. The 30-day
+  minimum-age rule excludes 1,173 recent DOI-less papers but imposes no maximum
+  age; the pre-2023 corpus was processed previously, while the 2023--2026 cohort
+  accumulated after routine DOI discovery stopped.
+- Crossref request errors are now distinct from successful empty searches. A
+  failed/429 request leaves `doi_checked_at` unchanged so the paper remains
+  eligible, and the main DOI command returns nonzero after committing successful
+  work from the batch, allowing the cron failure marker and admin banner to
+  report the problem. The bibliography backfill path honors the same distinction,
+  and the admin-triggered lookup returns an explicit 502 on partial request
+  failure. All 116 tests plus Python, Bash, JavaScript, and whitespace checks
+  pass; deployment is pending this checkpoint.
 - A production DOI audit found that DOI discovery is the second stage of the
   main update wrapper, not a separate live cron entry. The live scan had not
   run since 2026-08-25; three Crossref candidates remain pending manual review.

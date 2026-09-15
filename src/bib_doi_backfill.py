@@ -141,6 +141,13 @@ def main():
                 else None)
 
         items = query_crossref(paper['title'], first_last)
+        if items is None:
+            print(
+                f"  {arxiv_id}  Crossref request failed "
+                "[left eligible for retry]"
+            )
+            time.sleep(REQUEST_DELAY)
+            continue
 
         best = None
         for item in items:

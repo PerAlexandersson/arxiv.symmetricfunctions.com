@@ -148,7 +148,12 @@ def score_match(paper_title, paper_authors, paper_year, cr_item,
 
 
 def query_crossref(title, first_author_last):
-    """Query Crossref and return top results."""
+    """Query Crossref, returning results or ``None`` on request failure.
+
+    An empty list is a successful lookup with no matches.  Keeping failures
+    distinct prevents callers from recording a transient 429/network error as
+    a completed DOI check.
+    """
     params = {
         'query.bibliographic': title,
         'rows': 3,
@@ -164,7 +169,7 @@ def query_crossref(title, first_author_last):
         return resp.json().get('message', {}).get('items', [])
     except Exception as e:
         print(f"    Crossref error: {e}", file=sys.stderr)
-        return []
+        return None
 
 
 def get_papers_needing_doi(cursor, batch_size, min_age_days,
@@ -264,7 +269,13 @@ def main(argv=None):
                                     to_date=args.to_date)
     print(f"Found {len(papers)} papers to query.")
 
-    stats = {'queried': 0, 'found': 0, 'auto_approved': 0, 'skipped': 0}
+    stats = {
+        'queried': 0,
+        'found': 0,
+        'auto_approved': 0,
+        'skipped': 0,
+        'errors': 0,
+    }
 
     for paper in papers:
         authors = get_paper_authors(cursor, paper['id'])
@@ -274,11 +285,20 @@ def main(argv=None):
                 else int(str(paper['published_date'])[:4]))
 
         items = query_crossref(paper['title'], first_last)
+        stats['queried'] += 1
+        if items is None:
+            stats['errors'] += 1
+            print(
+                f"  {paper['arxiv_id']}  Crossref request failed "
+                "[left eligible for retry]"
+            )
+            time.sleep(REQUEST_DELAY)
+            continue
+
         items = filter_rejected_doi_items(
             items,
             get_rejected_dois(cursor, paper['id']),
         )
-        stats['queried'] += 1
 
         best = None
         for item in items:
@@ -358,8 +378,10 @@ def main(argv=None):
 
     print(f"\nDone. Queried {stats['queried']}, found {stats['found']} "
           f"({stats['auto_approved']} auto-approved), "
-          f"{stats['skipped']} below threshold.")
+          f"{stats['skipped']} below threshold, "
+          f"{stats['errors']} request errors left eligible.")
+    return 1 if stats['errors'] else 0
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

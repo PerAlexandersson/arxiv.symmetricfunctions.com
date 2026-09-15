@@ -1,10 +1,14 @@
+import contextlib
+import io
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 
-from doi_lookup import filter_rejected_doi_items, score_match
+import doi_lookup as doi_lookup_module
+from doi_lookup import filter_rejected_doi_items, query_crossref, score_match
 from title_matching import (
     author_coverage_similarity,
     author_last_name,
@@ -27,6 +31,74 @@ class NormalizeTests(unittest.TestCase):
             [{'DOI': '10.1000/alternative'}],
             filter_rejected_doi_items(items, {' 10.1000/rejected '}),
         )
+
+    def test_crossref_failure_is_distinct_from_successful_empty_result(self):
+        response = mock.Mock()
+        response.raise_for_status.side_effect = RuntimeError('429 Too Many Requests')
+        with mock.patch.object(doi_lookup_module.requests, 'get',
+                               return_value=response), \
+                contextlib.redirect_stderr(io.StringIO()):
+            self.assertIsNone(query_crossref('A title', 'Author'))
+
+        response.raise_for_status.side_effect = None
+        response.json.return_value = {'message': {'items': []}}
+        with mock.patch.object(doi_lookup_module.requests, 'get',
+                               return_value=response):
+            self.assertEqual([], query_crossref('A title', 'Author'))
+
+    def test_failed_crossref_request_leaves_paper_eligible(self):
+        cursor = mock.Mock()
+        connection = mock.Mock()
+        connection.cursor.return_value = cursor
+        paper = {
+            'id': 7,
+            'arxiv_id': '2401.00007v1',
+            'title': 'Retry this paper',
+            'published_date': '2024-01-02',
+        }
+        with mock.patch.object(doi_lookup_module.pymysql, 'connect',
+                               return_value=connection), \
+                mock.patch.object(doi_lookup_module, 'get_papers_needing_doi',
+                                  return_value=[paper]), \
+                mock.patch.object(doi_lookup_module, 'get_paper_authors',
+                                  return_value=['Ada Lovelace']), \
+                mock.patch.object(doi_lookup_module, 'query_crossref',
+                                  return_value=None), \
+                mock.patch.object(doi_lookup_module.time, 'sleep'), \
+                contextlib.redirect_stdout(io.StringIO()):
+            exit_code = doi_lookup_module.main(['--batch', '1'])
+
+        executed_sql = [call.args[0] for call in cursor.execute.call_args_list]
+        self.assertEqual(1, exit_code)
+        self.assertFalse(any('doi_checked_at = NOW()' in sql for sql in executed_sql))
+
+    def test_successful_empty_crossref_result_marks_paper_checked(self):
+        cursor = mock.Mock()
+        connection = mock.Mock()
+        connection.cursor.return_value = cursor
+        paper = {
+            'id': 8,
+            'arxiv_id': '2401.00008v1',
+            'title': 'No published match yet',
+            'published_date': '2024-01-03',
+        }
+        with mock.patch.object(doi_lookup_module.pymysql, 'connect',
+                               return_value=connection), \
+                mock.patch.object(doi_lookup_module, 'get_papers_needing_doi',
+                                  return_value=[paper]), \
+                mock.patch.object(doi_lookup_module, 'get_paper_authors',
+                                  return_value=['Ada Lovelace']), \
+                mock.patch.object(doi_lookup_module, 'get_rejected_dois',
+                                  return_value=set()), \
+                mock.patch.object(doi_lookup_module, 'query_crossref',
+                                  return_value=[]), \
+                mock.patch.object(doi_lookup_module.time, 'sleep'), \
+                contextlib.redirect_stdout(io.StringIO()):
+            exit_code = doi_lookup_module.main(['--batch', '1'])
+
+        executed_sql = [call.args[0] for call in cursor.execute.call_args_list]
+        self.assertEqual(0, exit_code)
+        self.assertTrue(any('doi_checked_at = NOW()' in sql for sql in executed_sql))
 
     def test_tex_math_and_unicode_titles_normalize_together(self):
         tex_title = r"Phase transitions for the minimizers of the $p^{th}$ frame potentials in $\mathbb{R}^2$"
