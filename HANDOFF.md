@@ -12,8 +12,8 @@ verified, committed, and pushed. No worker currently owns the fetch/cron files.
 Ownership released (2026-09-15): the admin attention banner and DOI/cron audit
 are deployed, verified, committed, and pushed. No worker owns these files.
 
-Ownership active (2026-09-15): the host supervisor owns Crossref failure-state
-handling in the DOI lookup paths and its regression tests.
+Ownership released (2026-09-15): Crossref failure-state handling is deployed,
+verified, committed, and pushed. No worker owns these files.
 
 ## Status
 
@@ -30,7 +30,9 @@ handling in the DOI lookup paths and its regression tests.
   report the problem. The bibliography backfill path honors the same distinction,
   and the admin-triggered lookup returns an explicit 502 on partial request
   failure. All 116 tests plus Python, Bash, JavaScript, and whitespace checks
-  pass; deployment is pending this checkpoint.
+  pass. Commit `477541a` is pushed and deployed; a Python 3.9 production-side
+  simulated failure returned the distinct error state, deployed checksums match,
+  and the homepage remains HTTP 200. No DOI scan or database write was run.
 - A production DOI audit found that DOI discovery is the second stage of the
   main update wrapper, not a separate live cron entry. The live scan had not
   run since 2026-08-25; three Crossref candidates remain pending manual review.
