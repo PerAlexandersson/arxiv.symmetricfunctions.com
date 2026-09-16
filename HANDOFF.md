@@ -2,11 +2,8 @@
 
 ## Current scope
 
-Ownership released (2026-09-15): the host supervisor completed the saved-list
-migration and application rollout. Python 3.11 is prepared, but the live
-Passenger group remains cached on 3.9 despite the cPanel selector change; this
-now needs an Inleed/Passenger hosting reload. Do not edit cPanel's selector
-files directly or keep recycling application workers.
+Ownership released (2026-09-16): the saved-list migration, application rollout,
+and Python 3.11 runtime upgrade are complete. No worker owns these files.
 
 Ownership released (2026-09-15): the complete 414-row pending DOI admin review,
 guarded local application, and production merge are finished. No worker owns
@@ -76,6 +73,12 @@ to production and verified. No worker owns the top-up or DOI-review state.
   with the exact 3.11 Passenger directives, selector state, and fresh-worker
   3.9 evidence, and repeated the server-side reload request. Await the next
   support response.
+  The host-side reload subsequently took effect: all observed arXiv Passenger
+  workers now use the Python 3.11 virtualenv, and `pip check`, homepage, API,
+  and login checks pass. Production has three users, 12 categories, 283 current
+  memberships, and zero orphans. The one row beyond the 282-row migration
+  snapshot was newly saved at 2026-09-16 10:31:39, confirming post-migration
+  writes work; the retained rollback table correctly remains at 282 rows.
 - The backend audit repair is complete locally. Paper menus show a checked
   state for every list already containing the paper and can add/remove several
   memberships without closing. Custom-list deletion is supported and now
