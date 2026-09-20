@@ -60,6 +60,10 @@
 
 {# ── Table ── #}
 <div id="doi-tab-content">
+<p id="doi-hidden-notice" role="status" aria-live="polite" hidden>
+  <span id="doi-hidden-message"></span>
+  <button type="button" class="doi-run-btn" data-doi-show-hidden>Show hidden entries</button>
+</p>
 <table class="doi-table">
   <colgroup>
     <col class="doi-col-paper">
@@ -152,5 +156,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='admin-dois.js') }}?v=2"></script>
+<script src="{{ url_for('static', filename='admin-dois.js') }}?v=3"></script>
 {% endblock %}

@@ -36,9 +36,21 @@ function shouldShowConflicts() {
 
 function applyConflictVisibility() {
   const showConflicts = shouldShowConflicts();
-  document.querySelectorAll('#doi-tbody tr.doi-row--conflict').forEach(row => {
+  const rows = document.querySelectorAll('#doi-tbody tr.doi-row--conflict');
+  rows.forEach(row => {
     row.hidden = !showConflicts;
   });
+  const notice = document.getElementById('doi-hidden-notice');
+  const message = document.getElementById('doi-hidden-message');
+  const hiddenCount = showConflicts ? 0 : rows.length;
+  if (notice && message) {
+    notice.hidden = hiddenCount === 0;
+    message.textContent = hiddenCount
+      ? hiddenCount + (hiddenCount === 1 ? ' entry on this page is' : ' entries on this page are') +
+        ' hidden because the proposed DOI is already assigned to another paper. ' +
+        'The tab and banner counts include hidden entries.'
+      : '';
+  }
 }
 
 function setupConflictToggle() {
@@ -83,6 +95,7 @@ function renderRows(candidates) {
   const tbody = document.getElementById('doi-tbody');
   if (!candidates.length) {
     tbody.innerHTML = '<tr><td colspan="3" class="doi-empty">No candidates in this view.</td></tr>';
+    applyConflictVisibility();
     return;
   }
   tbody.innerHTML = candidates.map(c => {
@@ -175,6 +188,16 @@ async function loadTab(tab, page) {
 
 /* ── Delegated click handlers ── */
 document.addEventListener('click', event => {
+  const revealBtn = event.target.closest('[data-doi-show-hidden]');
+  if (revealBtn) {
+    const toggle = document.getElementById('doi-show-conflicts');
+    if (toggle) {
+      toggle.checked = true;
+      toggle.dispatchEvent(new Event('change'));
+    }
+    return;
+  }
+
   const tab = event.target.closest('#doi-tabs a[data-tab]');
   if (tab) {
     event.preventDefault();

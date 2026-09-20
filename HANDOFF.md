@@ -2,6 +2,24 @@
 
 ## Current scope
 
+Active host-supervisor fix (2026-09-20): user requested correcting and deploying
+the DOI conflict-filter empty-view problem. Supervisor owns
+`src/static/admin-dois.js`, `src/templates/admin/dois.html`,
+`tests/test_admin_assets.py`, a focused JavaScript behavior test, and this
+handoff. Live read-only diagnosis found two pending candidates, both attached
+to existing papers and both conflicting with another paper's DOI assignment;
+the browser's saved “Show already assigned” filter can hide both while counts
+correctly stay at two. No candidate approval, rejection, or DB cleanup is part
+of this fix. The website worker is idle and owns none of these files.
+
+Implementation verified: a per-page live notice explains hidden conflict rows
+and that tab/banner totals include them. “Show hidden entries” enables and
+persists the existing filter without approving/rejecting candidates. The notice
+updates on checkbox changes and AJAX table refreshes, and clears on empty
+results. DOI asset cache version is now 3. All 132 Python tests pass (including
+the Node behavior harness); its six focused JavaScript cases, JS syntax check,
+and `git diff --check` pass. Production deployment/postflight is next.
+
 Deployed and verified by host supervisor (2026-09-20): application fix
 `b3dd09a` from source checkpoint `84474be` is live. The user explicitly
 authorized deployment; `./sync_to_prod.sh` completed with exit 0 using host

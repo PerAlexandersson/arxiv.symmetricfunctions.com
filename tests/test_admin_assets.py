@@ -1,4 +1,6 @@
 import unittest
+import shutil
+import subprocess
 from pathlib import Path
 
 
@@ -35,7 +37,17 @@ class AdminAssetTests(unittest.TestCase):
         ).read_text()
 
         self.assertIn("filename='admin-attention.js') }}?v=2", nav_source)
-        self.assertIn("filename='admin-dois.js') }}?v=2", dois_template)
+        self.assertIn("filename='admin-dois.js') }}?v=3", dois_template)
+        self.assertIn('id="doi-hidden-notice" role="status"', dois_template)
+        self.assertIn('data-doi-show-hidden>Show hidden entries', dois_template)
+
+    @unittest.skipUnless(shutil.which('node'), 'Node.js required for DOM behavior tests')
+    def test_doi_filter_behavior(self):
+        result = subprocess.run(
+            ['node', '--test', str(ROOT / 'tests' / 'admin_doi_filter.test.cjs')],
+            capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
 
 if __name__ == '__main__':
