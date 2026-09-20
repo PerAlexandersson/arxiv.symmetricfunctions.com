@@ -2,12 +2,31 @@
 
 ## Current scope
 
-Deployment pending (2026-09-20): the user explicitly authorized deploying
-commit `b3dd09a`, but this Docker worker has no production SSH identity.
-`./sync_to_prod.sh` stopped at its initial SSH command preflight before any
-upload, dependency install, restart, or remote change. The fix is pushed to
-canonical `main`; a host session with the production identity must perform the
-code-only deploy and postflight. No source files are currently owned.
+Deployed and verified by host supervisor (2026-09-20): application fix
+`b3dd09a` from source checkpoint `84474be` is live. The user explicitly
+authorized deployment; `./sync_to_prod.sh` completed with exit 0 using host
+SSH, production Python 3.11.16, unchanged installed dependency requirements,
+and a Passenger restart. SymCat's cached label snapshot refreshed to 2,129.
+No SQL migration, database import/content update, or paper fetch was run.
+
+Postflight: homepage, `/api/v1/status`, and `/admin/login` return HTTP 200.
+Both live JavaScript responses (`?v=2`) match the local SHA-256 values:
+`admin-attention.js` =
+`03f5a1e138d9bad04116f42a3397acdb23a120d593f0ac27826198a5a56c12ea`;
+`admin-dois.js` =
+`5b6fdb85344220cb6c37a8964ec0804b5c143e097f9e102efacc75ffd88cdedf`.
+Remote source/static copies and both changed templates match local hashes too.
+Authenticated approve/reject actions were not repeated on production: that
+would mutate live DOI-review state. Existing regression tests cover the UI
+refresh behavior; users should reload an already-open admin tab.
+
+A private-permission code/assets rollback archive was saved on the host at
+`~/domains/arxiv.symmetricfunctions.com/backups/pre-banner-deploy-20260920-b3dd09a.tar.gz`
+before upload. It contains prior source, static files, Passenger configuration,
+requirements, and cron script; it does not contain a database dump or `.env`.
+The earlier Docker preflight failure made no remote changes; deployment was
+performed once from the host. Supervisor releases this handoff; no active
+deployment or source ownership remains.
 
 Ownership released (2026-09-20): repaired the stale DOI-review attention
 banner. The banner now re-fetches after DOI approve/reject actions and lookup
