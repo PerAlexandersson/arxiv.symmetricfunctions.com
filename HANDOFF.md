@@ -2,6 +2,13 @@
 
 ## Current scope
 
+Deployment pending (2026-09-20): the user explicitly authorized deploying
+commit `b3dd09a`, but this Docker worker has no production SSH identity.
+`./sync_to_prod.sh` stopped at its initial SSH command preflight before any
+upload, dependency install, restart, or remote change. The fix is pushed to
+canonical `main`; a host session with the production identity must perform the
+code-only deploy and postflight. No source files are currently owned.
+
 Ownership released (2026-09-20): repaired the stale DOI-review attention
 banner. The banner now re-fetches after DOI approve/reject actions and lookup
 runs, and an empty action queue clears the prior rendered message. Both changed
