@@ -2,16 +2,22 @@
 
 ## Current scope
 
-Active ownership (2026-09-20): host supervisor owns `src/static/admin-dois.js`,
-`src/static/admin.css`, `src/templates/admin/dois.html`, the DOI visibility
-regression tests, and this handoff. User requested removal of the confusing
-conflict hide filter and deployment. All candidates will remain visible with
-explicit conflict warnings; review actions and database contents are unchanged.
-The website worker is idle and has released source ownership.
-Implementation complete: removed the saved hide filter, checkbox, hidden-row
-notice and unused toggle CSS; initial and AJAX views retain explicit DOI-conflict
-warnings. Cache version is 4. All 132 Python tests, six JavaScript behavior
-tests, JS syntax and diff checks pass. Host deployment is the remaining step.
+Deployed and ownership released (2026-09-20): host supervisor removed the
+confusing conflict hide filter in `f76e743`, committed/pushed and deployed once
+with `sync_to_prod.sh` (exit 0). All candidates remain visible with explicit
+DOI-conflict warnings in initial and AJAX views. Removed the checkbox,
+hidden-row notice and unused toggle CSS. Old saved hide preferences are ignored.
+Review actions and database contents are unchanged. Cache version is 4.
+
+All 132 Python tests, six JavaScript behavior tests, JS syntax and diff checks
+pass. Production template and both static JS/CSS copies match local SHA-256;
+the live `admin-dois.js?v=4` response matches
+`97d1d7288c0bda8fdbc2eaf7b1aa77bb78a39a62327ab10ffcd483c73cc0ad37`.
+Homepage, API status and admin login return HTTP 200. Behavior was tested with
+the production-script DOM fixture, not an authenticated live browser; no live
+approve/reject actions were exercised. Reload existing tabs for the new assets.
+Rollback code/assets (no database or `.env`) are preserved on production at
+`~/domains/arxiv.symmetricfunctions.com/backups/pre-visible-doi-deploy-20260920-f76e743.tar.gz`.
 
 ### Previous deployments (superseded conflict-filter UX below)
 
