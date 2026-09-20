@@ -2,6 +2,13 @@
 
 ## Current scope
 
+Ownership released (2026-09-20): repaired the stale DOI-review attention
+banner. The banner now re-fetches after DOI approve/reject actions and lookup
+runs, and an empty action queue clears the prior rendered message. Both changed
+JavaScript assets have new cache versions. The 131-test suite, JavaScript
+syntax checks, Python compilation, a focused DOM simulation, and
+`git diff --check` pass. No deployment or database mutation was performed.
+
 Ownership released (2026-09-16): the saved-list migration, application rollout,
 and Python 3.11 runtime upgrade are complete. No worker owns these files.
 

@@ -53,6 +53,10 @@ function setupConflictToggle() {
   applyConflictVisibility();
 }
 
+function refreshAdminAttention() {
+  document.dispatchEvent(new Event('admin-attention:refresh'));
+}
+
 /* ── Advanced toggle ── */
 function toggleAdvanced(btn) {
   const div = document.getElementById('advanced-options');
@@ -223,6 +227,7 @@ async function doiAction(cid, action, btn) {
     if (data.ok) {
       if (data.counts) updateCounts(data.counts);
       await loadTab(currentTab, currentPage);
+      refreshAdminAttention();
       return;
     } else {
       btn.textContent = 'Error';
@@ -252,7 +257,8 @@ async function runLookup(btn, withDates) {
       (data.log || data.error || 'Done').replace(/</g, '&lt;') + '</div>';
     if (data.ok) {
       btn.textContent = 'Done!';
-      loadTab('pending', 1);
+      await loadTab('pending', 1);
+      refreshAdminAttention();
     } else {
       btn.textContent = 'Error — see log';
     }
