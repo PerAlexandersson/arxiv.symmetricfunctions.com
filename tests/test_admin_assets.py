@@ -37,9 +37,11 @@ class AdminAssetTests(unittest.TestCase):
         ).read_text()
 
         self.assertIn("filename='admin-attention.js') }}?v=2", nav_source)
-        self.assertIn("filename='admin-dois.js') }}?v=3", dois_template)
-        self.assertIn('id="doi-hidden-notice" role="status"', dois_template)
-        self.assertIn('data-doi-show-hidden>Show hidden entries', dois_template)
+        self.assertIn("filename='admin-dois.js') }}?v=4", dois_template)
+        self.assertNotIn('doi-show-conflicts', dois_template)
+        self.assertNotIn('doi-hidden-notice', dois_template)
+        self.assertNotIn('data-doi-show-hidden', dois_template)
+        self.assertIn('DOI already assigned to another paper', dois_template)
 
     @unittest.skipUnless(shutil.which('node'), 'Node.js required for DOM behavior tests')
     def test_doi_filter_behavior(self):

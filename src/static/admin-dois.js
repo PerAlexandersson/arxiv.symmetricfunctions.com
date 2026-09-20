@@ -1,7 +1,6 @@
 const doiTabs = document.getElementById('doi-tabs');
 let currentTab = doiTabs?.dataset.currentTab || 'pending';
 let currentPage = parseInt(doiTabs?.dataset.currentPage || '1', 10);
-const conflictToggleKey = 'admin-dois-show-conflicts';
 
 /* ── Helpers ── */
 function esc(s) {
@@ -24,45 +23,9 @@ function renderConflictWarning(c) {
       '" target="_blank">arXiv: ' + esc(conflict.arxiv_id) + '</a>' + status + titleHtml;
   }).join('</div><div class="doi-warning-conflict">');
   const tooltip = c.doi_conflict_tooltip ? ' title="' + esc(c.doi_conflict_tooltip) + '"' : '';
-  return '<div class="doi-warning"' + tooltip + '><strong>Already assigned</strong>' +
+  return '<div class="doi-warning"' + tooltip + '><strong>DOI already assigned to another paper</strong>' +
     '<div class="doi-warning-conflicts"><div class="doi-warning-conflict">' + conflicts +
     '</div></div></div>';
-}
-
-function shouldShowConflicts() {
-  const toggle = document.getElementById('doi-show-conflicts');
-  return !toggle || toggle.checked;
-}
-
-function applyConflictVisibility() {
-  const showConflicts = shouldShowConflicts();
-  const rows = document.querySelectorAll('#doi-tbody tr.doi-row--conflict');
-  rows.forEach(row => {
-    row.hidden = !showConflicts;
-  });
-  const notice = document.getElementById('doi-hidden-notice');
-  const message = document.getElementById('doi-hidden-message');
-  const hiddenCount = showConflicts ? 0 : rows.length;
-  if (notice && message) {
-    notice.hidden = hiddenCount === 0;
-    message.textContent = hiddenCount
-      ? hiddenCount + (hiddenCount === 1 ? ' entry on this page is' : ' entries on this page are') +
-        ' hidden because the proposed DOI is already assigned to another paper. ' +
-        'The tab and banner counts include hidden entries.'
-      : '';
-  }
-}
-
-function setupConflictToggle() {
-  const toggle = document.getElementById('doi-show-conflicts');
-  if (!toggle) return;
-  const saved = localStorage.getItem(conflictToggleKey);
-  if (saved !== null) toggle.checked = saved === '1';
-  toggle.addEventListener('change', () => {
-    localStorage.setItem(conflictToggleKey, toggle.checked ? '1' : '0');
-    applyConflictVisibility();
-  });
-  applyConflictVisibility();
 }
 
 function refreshAdminAttention() {
@@ -95,7 +58,6 @@ function renderRows(candidates) {
   const tbody = document.getElementById('doi-tbody');
   if (!candidates.length) {
     tbody.innerHTML = '<tr><td colspan="3" class="doi-empty">No candidates in this view.</td></tr>';
-    applyConflictVisibility();
     return;
   }
   tbody.innerHTML = candidates.map(c => {
@@ -144,7 +106,6 @@ function renderRows(candidates) {
       '<td class="doi-actions" id="act-' + c.id + '">' + actionHtml + '</td>' +
       '</tr>';
   }).join('');
-  applyConflictVisibility();
 }
 
 /* ── Render pagination ── */
@@ -188,16 +149,6 @@ async function loadTab(tab, page) {
 
 /* ── Delegated click handlers ── */
 document.addEventListener('click', event => {
-  const revealBtn = event.target.closest('[data-doi-show-hidden]');
-  if (revealBtn) {
-    const toggle = document.getElementById('doi-show-conflicts');
-    if (toggle) {
-      toggle.checked = true;
-      toggle.dispatchEvent(new Event('change'));
-    }
-    return;
-  }
-
   const tab = event.target.closest('#doi-tabs a[data-tab]');
   if (tab) {
     event.preventDefault();
@@ -296,5 +247,3 @@ async function runLookup(btn, withDates) {
     btn.textContent = withDates ? 'Run with date range' : 'Fetch next 20';
   }, 3000);
 }
-
-setupConflictToggle();

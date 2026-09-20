@@ -37,10 +37,6 @@
 <div class="doi-controls">
   <button class="doi-run-btn" id="fetch-btn" data-doi-run>Fetch next 20</button>
   <button type="button" class="toggle-advanced" data-doi-toggle-advanced>&#x25b8; Date range</button>
-  <label class="doi-conflict-toggle">
-    <input type="checkbox" id="doi-show-conflicts" data-doi-show-conflicts checked>
-    Show already assigned
-  </label>
 </div>
 <div id="advanced-options" class="doi-advanced">
   <label>From <input type="date" id="doi-from" value="{{ default_from }}"></label>
@@ -60,10 +56,6 @@
 
 {# ── Table ── #}
 <div id="doi-tab-content">
-<p id="doi-hidden-notice" role="status" aria-live="polite" hidden>
-  <span id="doi-hidden-message"></span>
-  <button type="button" class="doi-run-btn" data-doi-show-hidden>Show hidden entries</button>
-</p>
 <table class="doi-table">
   <colgroup>
     <col class="doi-col-paper">
@@ -91,7 +83,7 @@
         <a class="doi-link" href="https://doi.org/{{ c.doi }}" target="_blank" rel="noopener">{{ c.doi }}</a>
         {% if c.doi_conflicts %}
         <div class="doi-warning"{% if c.doi_conflict_tooltip %} title="{{ c.doi_conflict_tooltip }}"{% endif %}>
-          <strong>Already assigned</strong>
+          <strong>DOI already assigned to another paper</strong>
           <div class="doi-warning-conflicts">
             {% for conflict in c.doi_conflicts %}
             <div class="doi-warning-conflict">
@@ -156,5 +148,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='admin-dois.js') }}?v=3"></script>
+<script src="{{ url_for('static', filename='admin-dois.js') }}?v=4"></script>
 {% endblock %}

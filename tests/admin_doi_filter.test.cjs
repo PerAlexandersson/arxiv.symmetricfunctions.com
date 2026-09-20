@@ -6,29 +6,23 @@ const vm = require('node:vm');
 
 const source = readFileSync(join(__dirname, '../src/static/admin-dois.js'), 'utf8');
 
-// Minimal DOM fixture: execute the production script, including its initial
-// setup and delegated click/change handlers. No network or database access.
-function fixture(saved = '0', initialConflicts = 2) {
-  const handlers = {};
-  const storage = new Map(saved === null ? [] : [['admin-dois-show-conflicts', saved]]);
-  let rows = Array.from({length: initialConflicts}, () => ({hidden: false}));
-  const toggleHandlers = {};
-  const toggle = {
-    checked: true,
-    addEventListener: (name, fn) => { toggleHandlers[name] = fn; },
-    dispatchEvent: event => toggleHandlers[event.type]?.(event),
-  };
+// Execute the production script against a small DOM fixture. Saved preferences
+// from the removed filter must not affect initial or AJAX-rendered candidates.
+function fixture(saved = '0') {
+  let rows = [{hidden: false}, {hidden: false}];
+  let html = '';
+  let storageReads = 0;
   const elements = {
     'doi-tabs': {dataset: {currentTab: 'pending', currentPage: '1'}},
-    'doi-show-conflicts': toggle,
-    'doi-hidden-notice': {hidden: true},
-    'doi-hidden-message': {textContent: ''},
     'tab-pending': {textContent: 'Pending (2)'},
     'tab-approved': {}, 'tab-rejected': {}, 'tab-all': {},
+    'doi-pagination': {},
     'doi-tbody': {
+      get innerHTML() { return html; },
       set innerHTML(value) {
-        rows = [...value.matchAll(/<tr id="row-\d+" class="doi-row--conflict"/g)]
-          .map(() => ({hidden: false}));
+        html = value;
+        rows = [...value.matchAll(/<tr id="row-(\d+)"([^>]*)>/g)]
+          .map(match => ({id: Number(match[1]), hidden: /\bhidden\b/.test(match[2])}));
       },
     },
   };
@@ -36,76 +30,91 @@ function fixture(saved = '0', initialConflicts = 2) {
     document: {
       getElementById: id => elements[id],
       querySelectorAll: selector => {
+        if (selector === '#doi-tabs a') return [];
         assert.equal(selector, '#doi-tbody tr.doi-row--conflict');
         return rows;
       },
-      addEventListener: (name, fn) => { handlers[name] = fn; },
+      addEventListener: () => {},
       createElement: () => ({textContent: '', get innerHTML() { return this.textContent; }}),
     },
-    localStorage: {getItem: key => storage.get(key) ?? null,
-      setItem: (key, value) => storage.set(key, value)},
-    Event: class { constructor(type) { this.type = type; } },
+    localStorage: {
+      getItem: key => {
+        storageReads++;
+        assert.equal(key, 'admin-dois-show-conflicts');
+        return saved;
+      },
+      setItem: () => { throw new Error('Visibility must not depend on storage'); },
+    },
+    history: {replaceState: () => {}},
+    console: {error: (...args) => { throw new Error(args.join(' ')); }},
   });
   vm.runInContext(source, context);
-  return {elements, toggle, storage, rows: () => rows, context,
-    reveal: () => handlers.click({target: {
-      closest: selector => selector === '[data-doi-show-hidden]' ? {} : null,
-    }}),
-  };
+  return {elements, rows: () => rows, storageReads: () => storageReads, context};
 }
 
-test('saved hide preference explains two real pending entries without changing totals', () => {
-  const f = fixture();
-  assert.ok(f.rows().every(row => row.hidden));
-  assert.equal(f.elements['doi-hidden-notice'].hidden, false);
-  assert.match(f.elements['doi-hidden-message'].textContent, /^2 entries on this page are hidden/);
-  assert.match(f.elements['doi-hidden-message'].textContent, /counts include hidden entries/);
-  assert.equal(f.elements['tab-pending'].textContent, 'Pending (2)');
-});
+function candidate(id, conflict = true) {
+  return {id, status: 'pending', confidence: 0.7, doi: 'test/' + id,
+    doi_conflicts: conflict ? [{arxiv_id: 'other', title: 'Other paper'}] : []};
+}
 
-test('reveal button checks the filter, persists it and reveals rows without reviewing them', () => {
-  const f = fixture();
-  f.reveal();
-  assert.equal(f.toggle.checked, true);
-  assert.equal(f.storage.get('admin-dois-show-conflicts'), '1');
-  assert.ok(f.rows().every(row => !row.hidden));
-  assert.equal(f.elements['doi-hidden-notice'].hidden, true);
-  assert.equal(f.elements['doi-hidden-message'].textContent, '');
-  assert.equal(f.elements['tab-pending'].textContent, 'Pending (2)');
-});
-
-test('fresh browsers and saved show preference do not show a misleading notice', () => {
-  for (const preference of [null, '1']) {
+test('initial rows stay visible regardless of the old saved hide preference', () => {
+  for (const preference of ['0', '1', null]) {
     const f = fixture(preference);
-    assert.equal(f.elements['doi-hidden-notice'].hidden, true);
+    assert.equal(f.rows().length, 2);
     assert.ok(f.rows().every(row => !row.hidden));
+    assert.equal(f.elements['tab-pending'].textContent, 'Pending (2)');
+    assert.equal(f.storageReads(), 0);
   }
 });
 
-test('checkbox changes update singular notice and persistence', () => {
-  const f = fixture('1', 1);
-  f.toggle.checked = false;
-  f.toggle.dispatchEvent({type: 'change'});
-  assert.match(f.elements['doi-hidden-message'].textContent, /^1 entry on this page is hidden/);
-  assert.equal(f.storage.get('admin-dois-show-conflicts'), '0');
+test('two conflicting pending candidates render visibly with warnings and review actions', () => {
+  const f = fixture();
+  f.context.candidates = [candidate(1), candidate(2)];
+  vm.runInContext('renderRows(candidates)', f.context);
+  assert.deepEqual(f.rows().map(row => row.id), [1, 2]);
+  assert.ok(f.rows().every(row => !row.hidden));
+  const html = f.elements['doi-tbody'].innerHTML;
+  assert.equal((html.match(/DOI already assigned to another paper/g) || []).length, 2);
+  for (const action of ['approve', 'reassign', 'reject']) {
+    assert.equal((html.match(new RegExp('data-doi-action="' + action + '"', 'g')) || []).length, 2);
+  }
 });
 
-test('AJAX empty-page rendering clears the old notice', () => {
+test('mixed results show every candidate and only warn about actual conflicts', () => {
+  const f = fixture();
+  f.context.candidates = [candidate(1), candidate(2, false)];
+  vm.runInContext('renderRows(candidates)', f.context);
+  assert.equal(f.rows().length, 2);
+  assert.ok(f.rows().every(row => !row.hidden));
+  assert.equal((f.elements['doi-tbody'].innerHTML.match(/DOI already assigned/g) || []).length, 1);
+});
+
+test('an actually empty result shows the empty-state message', () => {
   const f = fixture();
   vm.runInContext('renderRows([])', f.context);
-  assert.equal(f.elements['doi-hidden-notice'].hidden, true);
-  assert.equal(f.elements['doi-hidden-message'].textContent, '');
+  assert.equal(f.rows().length, 0);
+  assert.match(f.elements['doi-tbody'].innerHTML, /No candidates in this view/);
 });
 
-test('AJAX mixed-page rendering counts only hidden rows on this page', () => {
+test('AJAX tab refresh keeps counts and visible candidates consistent', async () => {
   const f = fixture();
-  f.context.candidates = [
-    {id: 1, status: 'pending', confidence: 0.7, doi: 'test/1',
-      doi_conflicts: [{arxiv_id: 'test', title: 'Other paper'}]},
-    {id: 2, status: 'pending', confidence: 0.6, doi: 'test/2'},
-  ];
+  f.context.fetchJson = async () => ({ok: true,
+    counts: {pending: 2, approved: 3, rejected: 1},
+    candidates: [candidate(1), candidate(2)], page: 1, total_pages: 1});
+  await vm.runInContext("loadTab('pending', 1)", f.context);
+  assert.equal(f.elements['tab-pending'].textContent, 'Pending (2)');
+  assert.equal(f.elements['tab-all'].textContent, 'All (6)');
+  assert.equal(f.rows().filter(row => !row.hidden).length, 2);
+  assert.equal(f.storageReads(), 0);
+});
+
+test('removed filter cannot silently hide rows or depend on browser storage', () => {
+  assert.doesNotMatch(source, /localStorage|doi-show-conflicts|doi-hidden-notice|row\.hidden/);
+  const f = fixture();
+  Object.defineProperty(f.context, 'localStorage', {
+    get() { throw new Error('Storage unavailable'); },
+  });
+  f.context.candidates = [candidate(1)];
   vm.runInContext('renderRows(candidates)', f.context);
-  assert.equal(f.rows().length, 1);
-  assert.equal(f.rows()[0].hidden, true);
-  assert.match(f.elements['doi-hidden-message'].textContent, /^1 entry on this page is hidden/);
+  assert.equal(f.rows()[0].hidden, false);
 });

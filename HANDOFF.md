@@ -2,6 +2,19 @@
 
 ## Current scope
 
+Active ownership (2026-09-20): host supervisor owns `src/static/admin-dois.js`,
+`src/static/admin.css`, `src/templates/admin/dois.html`, the DOI visibility
+regression tests, and this handoff. User requested removal of the confusing
+conflict hide filter and deployment. All candidates will remain visible with
+explicit conflict warnings; review actions and database contents are unchanged.
+The website worker is idle and has released source ownership.
+Implementation complete: removed the saved hide filter, checkbox, hidden-row
+notice and unused toggle CSS; initial and AJAX views retain explicit DOI-conflict
+warnings. Cache version is 4. All 132 Python tests, six JavaScript behavior
+tests, JS syntax and diff checks pass. Host deployment is the remaining step.
+
+### Previous deployments (superseded conflict-filter UX below)
+
 Deployed and ownership released (2026-09-20): the host supervisor fixed the
 DOI conflict-filter empty-view problem in `43b35e4`, committed/pushed and
 deployed once using `sync_to_prod.sh` (exit 0). Live read-only diagnosis found
