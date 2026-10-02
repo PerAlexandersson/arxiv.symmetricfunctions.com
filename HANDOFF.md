@@ -2,6 +2,88 @@
 
 ## Current scope
 
+Ownership released (2026-10-02): the bounded full-text keyword prototype and a
+fresh production-to-local database baseline are complete. Production and the
+paper-cache corpus were read-only throughout; no keyword, tag, or other
+database row was written after the local database replacement.
+
+Before replacement, local had the legacy list schema and 80,447 papers, 1,110
+keywords, 58 aliases, 258,469 automatic `paper_keywords`, three users, 11 list
+categories, 180 memberships, 41,554 DOI-bearing papers, and 30,428 DOI
+candidates (28,192 approved and 2,236 rejected). It was backed up to
+`/home/dev/.cache/arxiv.symmetricfunctions.com/fulltext-keyword-prototype-20261002T193531Z/local-before.sql.gz`
+(37,504,520 bytes, SHA-256
+`72595a00f1eb37391639389d045255ad55f2cc4e0f8de9477ea0de2aff7e4158`).
+The fresh retained production dump has all 19 table definitions, is 39,617,016
+bytes, and has SHA-256
+`c44dac545079a34f832023a2c334ecbf63aa425f75a4a824686aa114dc23f445`.
+
+Local now matches independent pre- and post-dump production snapshots exactly:
+82,505 papers, 1,199 keywords, 67 aliases, 264,560 automatic and no other
+`paper_keywords`, three users, 12 list categories, 309 memberships, 10 watched
+keywords, 15 watched authors, 48,965 DOI-bearing papers, and 39,205 DOI
+candidates (35,556 approved, 340 pending, 3,309 rejected). DOI paper statuses
+are 13,434 arXiv, 32,468 auto, 3,063 verified, five skipped, and 33,535 null.
+There are zero duplicate/null base IDs and zero keyword, alias, author,
+category, DOI-candidate, or normalized-list orphans; 45 normalized DOI values
+are deliberately or historically shared. The normalized invariant snapshots
+all have SHA-256
+`aeacc08968f2e6133f25f8514aaa76c35ae92ac52be041a878cafed9f040a672`.
+
+`src/fulltext_keyword_prototype.py` joins normalized base IDs and imports the
+existing tokenizer, n-gram generator, and usefulness filter. It requires paper
+and byte bounds, verifies artifact SHA-256, checkpoints each paper in SQLite,
+invalidates stale text/metadata/config checkpoints, and writes deterministic
+per-paper and aggregate dry-run evidence outside the repository. It separates
+title/abstract matches, existing tags, body-only matches, and novel repeated
+body phrases. Reference/bibliography, contents, acknowledgments, structured
+placeholders, and common boilerplate are suppressed with counts; section/page
+and a supporting passage are retained when available.
+
+Current coverage is 82,505 database papers and 82,357 paper-cache metadata
+records with an overlap of 81,758. The cache has 7,282 searchable texts (4,699
+structured and 2,583 PDF-derived); 7,280 join to the database, for 8.824%
+database coverage. The only text IDs absent from the database are `2107.08508`
+and `2210.11412`. Of the text artifacts, 6,299 match the current archived arXiv
+version and 983 are stale. There are 747 database IDs absent from archive
+metadata and 599 archive metadata IDs absent from the database, so source and
+database membership must not be compared by raw totals alone.
+
+The verified stratified sample is under the same cache directory at
+`sample-verified/`: 20 structured and 20 PDF papers (36 current-version and four
+stale), 6,803,347 input bytes, 5,034 paragraphs, and 178 structurally suppressed
+paragraphs. It completed in 2.427 seconds (16.484 papers/s, 2.674 MiB/s), found
+498 body-only matches to existing curated keywords across 38 papers (none
+already tagged), and retained 876 capped repeated novel phrases. Strong leads
+include `theta divisor`, `abel-jacobi map`, `r-domino tableau`, and
+`finite index subgroup`; broad existing tags such as `sequence` and `group`,
+and generic phrases such as `hand side`, show why human review remains
+necessary. At this rate the 7,280-paper text overlap is roughly a 7--11 minute
+scan, excluding review.
+
+If body evidence is persisted later, use a separate evidence table keyed by
+paper/keyword plus origin and artifact provenance; include corpus/release,
+versioned arXiv ID, artifact SHA-256, section/page, passage, detector version,
+and review status. Do not overload `paper_keywords.source`, because title,
+abstract, and multiple body observations may coexist while `paper_keywords`
+should remain the reviewed effective tag.
+
+The exact safe next bounded command, which reuses the 40 verified checkpoints,
+is:
+
+```bash
+source activate_venv.sh
+nice -n 10 python3 src/fulltext_keyword_prototype.py \
+  --corpus-root /papers/math-co --db-host db \
+  --output-dir /home/dev/.cache/arxiv.symmetricfunctions.com/fulltext-keyword-prototype-20261002T193531Z/sample-verified \
+  --selection sequential --max-papers 500 --max-input-mib 512
+```
+
+Verification: all 137 Python tests, focused five-test prototype suite, Python
+compilation, CLI help and output-location guard, checkpoint reuse, artifact
+integrity checks during the sample, and `git diff --check` pass. Existing
+`src/extract_keywords.py` and paper-cache source files were not modified.
+
 Deployed and ownership released (2026-09-20): host supervisor removed the
 confusing conflict hide filter in `f76e743`, committed/pushed and deployed once
 with `sync_to_prod.sh` (exit 0). All candidates remain visible with explicit

@@ -458,6 +458,48 @@ python3 extract_keywords.py       # outputs keywords.csv
 # then redeploy to update /admin/candidates
 ```
 
+### Bounded full-text keyword prototype
+
+`src/fulltext_keyword_prototype.py` is a read-only experiment over the local
+paper-cache math.CO corpus. It joins corpus artifacts to `papers` by normalized
+unversioned arXiv ID and reuses `extract_keywords.py` tokenization, n-gram, and
+candidate filters. It does not insert keywords, update `paper_keywords`, or
+write any other MariaDB table.
+
+Both a paper limit and an input-byte limit are mandatory. This deterministic
+sample selects across the PDF-text and structured-corpus inventories:
+
+```bash
+source activate_venv.sh
+python3 src/fulltext_keyword_prototype.py \
+  --corpus-root /papers/math-co --db-host db \
+  --output-dir /home/dev/.cache/arxiv.symmetricfunctions.com/fulltext-keywords/sample \
+  --selection stratified --max-papers 40 --max-input-mib 64
+```
+
+The output directory contains resumable `state.sqlite`, per-paper
+`papers.jsonl`, `aggregate.json`, and `summary.json`. Each result separates
+title/abstract matches, existing database tags, body-only matches to curated
+keywords, and uncurated repeated body phrases. Evidence retains the corpus,
+release, artifact hash, arXiv version status, section or PDF page when
+available, and a supporting passage. References, bibliographies, contents,
+acknowledgments, structured formula/citation placeholders, and common
+front-matter boilerplate are suppressed and counted rather than silently
+discarded.
+
+Repeat a sequential command with the same output directory to resume. A
+checkpoint is reused only while its text SHA-256 and current database metadata
+checksum still match. Changing the keyword/config snapshot requires a new
+output directory.
+
+If body evidence is later promoted into the application, keep it in a separate
+evidence table rather than expanding the single `paper_keywords.source` value.
+One paper-keyword relationship can have title, abstract, and several body
+observations simultaneously. Recommended evidence fields are `paper_id`,
+`keyword_id`, origin (`title`, `abstract`, or `body`), corpus/release,
+versioned arXiv ID, artifact SHA-256, section/page, passage, detector version,
+and review status. `paper_keywords` should remain the reviewed effective tag.
+
 ---
 
 ## DOI Discovery
