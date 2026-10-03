@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 from fulltext_keyword_prototype import (
     Artifact,
     analyze_paper,
+    arxiv_extract_paragraphs,
     normalize_arxiv_base_id,
     pdf_paragraphs,
     structured_paragraphs,
@@ -57,6 +58,26 @@ class FulltextKeywordPrototypeTests(unittest.TestCase):
         rows = pdf_paragraphs(b'Body text.\n\nReferences\n[1] A. Author')
         self.assertIsNone(rows[0].suppressed_reason)
         self.assertEqual('references', rows[1].suppressed_reason)
+
+    def test_arxiv_extract_parser_preserves_sections_and_suppresses_front_and_back_matter(self):
+        records = [
+            {'type': 'metadata', 'arxiv_id': '2601.12345'},
+            {'type': 'abstract', 'text_unicode': 'Schur functions in the abstract.'},
+            {'type': 'paragraph', 'text_unicode': 'Body evidence for tableaux.',
+             'section_context': [{'title': 'Main theorem'}]},
+            {'type': 'bibliography_item', 'text_unicode': 'Body evidence in a citation.',
+             'section_context': [{'title': 'References'}]},
+            {'type': 'figure', 'caption': '[figure: noisy.png] A useful-looking caption.',
+             'section_context': [{'title': 'Results'}]},
+        ]
+        payload = ''.join(json.dumps(row) + '\n' for row in records).encode()
+        rows = arxiv_extract_paragraphs(payload)
+        self.assertEqual('metadata-abstract', rows[0].suppressed_reason)
+        self.assertEqual('Main theorem', rows[1].section)
+        self.assertIsNone(rows[1].suppressed_reason)
+        self.assertEqual('references', rows[2].suppressed_reason)
+        self.assertEqual('figures-tables', rows[3].suppressed_reason)
+        self.assertNotIn('noisy.png', rows[3].text)
 
     def test_analysis_separates_metadata_and_body_only_evidence(self):
         payload = json.dumps({

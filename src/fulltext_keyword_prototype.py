@@ -28,7 +28,7 @@ from config import DB_CONFIG
 from extract_keywords import extract_ngrams, is_useful, tokenize
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 STRUCTURAL_SECTION_RE = re.compile(
     r"(?:^|\b)(references?|bibliograph(?:y|ies)|acknowledg(?:e)?ments?|contents?)(?:\b|$)",
     re.IGNORECASE,
@@ -42,7 +42,7 @@ PDF_CONTENTS_HEADING_RE = re.compile(
 )
 BOILERPLATE_RE = re.compile(
     r"(?:^arxiv:|^mathematics subject classification|^keywords?\s*[:.]|"
-    r"^e-?mail\s*[:.]|^received\s|^accepted\s|^submitted\s|"
+    r"\be-?mail\s*[:.]|^received\s|^accepted\s|^submitted\s|"
     r"copyright|all rights reserved|creative commons|"
     r"this (?:preprint|manuscript|version) (?:has been|was) submitted)",
     re.IGNORECASE,
@@ -50,6 +50,10 @@ BOILERPLATE_RE = re.compile(
 STRUCTURED_PLACEHOLDER_RE = re.compile(
     r"\{\{(?:cite|formula|figure|table|ref):[^{}]+\}\}", re.IGNORECASE
 )
+SOURCE_CITATION_KEY_RE = re.compile(
+    r"\[(?:[A-Za-z][A-Za-z0-9_.:-]*)(?:\s*,\s*[A-Za-z][A-Za-z0-9_.:-]*)*\]"
+)
+SOURCE_FIGURE_MARKER_RE = re.compile(r"\[(?:figure|image):[^\]]+\]", re.IGNORECASE)
 NOVEL_PHRASE_NOISE_WORDS = {
     "acknowledgment", "acknowledgement", "apply", "bibliography", "cite",
     "corollary", "definition", "equation", "fig", "figure", "lemma",
@@ -82,6 +86,16 @@ class Artifact:
     extraction_status: str
     quality_rank: int
     current_version: str | None
+    structure_relative_path: str | None = None
+    structure_size: int = 0
+    structure_sha256: str | None = None
+
+
+def artifact_fingerprint(artifact: Artifact) -> str:
+    return sha256_bytes(canonical_json({
+        "text_sha256": artifact.sha256,
+        "structure_sha256": artifact.structure_sha256,
+    }))
 
 
 def canonical_json(value: Any) -> bytes:
@@ -121,6 +135,8 @@ def source_kind(format_value: str, corpus_name: str) -> str | None:
         return "structured-corpus"
     if format_value.startswith("text/plain") and corpus_name == "local-pdf-text":
         return "local-pdf-text"
+    if format_value.startswith("text/plain") and corpus_name == "arxiv-extract":
+        return "arxiv-source"
     return None
 
 
@@ -206,6 +222,49 @@ def pdf_paragraphs(payload: bytes) -> list[Paragraph]:
     return result
 
 
+def arxiv_extract_paragraphs(payload: bytes) -> list[Paragraph]:
+    """Read Erik's structured NDJSON while excluding front matter/references."""
+    result: list[Paragraph] = []
+    for line in payload.decode("utf-8").splitlines():
+        if not line.strip():
+            continue
+        record = json.loads(line)
+        if not isinstance(record, dict):
+            continue
+        record_type = str(record.get("type") or "")
+        if record_type in {"metadata", "parse_warning", "section", "equation"}:
+            continue
+        section = None
+        context = record.get("section_context")
+        if isinstance(context, list):
+            for item in reversed(context):
+                if isinstance(item, dict) and isinstance(item.get("title"), str):
+                    section = item["title"]
+                    break
+        text = record.get("text_unicode")
+        if not isinstance(text, str) or not text.strip():
+            caption = record.get("caption")
+            text = caption if isinstance(caption, str) else None
+        if not text:
+            continue
+        text = SOURCE_CITATION_KEY_RE.sub(" ", text)
+        text = SOURCE_FIGURE_MARKER_RE.sub(" ", text)
+        reason = None
+        if record_type == "abstract":
+            reason = "metadata-abstract"
+        elif record_type == "bibliography_item":
+            reason = "references"
+        elif record_type in {"figure", "table"}:
+            reason = "figures-tables"
+        elif section and STRUCTURAL_SECTION_RE.search(section):
+            reason = "structural-section"
+        elif BOILERPLATE_RE.search(text):
+            reason = "boilerplate"
+        for chunk in split_paragraphs(text):
+            result.append(Paragraph(chunk, section, None, reason))
+    return result
+
+
 def evidence_text(text: str, limit: int = 600) -> str:
     compact = re.sub(r"\s+", " ", text).strip()
     return compact if len(compact) <= limit else compact[: limit - 1].rstrip() + "…"
@@ -246,12 +305,16 @@ def analyze_paper(
     max_ngram: int,
     candidate_min_occurrences: int,
     max_candidate_phrases: int,
+    structure_payload: bytes | None = None,
 ) -> dict[str, Any]:
-    paragraphs = (
-        structured_paragraphs(payload)
-        if artifact.source_kind == "structured-corpus"
-        else pdf_paragraphs(payload)
-    )
+    if artifact.source_kind == "structured-corpus":
+        paragraphs = structured_paragraphs(payload)
+    elif artifact.source_kind == "arxiv-source":
+        if structure_payload is None:
+            raise ValueError("arXiv source artifact has no verified NDJSON structure")
+        paragraphs = arxiv_extract_paragraphs(structure_payload)
+    else:
+        paragraphs = pdf_paragraphs(payload)
     metadata_tokens = tokenize(f"{paper.get('title') or ''} {paper.get('abstract') or ''}")
     metadata_ngrams = metadata_ngram_set(metadata_tokens, max_ngram)
     metadata_keyword_ids: set[int] = set()
@@ -364,6 +427,8 @@ def analyze_paper(
                 "release_id": artifact.release_id,
                 "path": artifact.relative_path,
                 "sha256": artifact.sha256,
+                "structure_path": artifact.structure_relative_path,
+                "structure_sha256": artifact.structure_sha256,
                 "version_status": (
                     "unknown" if not artifact.current_version or not artifact.versioned_arxiv_id
                     else "current" if artifact.current_version == artifact.versioned_arxiv_id
@@ -371,7 +436,12 @@ def analyze_paper(
                 ),
             },
         },
-        "checksums": {"metadata_sha256": metadata_sha, "full_text_sha256": artifact.sha256},
+        "checksums": {
+            "metadata_sha256": metadata_sha,
+            "full_text_sha256": artifact.sha256,
+            "structure_sha256": artifact.structure_sha256,
+            "artifact_fingerprint": artifact_fingerprint(artifact),
+        },
         "counts": {
             "paragraphs_total": len(paragraphs),
             "paragraphs_analyzed": analyzed_paragraphs,
@@ -477,11 +547,24 @@ def load_inventory(root: Path) -> tuple[list[Artifact], set[str]]:
             for row in conn.execute("SELECT arxiv_id FROM metadata")
             if (normalized := normalize_arxiv_base_id(row[0]))
         }
+        has_source_queue = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='source_text_queue'"
+        ).fetchone() is not None
+        structure_columns = (
+            "q.ndjson_size structure_size,q.ndjson_sha256 structure_sha256"
+            if has_source_queue else "0 structure_size,NULL structure_sha256"
+        )
+        structure_join = (
+            "LEFT JOIN source_text_queue q ON q.versioned_arxiv_id=t.versioned_arxiv_id "
+            "AND t.corpus_name='arxiv-extract'"
+            if has_source_queue else ""
+        )
         rows = conn.execute(
-            """SELECT t.arxiv_id,t.versioned_arxiv_id,t.corpus_name,t.release_id,
+            f"""SELECT t.arxiv_id,t.versioned_arxiv_id,t.corpus_name,t.release_id,
                       t.path,t.size,t.sha256,t.format,t.extraction_status,t.quality_rank,
-                      m.versions_json
+                      t.corpus_member,m.versions_json,{structure_columns}
                FROM text_artifacts t JOIN metadata m ON m.arxiv_id=t.arxiv_id
+               {structure_join}
                WHERE t.size>0
                ORDER BY t.arxiv_id,
                         CASE WHEN t.format='structured-json' THEN 0 ELSE 1 END,
@@ -505,6 +588,11 @@ def load_inventory(root: Path) -> tuple[list[Artifact], set[str]]:
             sha256=row["sha256"], format=row["format"],
             extraction_status=row["extraction_status"], quality_rank=int(row["quality_rank"]),
             current_version=latest_version(arxiv_id, row["versions_json"]),
+            structure_relative_path=(
+                row["corpus_member"] if kind == "arxiv-source" else None
+            ),
+            structure_size=int(row["structure_size"] or 0),
+            structure_sha256=row["structure_sha256"],
         ))
     return artifacts, metadata_ids
 
@@ -672,6 +760,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 "structural_section": STRUCTURAL_SECTION_RE.pattern,
                 "boilerplate": BOILERPLATE_RE.pattern,
                 "structured_placeholders": STRUCTURED_PLACEHOLDER_RE.pattern,
+                "source_citation_keys": SOURCE_CITATION_KEY_RE.pattern,
+                "source_figure_markers": SOURCE_FIGURE_MARKER_RE.pattern,
             },
         }
         state = open_state(output_dir / "state.sqlite", config)
@@ -695,7 +785,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 ).fetchone()
                 if (
                     existing
-                    and existing["source_sha256"] == artifact.sha256
+                    and existing["source_sha256"] == artifact_fingerprint(artifact)
                     and existing["metadata_sha256"] == current_metadata_sha
                 ):
                     reused += 1
@@ -704,7 +794,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     stop_reason = "paper-limit"
                     next_arxiv_id = artifact.arxiv_id
                     break
-                if input_bytes + artifact.size > args.max_input_mib * 1024 * 1024:
+                artifact_bytes = artifact.size + artifact.structure_size
+                if input_bytes + artifact_bytes > args.max_input_mib * 1024 * 1024:
                     stop_reason = "input-byte-limit"
                     next_arxiv_id = artifact.arxiv_id
                     break
@@ -716,12 +807,32 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 payload = path.read_bytes()
                 if len(payload) != artifact.size or sha256_bytes(payload) != artifact.sha256:
                     raise ValueError(f"artifact integrity mismatch: {artifact.relative_path}")
+                structure_payload = None
+                if artifact.source_kind == "arxiv-source":
+                    if not artifact.structure_relative_path or not artifact.structure_sha256:
+                        raise ValueError(f"source artifact lacks NDJSON provenance: {artifact.arxiv_id}")
+                    structure_path = (root / artifact.structure_relative_path).resolve()
+                    try:
+                        structure_path.relative_to(root)
+                    except ValueError as exc:
+                        raise ValueError(
+                            f"structured artifact escapes corpus root: {artifact.structure_relative_path}"
+                        ) from exc
+                    structure_payload = structure_path.read_bytes()
+                    if (
+                        len(structure_payload) != artifact.structure_size
+                        or sha256_bytes(structure_payload) != artifact.structure_sha256
+                    ):
+                        raise ValueError(
+                            f"structured artifact integrity mismatch: {artifact.structure_relative_path}"
+                        )
                 result = analyze_paper(
                     paper=paper, artifact=artifact, payload=payload,
                     phrase_index=phrase_index, known_phrases=known_phrases,
                     excluded_candidates=excluded, max_ngram=args.max_ngram,
                     candidate_min_occurrences=args.candidate_min_occurrences,
                     max_candidate_phrases=args.max_candidate_phrases,
+                    structure_payload=structure_payload,
                 )
                 state.execute(
                     """INSERT INTO processed(arxiv_id,source_sha256,metadata_sha256,source_bytes,source_kind,result_json)
@@ -732,12 +843,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                          source_bytes=excluded.source_bytes,
                          source_kind=excluded.source_kind,
                          result_json=excluded.result_json""",
-                    (artifact.arxiv_id, artifact.sha256, result["checksums"]["metadata_sha256"],
-                     artifact.size, artifact.source_kind, canonical_json(result).decode()),
+                    (artifact.arxiv_id, artifact_fingerprint(artifact), result["checksums"]["metadata_sha256"],
+                     artifact_bytes, artifact.source_kind, canonical_json(result).decode()),
                 )
                 state.commit()
                 processed += 1
-                input_bytes += artifact.size
+                input_bytes += artifact_bytes
             elapsed = time.monotonic() - started
             summary = {
                 "schema_version": SCHEMA_VERSION,
@@ -778,7 +889,11 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--max-ngram", type=int, default=4, choices=range(2, 5))
     parser.add_argument("--candidate-min-occurrences", type=int, default=2)
     parser.add_argument("--max-candidate-phrases", type=int, default=30)
-    parser.add_argument("--source-kind", choices=("all", "structured-corpus", "local-pdf-text"), default="all")
+    parser.add_argument(
+        "--source-kind",
+        choices=("all", "structured-corpus", "local-pdf-text", "arxiv-source"),
+        default="all",
+    )
     parser.add_argument("--selection", choices=("sequential", "stratified"), default="sequential")
     parser.add_argument("--start-after", type=arxiv_id_argument)
     args = parser.parse_args(argv)

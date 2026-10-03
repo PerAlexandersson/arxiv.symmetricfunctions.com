@@ -2,6 +2,29 @@
 
 ## Current scope
 
+Active ownership (2026-10-03): the private-account full-text worker owns only
+`src/fulltext_keyword_prototype.py`, its focused tests/documentation, and this
+handoff while validating Erik's source-derived NDJSON/plain-text output.  No
+application database writes, tagging, deployment, or production mutation are
+authorized.  Generated corpus text remains under `/papers/math-co`, outside
+this repository.  Avoid these files until this entry is released.
+
+Erik-source compatibility is verified on the paper-cache runner's 12-paper
+pilot. The prototype now recognizes `arxiv-source`, verifies both registered
+plain text and its checksum-recorded NDJSON, and consumes NDJSON records for
+section-aware body evidence while keeping the embedded abstract out of body
+matches. It suppresses bibliography records, reference/acknowledgment sections,
+source citation keys, figures/tables and filenames, and contact boilerplate.
+The v2 scan processed all 12 current-version papers (4,796,888 verified input
+bytes) in 1.281 s: 1,871 records yielded 1,574 analyzed paragraphs and 290
+suppressed records (264 references, 11 abstracts, 11 figures/tables, two
+structural sections, two boilerplate). It produced 137 body-only matches to
+curated keywords and 243 capped novel phrases, with useful section-backed
+examples including `cyclic flat`, `noncrossing partition lattice`, and
+`lattice polytope`; generic tags such as `group`, `sequence`, and `polynomial`
+still require review. Output is outside Git at
+`/home/dev/.cache/arxiv.symmetricfunctions.com/fulltext-keyword-prototype-20261003T0735Z/source-pilot-v2`.
+
 Ownership released (2026-10-02): the bounded full-text keyword prototype and a
 fresh production-to-local database baseline are complete. Production and the
 paper-cache corpus were read-only throughout; no keyword, tag, or other

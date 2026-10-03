@@ -467,7 +467,8 @@ candidate filters. It does not insert keywords, update `paper_keywords`, or
 write any other MariaDB table.
 
 Both a paper limit and an input-byte limit are mandatory. This deterministic
-sample selects across the PDF-text and structured-corpus inventories:
+sample selects across the PDF-text, structured-corpus, and locally extracted
+arXiv-source inventories:
 
 ```bash
 source activate_venv.sh
@@ -487,10 +488,18 @@ acknowledgments, structured formula/citation placeholders, and common
 front-matter boilerplate are suppressed and counted rather than silently
 discarded.
 
+For `arxiv-source` artifacts, the scanner verifies both the registered plain
+text and Erik's adjacent structured NDJSON. It uses the NDJSON records for
+section-aware passages while excluding the embedded abstract and bibliography,
+so title/abstract-derived evidence remains distinct from body/full-text
+evidence. Source citation keys, figure filenames, tables/figures, and author
+contact boilerplate are suppressed. The paper-cache provenance manifest—not
+the application database—records the exact source tree and extractor release.
+
 Repeat a sequential command with the same output directory to resume. A
-checkpoint is reused only while its text SHA-256 and current database metadata
-checksum still match. Changing the keyword/config snapshot requires a new
-output directory.
+checkpoint is reused only while its text/structure fingerprint and current
+database metadata checksum still match. Changing the keyword/config snapshot
+requires a new output directory.
 
 If body evidence is later promoted into the application, keep it in a separate
 evidence table rather than expanding the single `paper_keywords.source` value.
