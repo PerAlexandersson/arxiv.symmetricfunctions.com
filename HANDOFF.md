@@ -2,12 +2,10 @@
 
 ## Current scope
 
-Active ownership (2026-10-03): the private-account full-text worker owns only
-`src/fulltext_keyword_prototype.py`, its focused tests/documentation, and this
-handoff while validating Erik's source-derived NDJSON/plain-text output.  No
-application database writes, tagging, deployment, or production mutation are
-authorized.  Generated corpus text remains under `/papers/math-co`, outside
-this repository.  Avoid these files until this entry is released.
+Ownership released (2026-10-03): source-derived keyword compatibility is
+implemented, verified, committed, and pushed. No application database write,
+tagging, deployment, or production mutation occurred. Generated corpus text
+remains under `/papers/math-co`, outside this repository.
 
 Erik-source compatibility is verified on the paper-cache runner's 12-paper
 pilot. The prototype now recognizes `arxiv-source`, verifies both registered
