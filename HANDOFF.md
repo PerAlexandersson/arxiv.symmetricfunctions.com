@@ -2,6 +2,12 @@
 
 ## Current scope
 
+Active deployment ownership (2026-10-08): academic webpages worker owns this
+handoff, private production configuration, additive audit migration and source
+deployment of `b48ee1c`, explicitly authorized by the user. Back up current
+production before activation; verify authenticated reads and rejected unauthenticated
+writes only. No live approve/reject decisions are part of deployment.
+
 Completed and ownership released (2026-10-08): dedicated DOI review REST API
 and agent CLI, plus routine auto-match default lowered from 0.95 to 0.93.
 Admin lookup now uses the same 0.93 (previously 0.85). No actual candidate
