@@ -2,6 +2,10 @@
 
 Inspected 2026-10-08, using scorer checkpoint `2ae239d`. No DOI decisions,
 assignments, stored scores, runtime code or production configuration changed.
+That statement describes the audit itself. The user subsequently authorized
+fixes and repairs, completed later on 2026-10-08; see
+[the repair receipt](DOI_REPAIR_2026-10-08.md). The historical states below are
+retained as evidence rather than rewritten to match the repaired database.
 
 ## Finding
 

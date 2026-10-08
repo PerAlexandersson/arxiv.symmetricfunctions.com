@@ -2,29 +2,31 @@
 
 ## Current scope
 
-Active (2026-10-08): academic webpages worker owns the DOI normalization,
-precursor review guard and eight-assignment repair lane, including this handoff,
-README, DOI guides/schema, scoring/API/backfill source and their tests.
-Code checkpoint ready (not deployed): styled Latin/Greek normalization fixed;
-explicit extended-abstract/FPSAC markers require review for journal/untyped DOIs;
-proceedings-article candidates retain ordinary eligibility. Routine discovery
-and DB-backed bibliography backfill pass version context. AI review evidence
-now includes comments/editor notes and richer competing-paper context, bound
-into the evidence token. Reason-prefix conventions distinguish wrong work,
-wrong version and valid publication without treating conflicts as wrong matches.
+Completed and ownership released (2026-10-08): Unicode/version fixes committed
+and pushed as `8a62b32`, not deployed. Styled Latin/Greek normalization fixed;
+explicit precursor/FPSAC markers require automatic-approval review except for
+proceedings-article DOIs. Discovery/backfill pass version context. AI review
+evidence now includes comments/editor notes and richer conflicting-paper data.
+README/API/OpenAPI and reason-prefix guidance are synchronized.
+
+All eight user-authorized production assignment repairs completed through the
+existing authenticated admin HTTP API at 10:00:43–10:00:55 UTC. Seven rejected
+candidates approved; He–Wheeler DOI moved from Free boundary 2512.02267 to
+Periodic 2310.03527, with wrong-owner candidate 55169 rejected. Three precursor
+rejections and their full-paper owners unchanged. All eight now verified.
+Candidate IDs, source evidence and API limitations: `docs/DOI_REPAIR_2026-10-08.md`.
+No deployment, bulk rescore or local DB sync; stored legacy scores preserved.
 
 Verification: 183 Python tests pass (one optional DB skip), then all 12 DOI API
-tests pass against real MariaDB connection-local temporary tables. OpenAPI YAML
-and diff check pass. No production code deployment. User authorized repairing
-the eight sourced valid matches; the existing admin HTTP API supports rejected
-approvals/reassignment whereas the restricted bearer API intentionally does not.
-Live preflight confirms all 11 expected candidate states. A read-only production
-snapshot covers 15 papers/14 candidates including the incorrect He-Wheeler
-owner and the three correct full-paper owners. Repair is pending; preserve
-three wrong-version rejections and their full-paper assignments.
-Private snapshot: /home/dev/.local/state/arxiv-symmetricfunctions/repairs/
-2026-10-08-high-rejections/before.json. Logs: /tmp/arxiv-doi-repair-tests.log,
-/tmp/arxiv-doi-repair-db-tests.log.
+tests pass against MariaDB temporary tables; OpenAPI YAML/diff checks pass.
+Live before/after snapshots cover 15 papers/14 candidates: exactly nine paper
+and nine candidate rows changed as planned, all other inspected rows identical.
+Eight public DOI assignments plus cleared wrong owner independently verified
+via MCP. Existing admin endpoints do not write doi_review_events; durable
+source-backed plan, intents, receipts, snapshots and script are under
+/home/dev/.local/state/arxiv-symmetricfunctions/repairs/2026-10-08-high-rejections/.
+Logs: /tmp/arxiv-doi-repair-tests.log and /tmp/arxiv-doi-repair-db-tests.log.
+All owned source, tests, guides, audit/repair notes, suggestion and handoff released.
 
 Completed and ownership released (2026-10-08): audited all 11 historical
 rejections scoring >=93 on title/authors. Eight have strong evidence of valid
