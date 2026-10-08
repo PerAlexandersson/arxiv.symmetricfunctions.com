@@ -552,6 +552,12 @@ python3 bib_doi_backfill.py /path/to/file.bib   # bulk backfill from .bib file
 - Admin UI has date range controls; defaults to 1 year ago → today
 - Admin can manually set DOIs on individual paper pages
 - Publication dates contribute proximity evidence; publication may precede arXiv upload.
+- The stored confidence combines title/author similarity (80%), publication-year
+  proximity (10%) and journal metadata (10%). Identical title/author records can
+  therefore score below 100%; the admin score tooltip shows their current text
+  similarity separately. Normalization decodes MathJax Unicode escapes and
+  removes duplicate plain-text/MathML Greek symbols. Existing stored scores
+  are not silently recalculated when normalization changes.
 - DOI provenance: `arxiv` (from arXiv metadata), `auto` (Crossref match), `verified` (admin- or API-reviewed), `skipped` (unlikely to ever get a DOI)
 - `doi_checked_at` tracks when each paper was last queried (skipped for 180 days)
 - Routine discovery waits until a preprint is at least 180 days old and takes

@@ -46,7 +46,10 @@ from publication import (
     publication_venue_label,
 )
 from site_stats import mark_index_cache_dirty
-from title_matching import normalize_title, summarize_author_list_for_display
+from title_matching import (
+    author_similarity, normalize_title, summarize_author_list_for_display,
+    title_similarity,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1205,6 +1208,17 @@ def _attach_doi_display_fields(candidates):
         candidate['paper_authors_full'] = paper_full
         candidate['crossref_authors_display'] = crossref_summary
         candidate['crossref_authors_full'] = crossref_full
+        title_score = title_similarity(candidate.get('paper_title') or '',
+                                       candidate.get('crossref_title') or '')
+        authors_score = author_similarity(
+            candidate.get('paper_authors') or [],
+            [name.strip() for name in (candidate.get('crossref_authors') or '').split(';')
+             if name.strip()],
+        )
+        candidate['confidence_tooltip'] = (
+            f'Current title similarity: {title_score:.0%}; authors: {authors_score:.0%}. '
+            'Stored lookup score also includes dates and journal metadata.'
+        )
         published = candidate.get('published_date')
         candidate['paper_year'] = published.year if hasattr(published, 'year') else None
         conflicts = candidate.get('doi_conflicts') or []
@@ -1357,6 +1371,7 @@ def dois_tab():
                 'doi_conflict_summary': c['doi_conflict_summary'],
                 'doi_conflict_tooltip': c['doi_conflict_tooltip'],
                 'confidence': float(c['confidence']),
+                'confidence_tooltip': c['confidence_tooltip'],
                 'status': c['status'],
             }
             for c in candidates

@@ -68,7 +68,8 @@ function renderRows(candidates) {
     const paperYear = c.paper_year ? ' (' + c.paper_year + ')' : '';
     const yrSuffix = c.crossref_year ? ' (' + c.crossref_year + ')' : '';
 
-    let actionHtml = '<div class="doi-actions-inner"><span class="doi-conf ' + confClass + '">' + confPct + '%</span>';
+    let actionHtml = '<div class="doi-actions-inner"><span class="doi-conf ' + confClass +
+      '" title="' + esc(c.confidence_tooltip || '') + '">' + confPct + '%</span>';
     if (c.status === 'pending') {
       actionHtml += '<div class="doi-action-buttons">' +
         '<button class="approve-btn" data-doi-action="approve" data-candidate-id="' + c.id + '" title="Approve — assign this DOI to the paper"' +

@@ -60,6 +60,31 @@ class AutoApprovalTests(unittest.TestCase):
 
 
 class NormalizeTests(unittest.TestCase):
+    def test_crossref_unicode_mathml_matches_arxiv_nu_title(self):
+        arxiv = 'Super Stable Tensegrities and the Colin de Verdière Number $ν$'
+        crossref = ('Super stable tensegrities and the Colin de Verdière number ν '
+                    '&lt;math xmlns="http://www.w3.org/1998/Math/MathML" '
+                    'altimg="urn:x-wiley:03649024:media:jgt23188"&gt;'
+                    r'&lt;mrow&gt;&lt;mi&gt;\unicode{x003BD}&lt;/mi&gt;&lt;/mrow&gt;'
+                    '&lt;/math&gt;')
+        self.assertEqual(normalize_title(arxiv), normalize_title(crossref))
+        self.assertEqual(title_similarity(arxiv, crossref), 1.0)
+        self.assertEqual(author_similarity(['Ryoshun Oba', 'Shin-ichi Tanigawa'],
+                                          ['Oba, Ryoshun', 'Tanigawa, Shin‐ichi']), 1.0)
+
+    def test_unicode_escapes_decode_without_erasing_distinct_math(self):
+        for escaped in (r'\unicode{x003BD}', r'\unicode{X03BD}', r'\unicode{957}'):
+            with self.subTest(escaped=escaped):
+                self.assertEqual(normalize_title(escaped), 'nu')
+                self.assertEqual(normalize_title('<m:math><m:mi>' + escaped +
+                                                 '</m:mi></m:math>'), 'nu')
+        self.assertEqual(normalize_title('ν <math><mi>λ</mi></math>'), 'nu lambda')
+        self.assertEqual(normalize_title('<math><mi>ν</mi><mi>ν</mi></math>'), 'nu nu')
+        self.assertEqual(normalize_title('ν ν'), 'nu nu')
+        self.assertEqual(normalize_title('x003bd'), 'x003bd')
+        for invalid in (r'\unicode{x110000}', r'\unicode{xD800}', r'\unicode{x0000}'):
+            self.assertTrue(normalize_title(invalid))
+
     def test_doi_queue_uses_explicit_priority_bands(self):
         cursor = mock.Mock()
         cursor.fetchall.return_value = []
@@ -339,6 +364,15 @@ class NormalizeTests(unittest.TestCase):
 
 
 class ScoreMatchTests(unittest.TestCase):
+    def test_exact_mcneil_title_and_author_have_a_separate_date_penalty(self):
+        title = 'On a conjecture of McNeil'
+        self.assertEqual(title_similarity(title, title), 1.0)
+        self.assertEqual(author_similarity(['Sela Fried'], ['Fried, Sela']), 1.0)
+        item = {'title': [title], 'author': [{'family': 'Fried', 'given': 'Sela'}],
+                'container-title': ['Mathematical communications'],
+                'published-online': {'date-parts': [[2026, 4, 2]]}}
+        self.assertEqual(score_match(title, ['Sela Fried'], 2022, item)[0], .9)
+
     def test_allows_journal_publication_before_later_arxiv_upload(self):
         cr_item = {
             'title': ['Same title'],

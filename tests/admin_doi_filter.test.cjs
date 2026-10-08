@@ -96,6 +96,16 @@ test('an actually empty result shows the empty-state message', () => {
   assert.match(f.elements['doi-tbody'].innerHTML, /No candidates in this view/);
 });
 
+test('AJAX score keeps stored confidence and explains current text similarity', () => {
+  const f = fixture();
+  f.context.candidates = [{...candidate(1, false), confidence: 0.9,
+    confidence_tooltip: 'Current title similarity: 100%; authors: 100%. Stored lookup score also includes dates and journal metadata.'}];
+  vm.runInContext('renderRows(candidates)', f.context);
+  const html = f.elements['doi-tbody'].innerHTML;
+  assert.match(html, /title="Current title similarity: 100%; authors: 100%/);
+  assert.match(html, />90%<\/span>/);
+});
+
 test('AJAX tab refresh keeps counts and visible candidates consistent', async () => {
   const f = fixture();
   f.context.fetchJson = async () => ({ok: true,

@@ -7,6 +7,11 @@ import unicodedata
 
 _DASH_RE = re.compile(r'--+|[‐‑‒–—−-]+')
 _HTML_TAG_RE = re.compile(r'<[^>]+>')
+_TEX_UNICODE_RE = re.compile(r'\\unicode\s*\{\s*(x[0-9a-f]{1,6}|[0-9]{1,7})\s*\}', re.I)
+_MATHML_RE = re.compile(
+    r'<(?P<ns>[\w.-]+:)?math\b[^>]*>(?P<body>.*?)</(?(ns)(?P=ns))math\s*>',
+    re.I | re.S,
+)
 _MATH_DELIM_RE = re.compile(r'(\\\(|\\\)|\\\[|\\\]|\$+)')
 _TEX_ORDINAL_RE = re.compile(r'([a-z0-9])\s*\^\s*\{?\s*(?:st|nd|rd|th)\s*\}?')
 _TEX_UNWRAP_COMMANDS = (
@@ -327,12 +332,41 @@ def _substring_title_similarity_boost(left_norm, right_norm):
     return 0.0
 
 
+def _decode_tex_unicode(match):
+    """Decode MathJax Unicode escapes, leaving invalid scalar values intact."""
+    value = match.group(1)
+    codepoint = int(value[1:], 16) if value.lower().startswith('x') else int(value)
+    if codepoint > 0x10FFFF or 0xD800 <= codepoint <= 0xDFFF:
+        return match.group(0)
+    char = chr(codepoint)
+    return char if not unicodedata.category(char).startswith('C') else match.group(0)
+
+
+def _remove_duplicate_mathml_symbols(text):
+    """Drop a MathML Greek symbol repeated immediately after its plain-text copy.
+
+    Some publisher deposits include both renderings. Keep standalone MathML,
+    different symbols, and repeated symbols within mathematical expressions.
+    """
+    def replace(match):
+        symbol = _HTML_TAG_RE.sub('', match.group('body')).strip()
+        prefix = text[:match.start()].rstrip()
+        if (symbol in _GREEK_UNICODE_MAP and prefix.endswith(symbol)
+                and (len(prefix) == 1 or not prefix[-2].isalnum())):
+            return ''
+        return match.group(0)
+
+    return _MATHML_RE.sub(replace, text)
+
+
 def normalize_title(text):
     """Normalize titles across TeX, HTML/MathML, Unicode, and punctuation."""
     if not text:
         return ''
 
     text = html.unescape(str(text))
+    text = _TEX_UNICODE_RE.sub(_decode_tex_unicode, text)
+    text = _remove_duplicate_mathml_symbols(text)
     text = _HTML_TAG_RE.sub(' ', text)
     text = _DASH_RE.sub(' - ', text)
     text = _MATH_DELIM_RE.sub(' ', text)

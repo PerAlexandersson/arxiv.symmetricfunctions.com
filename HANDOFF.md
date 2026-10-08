@@ -2,6 +2,35 @@
 
 ## Current scope
 
+Completed and ownership released (2026-10-08, not yet deployed): fixed
+Crossref title normalization for MathJax `\unicode{x003BD}` (nu), including
+decimal escapes and the duplicated plain-text/MathML Greek symbol in
+`10.1002/jgt.23188`. Standalone/different/repeated mathematical symbols are
+preserved. The public arXiv paper title was already correct; the bug affected
+Crossref comparison and its normalized admin display. Fresh confidence for
+2212.04556v2 is now 0.95, versus stored 0.926; both title and author similarity
+are 1.0. No stored score or DOI decision was changed.
+
+McNeil (2208.03788v4, candidate 55815, DOI 10.64785/mc.31.1.1) already has
+exact title and author similarity. Its 0.90 is entirely the existing date
+penalty: arXiv 2022, journal 2026. The scoring weights remain 80% title/authors,
+10% date proximity, 10% journal metadata. Admin initial/AJAX score tooltips now
+explain stored confidence versus current title/author similarity; help/README
+also document the distinction. DOI JS cache version is 5.
+
+Verification: 158 Python tests OK (one opt-in MariaDB skip); seven JavaScript
+behavior tests, JS syntax and diff checks pass. The two live Crossref records
+were fetched read-only and reproduce both cases; bounded evidence lives in
+`/tmp/arxiv-doi-matching-cases.json` and `/tmp/crossref-2208.03788.json`,
+`/tmp/crossref-2212.04556.json`. Test log: `/tmp/arxiv-title-fix-tests.log`.
+No deployment, production metadata mutation, queue rescore or review decision
+was performed. Suggested future versioned score refresh is recorded in
+`suggestions/doi-score-refresh.md`, not implemented as an implicit batch write.
+
+Released paths: title_matching.py, admin.py, DOI JS/template, README,
+tests/test_doi_lookup.py, tests/test_routes.py, tests/test_admin_assets.py,
+tests/admin_doi_filter.test.cjs, the suggestion and this handoff.
+
 Deployed and ownership released (2026-10-08): DOI review API/client and 93%
 automatic matching are live. Source implementation `b48ee1c`, deployed from
 clean checkpoint `2d95752`; the user explicitly authorized deployment.

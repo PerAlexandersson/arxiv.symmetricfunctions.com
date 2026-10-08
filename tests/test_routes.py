@@ -83,6 +83,20 @@ class FakeConnection:
 
 
 class RouteTests(unittest.TestCase):
+    def test_doi_display_explains_stored_score_without_replacing_it(self):
+        from admin import _attach_doi_display_fields
+        candidate = {
+            'paper_title': 'On a conjecture of McNeil',
+            'crossref_title': 'On a conjecture of McNeil',
+            'paper_authors': ['Sela Fried'], 'crossref_authors': 'Fried, Sela',
+            'published_date': date(2022, 8, 7), 'crossref_year': 2026,
+            'confidence': .9,
+        }
+        _attach_doi_display_fields([candidate])
+        self.assertEqual(candidate['confidence'], .9)
+        self.assertIn('title similarity: 100%; authors: 100%', candidate['confidence_tooltip'])
+        self.assertIn('dates and journal metadata', candidate['confidence_tooltip'])
+
     def test_app_import_has_no_network_or_database_side_effects(self):
         self.assertFalse(_startup_network_called)
         self.assertFalse(_startup_db_called)
