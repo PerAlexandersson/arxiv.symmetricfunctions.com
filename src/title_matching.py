@@ -1,6 +1,5 @@
 """Utilities for normalizing titles/authors and scoring text similarity."""
 
-from difflib import SequenceMatcher
 import html
 import re
 import unicodedata
@@ -305,12 +304,20 @@ def _author_list_name_similarity(left_authors, right_authors):
 
 
 def _title_similarity_from_normalized(left_norm, right_norm):
-    """Score two already-normalized titles."""
+    """One minus word edit distance divided by the longer title's word count."""
+    if not left_norm or not right_norm:
+        return 0.0
     if left_norm and right_norm and left_norm.replace(' ', '') == right_norm.replace(' ', ''):
         return 1.0
-    token_sim = _jaccard(set(left_norm.split()), set(right_norm.split()))
-    string_sim = SequenceMatcher(None, left_norm, right_norm).ratio()
-    return 0.65 * token_sim + 0.35 * string_sim
+    left, right = left_norm.split(), right_norm.split()
+    previous = list(range(len(right) + 1))
+    for i, word in enumerate(left, 1):
+        current = [i]
+        for j, other in enumerate(right, 1):
+            current.append(min(previous[j] + 1, current[j - 1] + 1,
+                               previous[j - 1] + (word != other)))
+        previous = current
+    return 1.0 - previous[-1] / max(len(left), len(right))
 
 
 def _normalize_regional_spellings(text):
@@ -318,18 +325,6 @@ def _normalize_regional_spellings(text):
     if not text:
         return ''
     return ' '.join(_TITLE_WORD_NORMALIZATIONS.get(word, word) for word in text.split())
-
-
-def _substring_title_similarity_boost(left_norm, right_norm):
-    """Boost when one title is almost contained in the other title."""
-    left_compact = left_norm.replace(' ', '')
-    right_compact = right_norm.replace(' ', '')
-    if not left_compact or not right_compact:
-        return 0.0
-    shorter, longer = sorted((left_compact, right_compact), key=len)
-    if shorter in longer and len(longer) <= 1.35 * len(shorter):
-        return 0.96
-    return 0.0
 
 
 def _decode_tex_unicode(match):
@@ -465,7 +460,7 @@ def author_last_name(full_name):
 
 
 def title_similarity(left_title, right_title):
-    """Blend token overlap and whole-string similarity for titles."""
+    """Compare normalized titles by proportional word edits."""
     left_norm = normalize_title(left_title)
     right_norm = normalize_title(right_title)
     return _title_similarity_from_normalized(left_norm, right_norm)
@@ -499,35 +494,66 @@ def author_coverage_similarity(left_authors, right_authors):
     return min(1.0, total / min(len(left_authors), len(right_authors)))
 
 
+def _author_identity_matches(left, right):
+    surname = author_last_name(left).replace(' ', '')
+    other_surname = author_last_name(right).replace(' ', '')
+    surname_agrees = bool(surname and surname == other_surname)
+    # A structured family field can disambiguate an unhyphenated compound
+    # surname in arXiv's display name, e.g. "Jesse Campion Loth".
+    for plain, structured in ((left, right), (right, left)):
+        if ',' not in plain and ',' in structured:
+            family = author_last_name(structured)
+            if family and normalize_author_name(plain).endswith(' ' + family):
+                surname_agrees = True
+    if not surname_agrees:
+        return False
+    given, other = _author_given_token(left), _author_given_token(right)
+    return bool(given and other and given[0] == other[0]
+                and (given == other or len(given) == 1 or len(other) == 1))
+
+
+def author_changes(arxiv_authors, publication_authors):
+    """Maximum one-to-one identity matches; deductions use the arXiv count.
+
+    Full first names must agree unless one side uses an initial. Missing given
+    names are uncertain. An augmenting-path match avoids greedy errors when
+    two authors share a surname and one registry name is abbreviated.
+    """
+    left = [name for name in arxiv_authors if str(name).strip()]
+    right = [name for name in publication_authors if str(name).strip()]
+    edges = [[j for j, other in enumerate(right) if _author_identity_matches(name, other)]
+             for name in left]
+    paired = {}
+    for start in range(len(left)):
+        queue, parents_left, parents_right = [start], {start: None}, {}
+        free = None
+        for i in queue:
+            for j in edges[i]:
+                if j in parents_right:
+                    continue
+                parents_right[j] = i
+                if j not in paired:
+                    free = j
+                    break
+                next_left = paired[j]
+                if next_left not in parents_left:
+                    parents_left[next_left] = j
+                    queue.append(next_left)
+            if free is not None:
+                break
+        while free is not None:
+            i = parents_right[free]
+            paired[free] = i
+            free = parents_left[i]
+    matched = len(paired)
+    missing, added = len(left) - matched, len(right) - matched
+    penalty = (0.20 * missing + 0.15 * added) / len(left) if left else 0.20
+    return dict(matched=matched, missing=missing, added=added, penalty=penalty,
+                complete=bool(left and right),
+                conflicting=bool(missing and added))
+
+
 def score_title_author_match(left_title, left_authors, right_title, right_authors):
-    """Score two records using only title and author information."""
-    left_norm = normalize_title(left_title)
-    right_norm = normalize_title(right_title)
-    title_sim = _title_similarity_from_normalized(left_norm, right_norm)
-    title_sim = max(title_sim, _substring_title_similarity_boost(left_norm, right_norm))
-    author_sim = author_similarity(left_authors, right_authors)
-
-    # When titles normalize identically, Crossref author data is often a
-    # truncated or punctuation-split version of the arXiv author list.
-    exactish_title = bool(left_norm) and (
-        left_norm.replace(' ', '') == right_norm.replace(' ', '')
-    )
-    if exactish_title:
-        author_sim = max(author_sim, author_similarity(
-            left_authors, right_authors, compact=True))
-        has_robust_name_overlap = any(
-            _author_name_similarity(left, right) >= 0.65
-            for left in left_authors
-            for right in right_authors
-        )
-        left_compact = _surname_set(left_authors, compact=True)
-        right_compact = _surname_set(right_authors, compact=True)
-        if left_compact & right_compact or has_robust_name_overlap:
-            author_sim = 1.0
-        elif (left_compact and right_compact
-              and min(len(left_compact), len(right_compact)) >= 2
-              and (left_compact <= right_compact
-                   or right_compact <= left_compact)):
-            author_sim = 1.0
-
-    return 0.75 * title_sim + 0.25 * author_sim
+    """Title agreement minus directional, proportional author deductions."""
+    return max(0.0, title_similarity(left_title, right_title)
+               - author_changes(left_authors, right_authors)['penalty'])

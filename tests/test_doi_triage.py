@@ -98,7 +98,7 @@ class ClassificationTests(unittest.TestCase):
             candidate(), {'title': 'A theorem about graphs'}, set())
         self.assertEqual('metadata_exact', result['decision'])
 
-    def test_near_exact_metadata_with_article_word_is_staged(self):
+    def test_extra_article_word_is_a_proportional_difference(self):
         result = classify_candidate(
             candidate(
                 paper_title='Lower bounds for the depth of second powers',
@@ -109,9 +109,10 @@ class ClassificationTests(unittest.TestCase):
             {'title': 'Lower bounds for the depth of second powers'},
             set(),
         )
-        self.assertEqual('metadata_exact', result['decision'])
+        self.assertEqual('review_high_evidence', result['decision'])
+        self.assertAlmostEqual(result['stored_match_score'], 8 / 9, places=3)
 
-    def test_strong_renamed_metadata_is_prioritized_for_manual_review(self):
+    def test_longer_renamed_metadata_remains_unresolved(self):
         result = classify_candidate(
             candidate(
                 paper_title=(
@@ -127,7 +128,8 @@ class ClassificationTests(unittest.TestCase):
             None,
             set(),
         )
-        self.assertEqual('review_high_evidence', result['decision'])
+        self.assertEqual('unresolved', result['decision'])
+        self.assertAlmostEqual(result['stored_match_score'], 9 / 12, places=3)
 
     def test_high_evidence_conflict_is_not_prioritized_as_unambiguous(self):
         result = classify_candidate(

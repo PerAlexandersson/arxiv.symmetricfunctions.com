@@ -235,7 +235,11 @@ components:
         id: {type: integer}
         paper_id: {type: integer}
         doi: {type: string}
-        confidence: {type: number}
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Stored match score divided by 100, not a probability; may reflect an earlier scoring policy.
         status: {type: string, enum: [pending, approved, rejected]}
         reviewed_at: {type: [string, 'null']}
         crossref_title: {type: [string, 'null']}

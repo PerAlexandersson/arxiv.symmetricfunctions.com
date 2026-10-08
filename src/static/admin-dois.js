@@ -62,14 +62,14 @@ function renderRows(candidates) {
   }
   tbody.innerHTML = candidates.map(c => {
     const confClass = c.confidence >= 0.90 ? 'doi-conf-high' : c.confidence >= 0.75 ? 'doi-conf-med' : 'doi-conf-low';
-    const confPct = Math.round(c.confidence * 100);
+    const scoreText = (c.confidence * 100).toFixed(1).replace(/\.0$/, '');
     const pTitle = truncateText(c.paper_title_display || '', 80);
     const crTitle = truncateText(c.crossref_title_display || '', 80);
     const paperYear = c.paper_year ? ' (' + c.paper_year + ')' : '';
     const yrSuffix = c.crossref_year ? ' (' + c.crossref_year + ')' : '';
 
     let actionHtml = '<div class="doi-actions-inner"><span class="doi-conf ' + confClass +
-      '" title="' + esc(c.confidence_tooltip || '') + '">' + confPct + '%</span>';
+      '" title="' + esc(c.confidence_tooltip || '') + '">' + scoreText + '/100</span>';
     if (c.status === 'pending') {
       actionHtml += '<div class="doi-action-buttons">' +
         '<button class="approve-btn" data-doi-action="approve" data-candidate-id="' + c.id + '" title="Approve — assign this DOI to the paper"' +

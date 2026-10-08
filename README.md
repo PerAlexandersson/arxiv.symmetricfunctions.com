@@ -543,24 +543,41 @@ python3 doi_lookup.py --batch 250 --auto-approve 0.93
 python3 bib_doi_backfill.py /path/to/file.bib   # bulk backfill from .bib file
 ```
 
-- Routine matches at least 93% are auto-approved; lower-confidence matches at
-  least 60% are staged for review, while weaker results are not staged. The
+- Routine matches scoring at least 93/100 can be auto-approved when author,
+  ambiguity and DOI-assignment checks pass. Other matches scoring at least
+  60/100 are staged for review; weaker results are not staged. The
   CLI threshold remains configurable.
-- DOI conflicts and candidates below 93% remain in `/admin/dois` for review.
-- The admin-run lookup and default batch wrapper also use 93%; an explicit
+- DOI conflicts and candidates below 93/100 remain in `/admin/dois` for review.
+- The admin-run lookup and default batch wrapper also use 93/100; an explicit
   `DOI_AUTO_APPROVE` cron override still takes precedence.
 - Admin UI has date range controls; defaults to 1 year ago → today
 - Admin can manually set DOIs on individual paper pages
-- Confidence combines title/author similarity (80%), journal metadata (10%)
-  and a ten-point baseline, minus a publication-year deduction. Relative to
-  the first arXiv submission year, publication 0–4 years later has no deduction;
-  each additional year deducts one percentage point. Publication before arXiv
-  deducts two points per year. Unknown dates retain the seven-point deduction;
-  the final score is bounded to 0–100%. Identical title/author records can
-  therefore score below 100%; the admin score tooltip shows their current text
-  similarity separately. Normalization decodes MathJax Unicode escapes and
-  removes duplicate plain-text/MathML Greek symbols. Existing stored scores
-  are not silently recalculated when normalization changes.
+- The **match score** is a heuristic out of 100, not a probability. Title
+  agreement starts at 100 minus the percentage of word edits (insertions,
+  deletions or substitutions, divided by the longer normalized title).
+  One changed word out of ten costs ten points; five cost fifty. Spacing,
+  accents, TeX/MathML and the existing spelling normalization are still applied.
+- Authors match one-to-one by surname and full first name or compatible initial,
+  regardless of author order. Different spelled-out first names do not match
+  merely because their initials agree. A missing author costs `20 / N` points
+  and an added author `15 / N`, where `N` is the original arXiv author count.
+  Thus five authors becoming four costs four points; five becoming six costs
+  three. A replacement incurs both deductions and requires review. Missing
+  author metadata cannot authorize automatic approval.
+- Publication 0–4 calendar years after the first arXiv submission has no date
+  deduction; each further year costs one point, and each year before arXiv
+  costs two. Missing years cost seven points; missing journal metadata costs
+  five. Scores are bounded to 0–100.
+- Distinct DOI candidates are ranked using these metadata scores. If the
+  runner-up scores at least 80 and is fewer than five points behind, deduct
+  `8 × (1 − gap / 5)` points from the winner and require review. A tie costs
+  eight points; a lead of five or more costs none. Duplicate results for the
+  same DOI do not compete. The penalty never promotes the runner-up silently.
+  Routine lookup, bibliography backfill and BibTeX lookup share this rule.
+- The admin score tooltip shows current title agreement and author changes.
+  Stored scores are not silently recalculated when the policy changes. The
+  database/API field `confidence` retains its name for compatibility and stores
+  the match score divided by 100, not a probability.
 - DOI provenance: `arxiv` (from arXiv metadata), `auto` (Crossref match), `verified` (admin- or API-reviewed), `skipped` (unlikely to ever get a DOI)
 - `doi_checked_at` tracks when each paper was last queried (skipped for 180 days)
 - Routine discovery waits until a preprint is at least 180 days old and takes

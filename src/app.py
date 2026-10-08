@@ -1012,19 +1012,12 @@ def _crossref_lookup_doi(title, authors, year):
     Returns (doi, confidence) or (None, 0).
     """
     try:
-        from doi_lookup import query_crossref, score_match, _last_name
+        from doi_lookup import query_crossref, rank_crossref_matches, _last_name
         first_last = _last_name(authors[0]) if authors else ''
         items = query_crossref(title, first_last)
-        best_doi, best_conf = None, 0
-        for item in items:
-            doi = item.get('DOI')
-            if not doi:
-                continue
-            conf, _, _ = score_match(title, authors, year, item)
-            if conf > best_conf:
-                best_conf, best_doi = conf, doi
-        if best_conf >= 0.75:
-            return best_doi, best_conf
+        ranked = rank_crossref_matches(title, authors, year, items)
+        if ranked and ranked[0]['score'] >= 0.75 and ranked[0]['auto_eligible']:
+            return ranked[0]['doi'], ranked[0]['score']
     except Exception:
         logger.debug("Crossref lookup failed for %s", title[:60], exc_info=True)
     return None, 0

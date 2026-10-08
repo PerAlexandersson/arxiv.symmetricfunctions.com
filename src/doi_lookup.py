@@ -10,7 +10,7 @@ Usage:
     python3 doi_lookup.py --batch 100         # process 100 papers
     python3 doi_lookup.py --min-age 180       # only papers published >6 months ago
     python3 doi_lookup.py --dry-run           # print matches without writing
-    python3 doi_lookup.py --auto-approve 0.93 # auto-promote high-confidence matches
+    python3 doi_lookup.py --auto-approve 0.93 # auto-promote high-scoring matches
 """
 
 import argparse
@@ -23,6 +23,7 @@ import requests
 
 from config import DB_CONFIG
 from title_matching import (
+    author_changes,
     author_last_name as _last_name,
     normalize_title as _normalize,
     score_title_author_match,
@@ -114,7 +115,7 @@ def _paper_year_and_date(paper_year, paper_published_date=None):
 
 def score_match(paper_title, paper_authors, paper_year, cr_item,
                 paper_published_date=None):
-    """Compute a confidence score (0-1) for a Crossref result."""
+    """Compute a match score (0-1), not a probability, for one Crossref result."""
     cr_title = ' '.join(cr_item.get('title', []))
     cr_authors = []
     for author in cr_item.get('author', []):
@@ -139,16 +140,53 @@ def score_match(paper_title, paper_authors, paper_year, cr_item,
     else:
         date_penalty = 0.07  # Preserve the existing unknown-date deduction.
 
-    # DOI sanity (weight 0.10)
+    # Missing journal metadata deducts five points.
     has_journal = bool(cr_item.get('container-title'))
     doi_sanity = 1.0 if has_journal else 0.5
 
     text_author_score = score_title_author_match(
         paper_title, paper_authors, cr_title, cr_authors)
-    confidence = (0.80 * text_author_score + 0.10 * doi_sanity +
-                  0.10 - date_penalty)
+    confidence = text_author_score - 0.10 * (1.0 - doi_sanity) - date_penalty
 
     return round(max(0.0, min(1.0, confidence)), 3), cr_title, cr_year
+
+
+def rank_crossref_matches(title, authors, year, items, paper_published_date=None):
+    """Rank distinct DOIs and discount a close, plausible alternative.
+
+    A rival scoring at least 80/100 within five points deducts up to eight
+    points, linearly decreasing to zero at a five-point lead. Such ambiguity
+    and contradictory coauthors require review regardless of the threshold.
+    Duplicate Crossref hits for the same DOI are not competitors.
+    """
+    distinct = {}
+    for item in items or []:
+        doi = (item.get('DOI') or '').strip()
+        if not doi:
+            continue
+        score, cr_title, cr_year = score_match(
+            title, authors, year, item, paper_published_date=paper_published_date)
+        names = [((a.get('family', '') + ', ' + a.get('given', '')).strip(', ')
+                  or a.get('name', '')) for a in item.get('author', [])]
+        changes = author_changes(authors, names)
+        row = dict(doi=doi, score=score, raw_score=score, title=cr_title,
+                   authors='; '.join(names), year=cr_year, author_changes=changes,
+                   auto_eligible=changes['complete'] and not changes['conflicting'],
+                   ambiguity_penalty=0.0, runner_up_doi=None, runner_up_score=None)
+        key = doi.lower()
+        if key not in distinct or score > distinct[key]['raw_score']:
+            distinct[key] = row
+    ranked = sorted(distinct.values(), key=lambda row: (-row['raw_score'], row['doi'].lower()))
+    if len(ranked) > 1:
+        best, second = ranked[:2]
+        gap = best['raw_score'] - second['raw_score']
+        best.update(runner_up_doi=second['doi'], runner_up_score=second['raw_score'])
+        if second['raw_score'] >= 0.80 and gap < 0.05 - 1e-9:
+            best['ambiguity_penalty'] = round(0.08 * (1.0 - gap / 0.05), 3)
+            best['score'] = round(max(0.0, best['raw_score'] - best['ambiguity_penalty']), 3)
+            best['auto_eligible'] = False
+    # Keep raw ranking: penalizing the winner must not silently promote its rival.
+    return ranked
 
 
 def query_crossref(title, first_author_last):
@@ -277,7 +315,7 @@ def main(argv=None):
     parser.add_argument('--dry-run', action='store_true',
                         help='print matches without writing to DB')
     parser.add_argument('--auto-approve', type=float, default=None,
-                        help='auto-promote DOIs with confidence >= threshold')
+                        help='auto-promote DOIs with match score / 100 >= threshold')
     args = parser.parse_args(argv)
     if args.auto_approve is not None and not 0.60 <= args.auto_approve <= 1:
         parser.error('--auto-approve must be between 0.60 and 1')
@@ -322,27 +360,19 @@ def main(argv=None):
             get_rejected_dois(cursor, paper['id']),
         )
 
-        best = None
-        for item in items:
-            doi = item.get('DOI')
-            if not doi:
-                continue
-            conf, cr_title, cr_year = score_match(
-                paper['title'], authors, year, item,
-                paper_published_date=paper['published_date'])
-            cr_authors_str = '; '.join(
-                (a.get('family', '') + ', ' + a.get('given', '')).strip(', ')
-                for a in item.get('author', [])
-            )
-            if best is None or conf > best[0]:
-                best = (conf, doi, cr_title, cr_authors_str, cr_year)
+        ranked = rank_crossref_matches(paper['title'], authors, year, items,
+                                       paper_published_date=paper['published_date'])
+        leader = ranked[0] if ranked else None
+        best = (tuple(leader[key] for key in ('score', 'doi', 'title', 'authors', 'year'))
+                if leader else None)
 
         if best and best[0] >= 0.60:
             conf, doi, cr_title, cr_authors_str, cr_year = best
             stats['found'] += 1
-            flag = ''
+            flag = '' if leader['auto_eligible'] else ' [AMBIGUOUS MATCH OR AUTHOR CHANGES: REVIEW REQUIRED]'
 
-            auto_approve = args.auto_approve is not None and conf >= args.auto_approve
+            auto_approve = (args.auto_approve is not None and conf >= args.auto_approve
+                            and leader['auto_eligible'])
             if auto_approve:
                 # Recheck and lock current assignments before promoting a queued result.
                 lock = '' if args.dry_run else ' FOR UPDATE'
@@ -393,11 +423,11 @@ def main(argv=None):
                 """, (paper['id'], doi, conf, cr_title,
                       cr_authors_str, cr_year))
 
-            print(f"  {paper['arxiv_id']}  conf={conf:.3f}  doi={doi}{flag}")
+            print(f"  {paper['arxiv_id']}  score={conf * 100:.1f}/100  doi={doi}{flag}")
         else:
             stats['skipped'] += 1
             if best:
-                print(f"  {paper['arxiv_id']}  conf={best[0]:.3f}  (below threshold)")
+                print(f"  {paper['arxiv_id']}  score={best[0] * 100:.1f}/100  (below threshold)")
             else:
                 print(f"  {paper['arxiv_id']}  no Crossref results")
 

@@ -15,16 +15,23 @@
       that don't yet have a DOI. Starts from the most recent papers up to end of 2023
       and works backwards (older papers are more likely to have been published).
       Use "Date range" for a custom window.</li>
-    <li><strong>Auto-approve</strong> — Matches with confidence &ge; 93% are automatically
-      approved unless the DOI is already assigned or the paper changed during lookup. Lower-confidence matches appear in the Pending tab for manual review.</li>
+    <li><strong>Auto-approve</strong> — Matches scoring &ge; 93/100 are automatically
+      approved unless the DOI is already assigned or the paper changed during lookup. Lower-scoring matches appear in the Pending tab for manual review.</li>
     <li><strong>Review</strong> — Compare the arXiv paper title/authors against the Crossref
       match. Approve correct matches to assign the DOI; reject incorrect ones.</li>
-    <li><strong>Score</strong> — The stored lookup score includes dates and journal
-      metadata, so identical titles and authors can score below 100%.
+    <li><strong>Score</strong> — The stored match score includes dates and journal
+      metadata, so identical titles and authors can score below 100/100.
       Publication 0–4 years after the first arXiv submission has no date deduction;
       each extra year costs one point, and each year before arXiv costs two.
-      Hover over the score for current title and author similarity.
+      Hover over the score for current title agreement and author changes.
       Older stored scores are not automatically recalculated.</li>
+    <li><strong>Authors and titles</strong> — Surnames and compatible first names or
+      initials match one-to-one, regardless of order. Missing authors cost
+      20 × missing/original points; added authors cost 15 × added/original.
+      Title deductions follow the fraction of words changed.</li>
+    <li><strong>Alternatives</strong> — A plausible competing DOI within five
+      points deducts up to eight points. Close alternatives and conflicting
+      author identities require review.</li>
     <li><strong>Provenance</strong> — DOIs are tracked as <code>arxiv</code> (from arXiv
       metadata), <code>auto</code> (Crossref auto-approved), or <code>verified</code>
       (admin-approved).</li>
@@ -72,7 +79,7 @@
     <tr>
       <th>arXiv Paper</th>
       <th>Crossref Match</th>
-      <th class="doi-action-heading"></th>
+      <th class="doi-action-heading">Match score</th>
     </tr>
   </thead>
   <tbody id="doi-tbody">
@@ -107,7 +114,7 @@
       <td class="doi-actions" id="act-{{ c.id }}">
         <div class="doi-actions-inner">
           <span title="{{ c.confidence_tooltip }}" class="doi-conf {% if c.confidence >= 0.90 %}doi-conf-high{% elif c.confidence >= 0.75 %}doi-conf-med{% else %}doi-conf-low{% endif %}">
-            {{ '%.0f'|format(c.confidence * 100) }}%
+            {{ ('%.1f'|format(c.confidence * 100)).rstrip('0').rstrip('.') }}/100
           </span>
           {% if c.status == 'pending' %}
           <div class="doi-action-buttons">
@@ -154,5 +161,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='admin-dois.js') }}?v=5"></script>
+<script src="{{ url_for('static', filename='admin-dois.js') }}?v=6"></script>
 {% endblock %}

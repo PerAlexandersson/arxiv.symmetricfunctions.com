@@ -83,6 +83,15 @@ class FakeConnection:
 
 
 class RouteTests(unittest.TestCase):
+    def test_bibtex_lookup_does_not_choose_between_tied_dois(self):
+        records = [dict(DOI=doi, title=['A title'],
+                        author=[{'given': 'Jane', 'family': 'Doe'}],
+                        **{'container-title': ['Journal'], 'issued': {'date-parts': [[2024]]}})
+                   for doi in ('10.1234/a', '10.1234/b')]
+        with mock.patch('doi_lookup.query_crossref', return_value=records):
+            self.assertEqual(app_module._crossref_lookup_doi('A title', ['Jane Doe'], 2024),
+                             (None, 0))
+
     def test_doi_display_explains_stored_score_without_replacing_it(self):
         from admin import _attach_doi_display_fields
         candidate = {
@@ -94,8 +103,8 @@ class RouteTests(unittest.TestCase):
         }
         _attach_doi_display_fields([candidate])
         self.assertEqual(candidate['confidence'], .9)
-        self.assertIn('title similarity: 100%; authors: 100%', candidate['confidence_tooltip'])
-        self.assertIn('dates and journal metadata', candidate['confidence_tooltip'])
+        self.assertIn('title agreement: 100%; authors: 1 matched, 0 missing, 0 added', candidate['confidence_tooltip'])
+        self.assertIn('dates, journal metadata', candidate['confidence_tooltip'])
 
     def test_app_import_has_no_network_or_database_side_effects(self):
         self.assertFalse(_startup_network_called)

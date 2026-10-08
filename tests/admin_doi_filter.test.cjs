@@ -99,11 +99,11 @@ test('an actually empty result shows the empty-state message', () => {
 test('AJAX score keeps stored confidence and explains current text similarity', () => {
   const f = fixture();
   f.context.candidates = [{...candidate(1, false), confidence: 0.9,
-    confidence_tooltip: 'Current title similarity: 100%; authors: 100%. Stored lookup score also includes dates and journal metadata.'}];
+    confidence_tooltip: 'Current title agreement: 100%; authors: 1 matched, 0 missing, 0 added.'}];
   vm.runInContext('renderRows(candidates)', f.context);
   const html = f.elements['doi-tbody'].innerHTML;
-  assert.match(html, /title="Current title similarity: 100%; authors: 100%/);
-  assert.match(html, />90%<\/span>/);
+  assert.match(html, /title="Current title agreement: 100%; authors: 1 matched/);
+  assert.match(html, />90\/100<\/span>/);
 });
 
 test('AJAX tab refresh keeps counts and visible candidates consistent', async () => {
@@ -127,4 +127,12 @@ test('removed filter cannot silently hide rows or depend on browser storage', ()
   f.context.candidates = [candidate(1)];
   vm.runInContext('renderRows(candidates)', f.context);
   assert.equal(f.rows()[0].hidden, false);
+});
+
+
+test('fractional match scores stay visible instead of rounding across the threshold', () => {
+  const f = fixture();
+  f.context.candidates = [{...candidate(1, false), confidence: 0.926}];
+  vm.runInContext('renderRows(candidates)', f.context);
+  assert.match(f.elements['doi-tbody'].innerHTML, />92\.6\/100<\/span>/);
 });

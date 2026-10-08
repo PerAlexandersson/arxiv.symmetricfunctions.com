@@ -69,7 +69,7 @@ Config loader: `src/config.py`.
 
 - `NULL` — no DOI, eligible for lookup
 - `'arxiv'` — DOI came from arXiv metadata
-- `'auto'` — auto-approved from Crossref (default confidence >= 0.93)
+- `'auto'` — auto-approved from Crossref (default match score >= 93/100 with author/ambiguity guards)
 - `'verified'` — admin- or credentialed API-reviewed
 - `'skipped'` — marked as unlikely to ever get a DOI; excluded from lookups
 

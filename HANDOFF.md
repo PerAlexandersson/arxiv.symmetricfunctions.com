@@ -2,6 +2,53 @@
 
 ## Current scope
 
+Completed and ownership released (2026-10-08, not deployed): proportional
+match scoring and runner-up handling are implemented. This supersedes the
+older weighted title/author policy described in earlier checkpoints below.
+
+Author identities now match one-to-one by surname (including structured
+compound surnames) and full first name or compatible initial; author order
+and middle initials do not matter. Different spelled-out first names do not
+match just because their initials agree. Maximum matching handles shared
+surnames/ambiguous initials without reusing an author. Missing authors deduct
+20 × missing/N points; additions deduct 15 × added/N, where N is the original
+arXiv author count. Five→four costs four points; five→six costs three. Replacing
+an author costs both and blocks automatic discovery approval. Absent author
+lists also require review. Exact titles no longer erase coauthor differences.
+
+Title score is 100 × (1 − word-edit-distance/max-word-count), retaining existing
+normalization and exact spacing equivalence. Insertions, deletions and
+substitutions count; repeated words and part numbers remain meaningful. The
+old substring boost is removed. Existing asymmetric year deductions remain;
+unknown years cost seven points, absent journal metadata five. Final scores
+are bounded to 0–100 and stored as 0–1 in the compatibility field `confidence`.
+
+Search results share `rank_crossref_matches` across routine DOI lookup,
+bibliography backfill and BibTeX lookup. Distinct DOI runner-up >=80 within
+five points deducts 8 × (1 − gap/5) from the leader; ties cost eight. Ambiguity
+requires review even under a lower auto-approval threshold. Same-DOI hits
+are deduplicated; adjusted score never silently promotes the runner-up.
+Isolated DOI evidence checks have no runner-up context. No queue rescore,
+DOI decision, production mutation or deployment occurred.
+
+Admin initial/AJAX views label match score as e.g. 92.6/100, preserving tenths
+near thresholds. Tooltip shows title agreement, matched/missing/added authors,
+author deduction and other score inputs; old stored values remain unchanged.
+JS cache version is 6. README, API/OpenAPI docs, CLAUDE and the author-guard
+suggestion are synchronized. The score-refresh suggestion remains outstanding.
+
+Verification: all 175 Python tests OK (one optional MariaDB skip), including
+the eight JS behavior cases; standalone JS syntax, changed Python AST, OpenAPI
+YAML, server-rendered DOI template and diff checks pass. Added regressions cover
+five→four/six authors, initials/compound names/duplicate surnames, proportional
+title edits, runner-up thresholds and no automatic writes on ties. Public site
+metadata confirmed the known hypercube collision (2501.19029 vs 2401.01769);
+the wrong-author fixture now scores 82.5 and cannot auto-approve. Crossref's
+live endpoint returned HTTP 500 for that DOI; the regression uses the confirmed
+site author lists with synthetic date/journal fields. Logs:
+`/tmp/arxiv-proportional-tests.log`. No other site touched; all task ownership
+is released. Production still has only the earlier DOI API activation.
+
 Completed and ownership released (2026-10-08, not yet deployed): the user's
 asymmetric publication-year policy is implemented in `src/doi_lookup.py`.
 Relative to the first arXiv submission year: publication 0–4 years later has

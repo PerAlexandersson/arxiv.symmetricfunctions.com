@@ -47,7 +47,7 @@ from publication import (
 )
 from site_stats import mark_index_cache_dirty
 from title_matching import (
-    author_similarity, normalize_title, summarize_author_list_for_display,
+    author_changes, normalize_title, summarize_author_list_for_display,
     title_similarity,
 )
 
@@ -1210,14 +1210,17 @@ def _attach_doi_display_fields(candidates):
         candidate['crossref_authors_full'] = crossref_full
         title_score = title_similarity(candidate.get('paper_title') or '',
                                        candidate.get('crossref_title') or '')
-        authors_score = author_similarity(
+        changes = author_changes(
             candidate.get('paper_authors') or [],
             [name.strip() for name in (candidate.get('crossref_authors') or '').split(';')
              if name.strip()],
         )
         candidate['confidence_tooltip'] = (
-            f'Current title similarity: {title_score:.0%}; authors: {authors_score:.0%}. '
-            'Stored lookup score also includes dates and journal metadata.'
+            f'Current title agreement: {title_score:.0%}; authors: '
+            f"{changes['matched']} matched, {changes['missing']} missing, {changes['added']} added "
+            f"(-{changes['penalty'] * 100:g} points). "
+            'Stored match score may also include dates, journal metadata and competing DOIs. '
+            'Older scores are not automatically recalculated.'
         )
         published = candidate.get('published_date')
         candidate['paper_year'] = published.year if hasattr(published, 'year') else None

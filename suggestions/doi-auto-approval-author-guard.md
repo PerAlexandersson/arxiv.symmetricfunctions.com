@@ -1,5 +1,12 @@
 # Require author agreement for DOI auto-approval
 
+Implemented locally on 2026-10-08 (not yet deployed): strict one-to-one
+surname/first-name-or-initial matching, proportional missing/added penalties,
+and a discovery auto-approval guard against contradictory coauthors. Routine
+lookup, bibliography backfill and BibTeX discovery share the guard. The same
+named hypercube authors are included as a regression fixture. Historical
+metadata below records the reason; no production DOI corrections were run.
+
 Observed friction: the DOI lookup assigned `10.1137/24M1670093` to arXiv
 `2501.19029` at confidence 1.000 because its title exactly matched the journal
 article. The arXiv paper has a different coauthor and proves a different

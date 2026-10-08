@@ -17,7 +17,7 @@ import time
 import pymysql
 
 from config import DB_CONFIG
-from doi_lookup import (query_crossref, score_match, _last_name,
+from doi_lookup import (query_crossref, rank_crossref_matches, _last_name,
                         get_paper_authors, REQUEST_DELAY)
 from site_stats import mark_index_cache_dirty
 
@@ -149,26 +149,17 @@ def main():
             time.sleep(REQUEST_DELAY)
             continue
 
-        best = None
-        for item in items:
-            doi = item.get('DOI')
-            if not doi:
-                continue
-            conf, cr_title, cr_year = score_match(
-                paper['title'], authors, year, item,
-                paper_published_date=paper.get('published_date'))
-            cr_authors_str = '; '.join(
-                (a.get('family', '') + ', ' + a.get('given', '')).strip(', ')
-                for a in item.get('author', [])
-            )
-            if best is None or conf > best[0]:
-                best = (conf, doi, cr_title, cr_authors_str, cr_year)
+        ranked = rank_crossref_matches(paper['title'], authors, year, items,
+                                       paper_published_date=paper.get('published_date'))
+        leader = ranked[0] if ranked else None
+        best = (tuple(leader[key] for key in ('score', 'doi', 'title', 'authors', 'year'))
+                if leader else None)
 
         if best and best[0] >= 0.60:
             conf, doi, cr_title, cr_authors_str, cr_year = best
 
-            if conf >= args.auto_approve:
-                print(f"  {arxiv_id}  conf={conf:.3f}  doi={doi}  [auto-approved]")
+            if conf >= args.auto_approve and leader['auto_eligible']:
+                print(f"  {arxiv_id}  score={conf * 100:.1f}/100  doi={doi}  [auto-approved]")
                 if not args.dry_run:
                     cursor.execute("""
                         UPDATE papers SET doi=%s, doi_status='auto',
@@ -185,7 +176,7 @@ def main():
                           cr_authors_str, cr_year))
                 doi_from_crossref += 1
             else:
-                print(f"  {arxiv_id}  conf={conf:.3f}  doi={doi}  [pending review]")
+                print(f"  {arxiv_id}  score={conf * 100:.1f}/100  doi={doi}  [pending review]")
                 if not args.dry_run:
                     cursor.execute("""
                         INSERT INTO doi_candidates
@@ -201,7 +192,7 @@ def main():
                           cr_authors_str, cr_year))
                 crossref_pending += 1
         else:
-            conf_str = f"conf={best[0]:.3f}" if best else "no results"
+            conf_str = f"score={best[0] * 100:.1f}/100" if best else "no results"
             print(f"  {arxiv_id}  {conf_str}  [below threshold]")
             below_threshold += 1
 

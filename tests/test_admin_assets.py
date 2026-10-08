@@ -37,7 +37,7 @@ class AdminAssetTests(unittest.TestCase):
         ).read_text()
 
         self.assertIn("filename='admin-attention.js') }}?v=2", nav_source)
-        self.assertIn("filename='admin-dois.js') }}?v=5", dois_template)
+        self.assertIn("filename='admin-dois.js') }}?v=6", dois_template)
         self.assertNotIn('doi-show-conflicts', dois_template)
         self.assertNotIn('doi-hidden-notice', dois_template)
         self.assertNotIn('data-doi-show-hidden', dois_template)

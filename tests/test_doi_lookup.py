@@ -27,6 +27,29 @@ from title_matching import (
 
 
 class AutoApprovalTests(unittest.TestCase):
+    def test_tied_candidates_are_staged_even_with_a_lower_threshold(self):
+        cursor = mock.Mock()
+        connection = mock.Mock()
+        connection.cursor.return_value = cursor
+        paper = dict(id=7, arxiv_id='2401.00007', title='A title', published_date='2024-01-02')
+        records = [dict(DOI=doi, title=['A title'],
+                        author=[{'given': 'Jane', 'family': 'Doe'}],
+                        **{'container-title': ['Journal'], 'issued': {'date-parts': [[2024]]}})
+                   for doi in ('10.1234/a', '10.1234/b')]
+        with mock.patch.object(doi_lookup_module.pymysql, 'connect', return_value=connection), \
+             mock.patch.object(doi_lookup_module, 'get_papers_needing_doi', return_value=[paper]), \
+             mock.patch.object(doi_lookup_module, 'get_paper_authors', return_value=['Jane Doe']), \
+             mock.patch.object(doi_lookup_module, 'get_rejected_dois', return_value=set()), \
+             mock.patch.object(doi_lookup_module, 'query_crossref', return_value=records), \
+             mock.patch.object(doi_lookup_module, '_mark_index_cache_dirty_after_doi_changes'), \
+             mock.patch.object(doi_lookup_module.time, 'sleep'), \
+             contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(doi_lookup_module.main(['--batch', '1', '--auto-approve', '.85']), 0)
+        statements = cursor.execute.call_args_list
+        self.assertFalse(any("doi_status='auto'" in call.args[0] for call in statements))
+        insert = next(call for call in statements if 'INSERT INTO doi_candidates' in call.args[0])
+        self.assertEqual(insert.args[1][2], .92)
+
     def test_threshold_boundary_and_existing_assignments(self):
         for confidence, current, conflict, candidate_state, expected in [
             (.929, {'doi': None, 'doi_status': None}, None, None, False),
@@ -47,7 +70,7 @@ class AutoApprovalTests(unittest.TestCase):
                      mock.patch.object(doi_lookup_module, 'get_papers_needing_doi', return_value=[paper]), \
                      mock.patch.object(doi_lookup_module, 'get_paper_authors', return_value=['Jane Doe']), \
                      mock.patch.object(doi_lookup_module, 'get_rejected_dois', return_value=set()), \
-                     mock.patch.object(doi_lookup_module, 'query_crossref', return_value=[{'DOI':'10.1234/test'}]), \
+                     mock.patch.object(doi_lookup_module, 'query_crossref', return_value=[{'DOI':'10.1234/test', 'author': [{'family':'Doe','given':'Jane'}]}]), \
                      mock.patch.object(doi_lookup_module, 'score_match', return_value=(confidence, 'A title', 2024)), \
                      mock.patch.object(doi_lookup_module, '_mark_index_cache_dirty_after_doi_changes'), \
                      mock.patch.object(doi_lookup_module.time, 'sleep',
@@ -250,9 +273,9 @@ class NormalizeTests(unittest.TestCase):
             ),
         )
 
-    def test_exact_titles_allow_subset_author_lists_when_two_match(self):
+    def test_exact_titles_deduct_for_subset_author_lists(self):
         self.assertEqual(
-            1.0,
+            1.0 - .20 / 3,
             score_title_author_match(
                 "Connectivity for Kite-Linked Graphs",
                 ["Runrun Liu", "Martin Rolek", "D. Christopher Stephens"],
@@ -318,9 +341,9 @@ class NormalizeTests(unittest.TestCase):
             0.65,
         )
 
-    def test_spacing_only_title_match_needs_one_author_overlap(self):
+    def test_spacing_only_title_match_still_deducts_missing_author(self):
         self.assertEqual(
-            1.0,
+            .9,
             score_title_author_match(
                 "Macdonald polynomial positivity",
                 ["Jane Doe", "Alex Smith"],
@@ -329,19 +352,19 @@ class NormalizeTests(unittest.TestCase):
             ),
         )
 
-    def test_short_published_suffix_boosts_near_substring_match(self):
-        self.assertGreaterEqual(
+    def test_short_published_suffix_has_proportional_cost(self):
+        self.assertAlmostEqual(
             score_title_author_match(
                 "Coloured Graphs",
                 ["Jane Doe"],
                 "Colored Graphs II",
                 ["Doe, Jane"],
             ),
-            0.97,
+            2 / 3,
         )
 
-    def test_dropped_published_suffix_boosts_near_substring_match(self):
-        self.assertGreaterEqual(
+    def test_dropped_published_suffix_has_proportional_cost(self):
+        self.assertAlmostEqual(
             score_title_author_match(
                 "Bounding the multiplicities of eigenvalues of graph matrices "
                 "in terms of circuit rank using a new approach",
@@ -350,7 +373,7 @@ class NormalizeTests(unittest.TestCase):
                 "in terms of circuit rank",
                 ["Batal, A."],
             ),
-            0.97,
+            13 / 17,
         )
 
     def test_old_tex_font_declarations_do_not_pollute_titles(self):
@@ -407,7 +430,7 @@ class ScoreMatchTests(unittest.TestCase):
     def test_allows_journal_publication_before_later_arxiv_upload(self):
         cr_item = {
             'title': ['Same title'],
-            'author': [{'family': 'Doe'}],
+            'author': [{'family': 'Doe', 'given': 'Jane'}],
             'container-title': ['Journal'],
             'issued': {'date-parts': [[2022, 12, 1]]},
         }
@@ -424,7 +447,7 @@ class ScoreMatchTests(unittest.TestCase):
     def test_does_not_false_reject_incomplete_crossref_month_precision(self):
         cr_item = {
             'title': ['Same title'],
-            'author': [{'family': 'Doe'}],
+            'author': [{'family': 'Doe', 'given': 'Jane'}],
             'container-title': ['Journal'],
             'issued': {'date-parts': [[2022, 12]]},
         }
@@ -440,7 +463,7 @@ class ScoreMatchTests(unittest.TestCase):
     def test_uses_online_date_when_closer_than_print_date(self):
         cr_item = {
             'title': ['Same title'],
-            'author': [{'family': 'Doe'}],
+            'author': [{'family': 'Doe', 'given': 'Jane'}],
             'container-title': ['Journal'],
             'published-print': {'date-parts': [[2024, 5]]},
             'published-online': {'date-parts': [[2023, 3, 7]]},
@@ -458,7 +481,7 @@ class ScoreMatchTests(unittest.TestCase):
     def test_created_date_does_not_override_publication_date(self):
         cr_item = {
             'title': ['Same title'],
-            'author': [{'family': 'Doe'}],
+            'author': [{'family': 'Doe', 'given': 'Jane'}],
             'container-title': ['Journal'],
             'issued': {'date-parts': [[2024]]},
             'created': {'date-parts': [[2022]]},
@@ -469,7 +492,7 @@ class ScoreMatchTests(unittest.TestCase):
     def test_uses_earlier_crossref_year_as_proximity_evidence(self):
         cr_item = {
             'title': ['Same title'],
-            'author': [{'family': 'Doe'}],
+            'author': [{'family': 'Doe', 'given': 'Jane'}],
             'container-title': ['Journal'],
             'issued': {'date-parts': [[2021]]},
         }
