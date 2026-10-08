@@ -2,51 +2,52 @@
 
 ## Current scope
 
-Active deployment ownership (2026-10-08): academic webpages worker owns this
-handoff, private production configuration, additive audit migration and source
-deployment of `b48ee1c`, explicitly authorized by the user. Back up current
-production before activation; verify authenticated reads and rejected unauthenticated
-writes only. No live approve/reject decisions are part of deployment.
+Deployed and ownership released (2026-10-08): DOI review API/client and 93%
+automatic matching are live. Source implementation `b48ee1c`, deployed from
+clean checkpoint `2d95752`; the user explicitly authorized deployment.
+Docker SSH worked, so no host bridge or additional worker was needed.
 
-Completed and ownership released (2026-10-08): dedicated DOI review REST API
-and agent CLI, plus routine auto-match default lowered from 0.95 to 0.93.
-Admin lookup now uses the same 0.93 (previously 0.85). No actual candidate
-review, application DB migration, production configuration or deployment was
-performed. Source is ready for a deployment owner; see `docs/DOI_REVIEW_API.md`.
+Before activation, retained production code/config and a consistent database
+dump under
+`~/domains/arxiv.symmetricfunctions.com/backups/pre-doi-review-20261008T080327Z/`
+(`code-config.tar.gz`, `database.sql.gz`, private permissions). Applied only
+`database/migrate_doi_review_events.sql`, then added the dedicated digest/actor
+to private `.env.production` and ran `./sync_to_prod.sh` successfully. Existing
+production configuration matched local before editing. Passenger restarted,
+and the standard deployment refreshed the SymCat snapshot to 2,227 labels.
 
-API: `/api/v1/doi-review/candidates`, individual candidate evidence, and a
-single-candidate decision endpoint. Dedicated hashed bearer authentication is
-disabled by default. Decisions require current evidence and a reason, cannot
-reassign DOIs or override skipped papers, and atomically record an audit entry.
-Identical retries are idempotent. Public API/MCP remain read-only. CLI previews
-decisions unless `--apply` is passed; OpenAPI documents the interface.
+Live verification: homepage, public API status, admin login and OpenAPI all
+return 200. OpenAPI and the eight changed runtime/API/cron files checked match
+local SHA-256. Unauthenticated review GET and POST return 401/no-store;
+authenticated queue and single-candidate evidence reads succeed. No actual
+review decision was submitted. Candidate counts before and after match:
+455 pending, 35,579 approved, 3,309 rejected. The new audit table remains empty.
+The single scheduled update entry has no threshold override, so its next run
+uses 0.93. Admin lookup also uses 0.93 (previously 0.85). Existing pending
+candidates were not bulk-approved.
 
-Automatic lookup rechecks and locks assignments, skipped status and intervening
-rejections before approval, then releases locks before another network request.
-No existing pending queue is bulk-approved. Read-only local snapshot: 340
-pending, two in [0.93,0.95), none >=0.95; this is not a live-production count.
+API: `/api/v1/doi-review/candidates`, individual evidence, and single-candidate
+decisions. Dedicated hashed bearer authentication is separate from admin
+cookies and FETCH_SECRET. Decisions require a current evidence snapshot and
+reason; reassignment, skipped papers and stale evidence require review.
+Assignment and audit commit atomically; identical retries are idempotent.
+Public metadata API/MCP remain read-only. `src/doi_review_client.py` previews
+decisions unless `--apply` is supplied. Usage: `docs/DOI_REVIEW_API.md`.
 
-Verification: full Python suite 154 tests OK (one opt-in test skipped); the
-12-test DOI API suite separately passed against MariaDB with connection-local
-temporary tables, including actual transaction, stale evidence and retry checks.
-Six JavaScript behavior tests, JS/shell syntax, OpenAPI YAML/security checks and
-`git diff --check` pass. Test logs: `/tmp/arxiv-review-full-final.log` and
-`/tmp/arxiv-review-mariadb-final.log`.
+Agent credential (mode 600, outside the synced workspace):
+`/home/dev/.config/arxiv-symmetricfunctions/doi-review-token`.
+Set `DOI_REVIEW_TOKEN_FILE` to that path for the client. Its `.server.env`
+companion contains the deployed digest/actor. No secret values were printed
+or committed. Rotation requires a new token pair plus private server config
+and restart; keep `.env.production` aligned because deployment uploads it.
 
-A dedicated credential was generated outside the synced workspace at
-`/home/dev/.config/arxiv-symmetricfunctions/doi-review-token`; its corresponding
-`.server.env` file contains the server digest and actor. Both files are mode
-600; no secret value was printed or added to Git. Activation requires the
-additive `database/migrate_doi_review_events.sql`, private server configuration
-(and `.env.production`, because deployment uploads it), then an authorized
-source deployment/restart. Do not run the destructive fresh-install schema.
-The ignored local `CRONJOBS.md` example was also aligned to 0.93.
-
-Task-owned paths: `src/{doi_review_api,doi_review_client,doi_lookup,app,config,
-admin,api_v1}.py`, `src/templates/admin/dois.html`, review API/client tests,
-`tests/{test_doi_lookup,test_cron_update}.py`, audit migration and fresh schema,
-cron/batch wrappers, `.env.example`, README, CLAUDE, OpenAPI, review guide and
-this handoff. No other site was touched.
+Verification before deployment: 154 Python tests OK (one opt-in skip); separate
+12-test MariaDB API suite passed using connection-local temporary tables;
+six JavaScript behavior tests, JS/shell syntax, OpenAPI/security and diff checks
+passed. Logs: `/tmp/arxiv-review-full-final.log`,
+`/tmp/arxiv-review-mariadb-final.log`, `/tmp/arxiv-doi-review-deploy.log`.
+Live check script: `/tmp/arxiv-doi-review-smoke.py` (contains no credential).
+No other site was edited or deployed. All task file ownership is released.
 
 Ownership released (2026-10-03): source-derived keyword compatibility is
 implemented, verified, committed, and pushed. No application database write,
