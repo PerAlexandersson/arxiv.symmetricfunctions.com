@@ -2,6 +2,30 @@
 
 ## Current scope
 
+Completed and ownership released (2026-10-08): audited all 11 historical
+rejections scoring >=93 on title/authors. Eight have strong evidence of valid
+publication matches; three correctly distinguish FPSAC precursors from full
+journal papers despite scoring 100. Six apparent valid matches share the old
+0.600 score and exact rejection timestamp, suggesting a batch operation whose
+reason is not recorded. The He–Wheeler Periodic DOI is currently verified on
+their distinct Free boundary paper; publisher/arXiv evidence indicates a wrong
+assignment requiring an editorial correction pass. No assignments were changed.
+
+Read `docs/DOI_HIGH_SCORE_REJECTIONS.md` for all candidate IDs, source links,
+timestamps, limitations and recommended follow-ups. Found a reproducible
+normalization bug: styled capital M is removed because casefold precedes NFKD.
+Proposals: distinguish work/version/conflict labels, add precursor review
+guards, compare both DOI claimants, fix styled-character normalization before
+calibrating. Raising the cutoff alone cannot solve these exceptions.
+
+Verification: recomputed sample scores, read-only local DB inspection,
+all 11 live public records plus competing He–Wheeler record checked through MCP,
+primary-source publication evidence checked for every case. Six Crossref work
+requests succeeded; three returned 500 and two 429; publisher evidence used
+instead. Diff check passed. No runtime edits, database writes or deployment.
+Evidence: `/tmp/arxiv-high-rejects{,-db,-crossref}.json`. Released ownership of
+this handoff, the audit note and `suggestions/doi-version-and-label-review.md`.
+
 Completed and ownership released (2026-10-08, not deployed): clear author
 identity contradictions now deduct 50 points in addition to proportional
 missing/added penalties. Named constants make these parameters explicit.
