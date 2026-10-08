@@ -13,3 +13,10 @@ Leave uncertainty pending; do not use these legacy scores as truth labels.
 
 Next step: use this format for the next review batch before considering an
 unattended review worker. Preserve the existing root-owned API-write gate.
+
+The deeper 125-case pass also caught evidence URLs naming a different DOI while
+claiming to describe the candidate. Before accepting a worker artifact, validate
+its DOI against the queue and any fetched payload's `DOI` field. Store actual
+responses and final URLs in the artifact directory; do not accept an `access:
+fetched` label alone as proof. Keep cross-paper citations explicitly marked as
+comparisons. This validation should precede any unattended API writes.

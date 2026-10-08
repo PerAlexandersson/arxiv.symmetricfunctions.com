@@ -2,6 +2,34 @@
 
 ## Current scope
 
+Completed and ownership released (2026-10-08): resolved all 125 deferred DOI
+candidates: 40 approved, 85 rejected, zero pending. Root applied 124 ordinary
+decisions through the snapshot-bound bearer API and one admin reassignment:
+Levit–Mandrescu DOI 10.1016/j.dam.2025.01.022 moved from the distinct Revisited
+paper 2405.13176 to 2209.00308. Former-owner candidate 51206 is now rejected;
+the existing SSRN rejection is unchanged. No runtime/scoring/deployment changes.
+
+Verification: every decision and paper DOI/provenance reconciled against
+production; 124 new audit rows match reasons/tokens/DOIs/paper IDs. Admin
+before/after snapshots and public MCP confirm the one transfer. No skipped or
+failed writes. Final authenticated pending queue empty. Production: 35,841
+approved, 3,502 rejected, 447 review events. Other existing owners unchanged.
+
+Report: docs/DOI_DEFERRED_REVIEW_2026-10-08.md. Durable evidence/plans/receipts:
+/home/dev/.local/state/arxiv-symmetricfunctions/reviews/2026-10-08-deferred/.
+Original cheap-agent proposals include corrected DOI/source and version errors;
+use final-plan.json and execution receipts, not initial proposals. Root full-text
+comparison resolved the last narrowed-publication case (55824).
+
+Separate follow-up findings in the report: the Roman-domination DOI appears to
+belong to 2604.12029 rather than current owner 2603.02831; the Sun DOI has an
+extra owner 2111.04538 alongside the matching 1803.10051. These assignments were
+not changed in this pending-candidate pass; exact owner/candidate snapshots are
+in additional-owner-before.json. Released HANDOFF.md, the new report, and
+suggestions/doi-review-evidence-quality.md. No other site touched.
+
+## Earlier checkpoints
+
 Completed and ownership released (2026-10-08): deployed clean checkpoint
 58ad92e, then reviewed all 448 pending DOI candidates with three inexpensive
 agent batches and root evidence review. Applied through the credentialed API:
