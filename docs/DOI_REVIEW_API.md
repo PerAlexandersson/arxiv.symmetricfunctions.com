@@ -133,8 +133,12 @@ Scoring is a heuristic out of 100, not a probability. The compatibility field
 normalized word-edit distance divided by the longer title's word count.
 Authors match one-to-one using surnames and compatible first names/initials.
 Missing and added authors deduct `20 × missing/N` and `15 × added/N` points,
-respectively, relative to the arXiv count N. Conflicting coauthor identities
-and absent author metadata require review.
+respectively, relative to the arXiv count N. Clear identity contradictions
+incur a further 50 points per candidate. Incomplete names and plausible spelling
+or name-component variants retain proportional deductions without this extra
+penalty; they still require review and receive no exact-match credit.
+Conflicting coauthor identities and absent author metadata require review.
+See `docs/DOI_AUTHOR_TUNING.md` for the exploratory parameter assessment.
 
 Publication in the first arXiv submission year or the next four years has no
 date deduction; each further year costs one point, each earlier year two.

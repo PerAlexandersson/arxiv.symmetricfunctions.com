@@ -4,7 +4,9 @@ Implemented locally on 2026-10-08 (not yet deployed): strict one-to-one
 surname/first-name-or-initial matching, proportional missing/added penalties,
 and a discovery auto-approval guard against contradictory coauthors. Routine
 lookup, bibliography backfill and BibTeX discovery share the guard. The same
-named hypercube authors are included as a regression fixture. Historical
+named hypercube authors are included as a regression fixture. A later same-day
+increment adds 50 points of deduction for clear identity contradictions,
+reducing the wrong-author fixture from 82.5 to 32.5. Historical
 metadata below records the reason; no production DOI corrections were run.
 
 Observed friction: the DOI lookup assigned `10.1137/24M1670093` to arXiv

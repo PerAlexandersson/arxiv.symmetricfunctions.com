@@ -17,6 +17,38 @@ def item(doi='10.1234/a', title='A title', names=None):
 
 
 class AuthorPolicyTests(unittest.TestCase):
+    def test_v_initial_is_not_a_generational_suffix(self):
+        self.assertEqual(author_changes(['Vojtěch Rödl'], ['Rödl, V.'])['matched'], 1)
+        self.assertEqual(author_changes(['V. Voronov'], ['Voronov, V. A.'])['penalty'], 0)
+
+    def test_variants_and_incomplete_names_do_not_get_contradiction_deduction(self):
+        for left, right in [('Gerhard Roehrle', 'Röhrle, Gerhard'),
+                            ('Emily Leven', 'Sergel Leven, Emily'),
+                            ('Renhong Wang', 'Wang, Ren-Hong'),
+                            ('Jane Doe', 'Doe'),
+                            ('Harry Richman', 'Richman, David Harry')]:
+            with self.subTest(left=left, right=right):
+                change = author_changes([left], [right])
+                self.assertEqual(change['contradictions'], 0)
+                self.assertEqual(change['contradiction_penalty'], 0)
+                self.assertEqual(change['uncertain'], 1)
+                self.assertEqual(change['matched'], 0)
+                self.assertTrue(change['conflicting'])  # Still requires manual review.
+
+    def test_one_missing_initial_cannot_hide_a_different_coauthor(self):
+        change = author_changes(['Jane Doe', 'Alice Grey'], ['Doe', 'Bob Black'])
+        self.assertEqual(change['uncertain'], 1)
+        self.assertEqual(change['contradictions'], 1)
+        self.assertAlmostEqual(change['contradiction_penalty'], .5)
+        self.assertEqual(author_changes(['J. Doe'], ['A. Grey'])['contradictions'], 1)
+
+    def test_clear_replacement_cannot_remain_in_likely_match_band(self):
+        names = ['Jane Doe', 'Bob Brown', 'Sela Fried', 'Alex Green', 'Iris White']
+        self.assertAlmostEqual(score_title_author_match('Same title', names, 'Same title',
+                                                       names[:-1] + ['Ted Black']), .43)
+        self.assertAlmostEqual(score_title_author_match('Same title', ['Jane Doe'],
+                                                       'Same title', ['Bob Brown']), .15)
+
     def test_full_names_initials_accents_order_and_compound_surnames(self):
         left = ['Sela Fried', 'Jesse Campion Loth', 'Erika Škrabuláková']
         right = ['Škrabul’áková, E.', 'Fried, S.', 'Campion Loth, Jesse']
@@ -44,8 +76,9 @@ class AuthorPolicyTests(unittest.TestCase):
         self.assertAlmostEqual(author_changes(names, names[:-1])['penalty'], .04)
         self.assertAlmostEqual(author_changes(names, names + ['Ted Black'])['penalty'], .03)
         replacement = author_changes(names, names[:-1] + ['Ted Black'])
-        self.assertAlmostEqual(replacement['penalty'], .07)
+        self.assertAlmostEqual(replacement['change_penalty'], .07)
         self.assertTrue(replacement['conflicting'])
+        self.assertAlmostEqual(replacement['penalty'], .57)
         full = item(names=[tuple(name.split()) for name in names])
         added = item(names=[tuple(name.split()) for name in names + ['Ted Black']])
         removed = item(names=[tuple(name.split()) for name in names[:-1]])
@@ -56,7 +89,7 @@ class AuthorPolicyTests(unittest.TestCase):
     def test_exact_title_does_not_erase_wrong_coauthor(self):
         score = score_title_author_match('Same title', ['Jane Doe', 'Alex Smith'],
                                          'Same title', ['Jane Doe', 'Bob Brown'])
-        self.assertAlmostEqual(score, .825)
+        self.assertAlmostEqual(score, .325)
         rank = rank_crossref_matches('Same title', ['Jane Doe', 'Alex Smith'], 2022,
                                     [item(title='Same title', names=[('Jane', 'Doe'), ('Bob', 'Brown')])])
         self.assertFalse(rank[0]['auto_eligible'])
@@ -76,7 +109,7 @@ class AuthorPolicyTests(unittest.TestCase):
                                       2025, [publication])[0]
         right = rank_crossref_matches(title, ['Jiří Fink', 'Torsten Mütze'],
                                       2024, [publication])[0]
-        self.assertEqual(wrong['score'], .825)
+        self.assertEqual(wrong['score'], .325)
         self.assertFalse(wrong['auto_eligible'])
         self.assertEqual(right['score'], 1)
         self.assertTrue(right['auto_eligible'])

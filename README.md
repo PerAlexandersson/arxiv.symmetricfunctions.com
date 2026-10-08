@@ -562,8 +562,14 @@ python3 bib_doi_backfill.py /path/to/file.bib   # bulk backfill from .bib file
   merely because their initials agree. A missing author costs `20 / N` points
   and an added author `15 / N`, where `N` is the original arXiv author count.
   Thus five authors becoming four costs four points; five becoming six costs
-  three. A replacement incurs both deductions and requires review. Missing
-  author metadata cannot authorize automatic approval.
+  three. A clear identity contradiction costs a further 50 points once per
+  candidate, after accounting for initials, incomplete names and plausible
+  spelling/name-component variants. Thus replacing one of two fully named
+  authors scores at most 32.5; replacing one of five scores at most 43.
+  Possible variants retain the proportional deductions and still require
+  review; they receive no full-match credit. Missing author metadata cannot
+  authorize automatic approval. The constants are named in `title_matching.py`;
+  see [parameter assessment](docs/DOI_AUTHOR_TUNING.md).
 - Publication 0–4 calendar years after the first arXiv submission has no date
   deduction; each further year costs one point, and each year before arXiv
   costs two. Missing years cost seven points; missing journal metadata costs

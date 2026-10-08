@@ -1218,7 +1218,8 @@ def _attach_doi_display_fields(candidates):
         candidate['confidence_tooltip'] = (
             f'Current title agreement: {title_score:.0%}; authors: '
             f"{changes['matched']} matched, {changes['missing']} missing, {changes['added']} added "
-            f"(-{changes['penalty'] * 100:g} points). "
+            f"(-{changes['penalty'] * 100:g} points, including "
+            f"{changes['contradiction_penalty'] * 100:g} for identity contradictions). "
             'Stored match score may also include dates, journal metadata and competing DOIs. '
             'Older scores are not automatically recalculated.'
         )

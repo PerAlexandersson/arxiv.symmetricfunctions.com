@@ -2,6 +2,41 @@
 
 ## Current scope
 
+Completed and ownership released (2026-10-08, not deployed): clear author
+identity contradictions now deduct 50 points in addition to proportional
+missing/added penalties. Named constants make these parameters explicit.
+Pure additions/omissions keep the approved 20/N and 15/N costs. Incomplete
+names and plausible name-form variants are paired conservatively and do not
+receive the extra contradiction deduction; they still get no exact identity
+credit and remain ineligible for automatic approval. A V. first initial is
+no longer discarded as a generational suffix. The admin tooltip/help explain
+the added deduction; README and the API guide are synchronized.
+
+Known wrong coauthor example: 82.5→32.5; one replacement among five authors
+scores 43; a wholly different sole author scores 15. Five→six and five→four
+pure author changes remain 97 and 96. Correct hypercube metadata still scores
+100 in the regression fixture. No queue values or DOI decisions were changed.
+
+Exploratory assessment: 400 locally verified/current-DOI and 400 rejected
+candidates, read-only. Compared extra 30/40/50-point deductions. The choice
+of 50 enforces the desired low-score treatment of clear contradictions; it is
+not claimed statistically optimal. Name-form checks reduce 24/400 verified
+pairs flagged by strict matching to two apparent identity contradictions;
+35/400 rejected pairs have such contradictions. The two verified cases need
+source review and were not altered. Historical labels are noisy; both parts
+of the diagnostic split were inspected, so this is not a blind validation.
+Overall score bands and IDF weighting remain unvalidated/unimplemented.
+Details and aggregate comparison: `docs/DOI_AUTHOR_TUNING.md`.
+
+Verification: 179 Python tests OK (one opt-in MariaDB skip), including eight
+JS behavior cases; JS syntax and diff checks pass. Regressions cover initials,
+name variants, one-to-one uncertainty pairing and stronger contradiction scores.
+Evidence: `/tmp/arxiv-author-penalty-sample.json`,
+`/tmp/arxiv-author-tuning-results.json`, `/tmp/arxiv-author-tuning-tests.log`.
+Released: title_matching.py, admin.py, DOI template, scoring tests, README/API
+guide, tuning note, two DOI suggestions and this handoff. No deployment or
+other-site edits occurred. Production still has the earlier DOI API activation.
+
 Assessment completed and ownership released (2026-10-08): title rarity and
 score-band calibration proposal recorded in `suggestions/doi-score-calibration.md`.
 Read-only local snapshot: 82,505 titles, 19,030 normalized tokens; document

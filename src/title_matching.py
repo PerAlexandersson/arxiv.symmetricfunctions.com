@@ -1,5 +1,6 @@
 """Utilities for normalizing titles/authors and scoring text similarity."""
 
+from difflib import SequenceMatcher
 import html
 import re
 import unicodedata
@@ -133,6 +134,10 @@ _AUTHOR_SURNAME_PARTICLES = {
     'el', 'ibn', 'la', 'le', 'st', 'ten', 'ter', 'van', 'von',
 }
 _AUTHOR_SUFFIXES = {'jr', 'sr', 'ii', 'iii', 'iv', 'v'}
+AUTHOR_MISSING_PENALTY = 0.20
+AUTHOR_ADDED_PENALTY = 0.15
+AUTHOR_CONTRADICTION_PENALTY = 0.50
+AUTHOR_VARIANT_SIMILARITY = 0.85
 
 
 def _unwrap_tex_commands(text):
@@ -190,10 +195,11 @@ def _author_given_token(name):
     raw = str(name or '')
     if ',' in raw:
         given = raw.split(',', 1)[1]
-        tokens = _author_name_tokens(given)
+        # Given-name initials such as V. are not generational suffixes.
+        tokens = normalize_author_name(given).split()
         return tokens[0] if tokens else ''
 
-    tokens = _author_name_tokens(raw)
+    tokens = normalize_author_name(raw).split()
     surname_tokens = author_last_name(raw).split()
     if surname_tokens and tokens[-len(surname_tokens):] == surname_tokens:
         tokens = tokens[:-len(surname_tokens)]
@@ -512,17 +518,9 @@ def _author_identity_matches(left, right):
                 and (given == other or len(given) == 1 or len(other) == 1))
 
 
-def author_changes(arxiv_authors, publication_authors):
-    """Maximum one-to-one identity matches; deductions use the arXiv count.
-
-    Full first names must agree unless one side uses an initial. Missing given
-    names are uncertain. An augmenting-path match avoids greedy errors when
-    two authors share a surname and one registry name is abbreviated.
-    """
-    left = [name for name in arxiv_authors if str(name).strip()]
-    right = [name for name in publication_authors if str(name).strip()]
-    edges = [[j for j, other in enumerate(right) if _author_identity_matches(name, other)]
-             for name in left]
+def _pair_authors(left, right, compatible):
+    """Maximum one-to-one pairing, returned as right-index -> left-index."""
+    edges = [[j for j, other in enumerate(right) if compatible(name, other)] for name in left]
     paired = {}
     for start in range(len(left)):
         queue, parents_left, parents_right = [start], {start: None}, {}
@@ -545,10 +543,60 @@ def author_changes(arxiv_authors, publication_authors):
             i = parents_right[free]
             paired[free] = i
             free = parents_left[i]
+    return paired
+
+
+def _author_variant_or_incomplete(left, right):
+    """Possible metadata variant, not sufficient evidence for an identity match.
+
+    Short/absent given names alone do not establish a contradiction; a clearly
+    different surname still can. Malformed TeX and close variants are uncertain.
+    This predicate never gives full author credit or enables auto-approval.
+    """
+    if '\\' in left or '\\' in right:
+        return True
+    left_tokens = normalize_author_name(normalize_author_display_name(left)).split()
+    right_tokens = normalize_author_name(normalize_author_display_name(right)).split()
+    # Added given/family name components and malformed merged author fields
+    # are evidence of uncertainty rather than a different identity.
+    if set(left_tokens) <= set(right_tokens) or set(right_tokens) <= set(left_tokens):
+        return True
+    surname = author_last_name(left).replace(' ', '')
+    other_surname = author_last_name(right).replace(' ', '')
+    if (len(_author_given_token(left)) <= 2 or len(_author_given_token(right)) <= 2):
+        # An incomplete given name does not erase a clearly different surname.
+        surname_similarity = SequenceMatcher(None, surname, other_surname,
+                                             autojunk=False).ratio()
+        if surname_similarity >= AUTHOR_VARIANT_SIMILARITY:
+            return True
+    left_key, right_key = ''.join(left_tokens), ''.join(right_tokens)
+    similarity = SequenceMatcher(None, left_key, right_key, autojunk=False).ratio()
+    return similarity >= AUTHOR_VARIANT_SIMILARITY
+
+
+def author_changes(arxiv_authors, publication_authors):
+    """Proportional author changes plus a separate identity-contradiction cost.
+
+    Exact one-to-one matches receive full credit. Unmatched names can be
+    incomplete or plausible variants; pair these conservatively before
+    counting contradictions. Pure additions/omissions retain their old cost.
+    """
+    left = [name for name in arxiv_authors if str(name).strip()]
+    right = [name for name in publication_authors if str(name).strip()]
+    paired = _pair_authors(left, right, _author_identity_matches)
     matched = len(paired)
     missing, added = len(left) - matched, len(right) - matched
-    penalty = (0.20 * missing + 0.15 * added) / len(left) if left else 0.20
+    unmatched_left = [name for i, name in enumerate(left) if i not in paired.values()]
+    unmatched_right = [name for j, name in enumerate(right) if j not in paired]
+    uncertain = len(_pair_authors(unmatched_left, unmatched_right, _author_variant_or_incomplete))
+    contradictions = min(missing, added) - uncertain
+    change_penalty = ((AUTHOR_MISSING_PENALTY * missing + AUTHOR_ADDED_PENALTY * added)
+                      / len(left) if left else AUTHOR_MISSING_PENALTY)
+    contradiction_penalty = AUTHOR_CONTRADICTION_PENALTY if contradictions else 0.0
+    penalty = change_penalty + contradiction_penalty
     return dict(matched=matched, missing=missing, added=added, penalty=penalty,
+                contradictions=contradictions, uncertain=uncertain,
+                change_penalty=change_penalty, contradiction_penalty=contradiction_penalty,
                 complete=bool(left and right),
                 conflicting=bool(missing and added))
 

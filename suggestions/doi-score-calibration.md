@@ -2,7 +2,10 @@
 
 The user proposed weighting shared rare title words more strongly and making
 60–100 generally indicate a likely match, with scores below 50 unlikely.
-This is an assessment and proposed next step, not an implemented score policy.
+Title-rarity weighting and overall band calibration remain proposals. A later
+2026-10-08 increment implements a 50-point deduction for clear author identity
+contradictions after separating plausible name variants; see
+`../docs/DOI_AUTHOR_TUNING.md`. No IDF weighting or queue rescore was implemented.
 
 ## Read-only evidence (2026-10-08)
 
@@ -63,8 +66,9 @@ pairs, including near-identical titles, shared surnames, changed author lists,
 publication lag and renamed titles. Partition by paper/DOI, not candidate row,
 so related versions do not leak across development and held-out evaluation.
 
-The new heuristic still gives the known wrong hypercube coauthor match 82.5,
-although the author guard blocks auto-approval. Thus a numeric stretch cannot
+At the time of this assessment, the heuristic gave the known wrong hypercube
+coauthor match 82.5, although the author guard blocked auto-approval. The later
+contradiction deduction reduces it to 32.5. Thus a numeric stretch cannot
 make the desired bands reliable by itself. Consider an explicit low-score cap
 for strong identity contradictions, while keeping incomplete metadata and
 simple added/omitted authors distinct from contradictions. Validate any such
