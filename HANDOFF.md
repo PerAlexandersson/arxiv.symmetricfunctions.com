@@ -2,6 +2,12 @@
 
 ## Current scope
 
+Active (2026-10-08): academic webpages worker owns deployment and pending DOI
+review integration; HANDOFF.md and deployment/review receipts only. User
+authorized deployment and cheap-agent review. Luna agents will own separate
+read-only evidence batches and private review-result files, no shared source
+edits or API decisions. Root verifies evidence and owns all decision writes.
+
 Completed and ownership released (2026-10-08): Unicode/version fixes committed
 and pushed as `8a62b32`, not deployed. Styled Latin/Greek normalization fixed;
 explicit precursor/FPSAC markers require automatic-approval review except for
