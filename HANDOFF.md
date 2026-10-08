@@ -8,8 +8,17 @@ authorized deployment and cheap-agent review. Luna agents will own separate
 read-only evidence batches and private review-result files, no shared source
 edits or API decisions. Root verifies evidence and owns all decision writes.
 
+Deployed and smoke-verified 58ad92e on 2026-10-08. Ten live runtime/schema
+files match the checkout; public routes and authenticated/unauthorized API
+checks pass. Host backup: backups/pre-doi-scoring-20261008 (code/config and
+consistent database dump). Log: /tmp/arxiv-doi-scoring-deploy.log. Snapshot:
+448 pending candidates, partitioned into 343 unassigned and 105 DOI conflicts.
+Review evidence is outside Git under
+/home/dev/.local/state/arxiv-symmetricfunctions/reviews/2026-10-08-pending/.
+No pending decisions applied yet; initial agent proposals need evidence audit.
+
 Completed and ownership released (2026-10-08): Unicode/version fixes committed
-and pushed as `8a62b32`, not deployed. Styled Latin/Greek normalization fixed;
+and pushed as `8a62b32`, deployed below 58ad92e. Styled Latin/Greek normalization fixed;
 explicit precursor/FPSAC markers require automatic-approval review except for
 proceedings-article DOIs. Discovery/backfill pass version context. AI review
 evidence now includes comments/editor notes and richer conflicting-paper data.
