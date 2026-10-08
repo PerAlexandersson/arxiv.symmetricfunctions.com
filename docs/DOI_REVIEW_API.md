@@ -127,7 +127,13 @@ lookup also uses 0.93 (previously 0.85). Explicit cron/CLI overrides still work;
 `DOI_AUTO_APPROVE=none` disables automatic approval. Bare `doi_lookup.py` still
 stages matches unless `--auto-approve` is supplied.
 
-Existing title/author/date scoring is unchanged. Before automatic assignment,
+Title/author scoring is unchanged. Publication in the first arXiv submission
+year or the next four years has no date deduction. Each further calendar year
+deducts one percentage point; each year before arXiv deducts two. Missing dates
+retain the previous seven-point deduction. The final score is bounded to 0–100%.
+Existing queue scores are not automatically recalculated.
+
+Before automatic assignment,
 lookup rechecks the current paper and existing DOI assignments. Changed/skipped
 papers, intervening rejections and DOI conflicts cannot be auto-approved, even
 above the threshold. Each paper commits before the next network request so

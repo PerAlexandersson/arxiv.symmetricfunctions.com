@@ -364,14 +364,45 @@ class NormalizeTests(unittest.TestCase):
 
 
 class ScoreMatchTests(unittest.TestCase):
-    def test_exact_mcneil_title_and_author_have_a_separate_date_penalty(self):
+    def test_exact_mcneil_match_has_no_four_year_publication_lag_penalty(self):
         title = 'On a conjecture of McNeil'
         self.assertEqual(title_similarity(title, title), 1.0)
         self.assertEqual(author_similarity(['Sela Fried'], ['Fried, Sela']), 1.0)
         item = {'title': [title], 'author': [{'family': 'Fried', 'given': 'Sela'}],
                 'container-title': ['Mathematical communications'],
                 'published-online': {'date-parts': [[2026, 4, 2]]}}
-        self.assertEqual(score_match(title, ['Sela Fried'], 2022, item)[0], .9)
+        self.assertEqual(score_match(title, ['Sela Fried'], 2022, item)[0], 1.0)
+
+    def test_asymmetric_year_deductions_are_percentage_points(self):
+        for lag, expected in [(0, 1), (1, 1), (2, 1), (3, 1), (4, 1),
+                              (5, .99), (6, .98), (14, .90), (15, .89),
+                              (-1, .98), (-2, .96), (-6, .88),
+                              (-50, 0), (-51, 0), (104, 0), (105, 0)]:
+            with self.subTest(lag=lag):
+                item = {'title': ['Same title'],
+                        'author': [{'family': 'Doe', 'given': 'Jane'}],
+                        'container-title': ['Journal'],
+                        'issued': {'date-parts': [[2022 + lag]]}}
+                self.assertEqual(score_match('Same title', ['Jane Doe'], 2022, item)[0],
+                                 expected)
+        # Deductions are additive, not a percentage of a lower starting score.
+        item['issued'] = {'date-parts': [[2027]]}
+        item['container-title'] = []
+        self.assertEqual(score_match('Same title', ['Jane Doe'], 2022, item)[0], .94)
+
+    def test_missing_year_keeps_existing_unknown_date_deduction(self):
+        item = {'title': ['Same title'], 'author': [{'family': 'Doe', 'given': 'Jane'}],
+                'container-title': ['Journal']}
+        self.assertEqual(score_match('Same title', ['Jane Doe'], 2022, item)[0], .93)
+        item['issued'] = {'date-parts': [[2026]]}
+        self.assertEqual(score_match('Same title', ['Jane Doe'], None, item)[0], .93)
+
+    def test_year_policy_uses_first_arxiv_submission_date_when_available(self):
+        item = {'title': ['Same title'], 'author': [{'family': 'Doe', 'given': 'Jane'}],
+                'container-title': ['Journal'], 'issued': {'date-parts': [[2026]]}}
+        # A different fallback year must not override the first submission date.
+        self.assertEqual(score_match('Same title', ['Jane Doe'], 2025, item,
+                                     paper_published_date='2021-08-07')[0], .99)
 
     def test_allows_journal_publication_before_later_arxiv_upload(self):
         cr_item = {

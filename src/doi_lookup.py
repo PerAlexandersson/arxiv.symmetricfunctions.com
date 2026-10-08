@@ -125,19 +125,19 @@ def score_match(paper_title, paper_authors, paper_year, cr_item,
         if full_name:
             cr_authors.append(full_name)
 
-    # A journal publication may legitimately predate a later arXiv upload.
-    # Treat the date as symmetric proximity evidence rather than a hard veto.
+    # published_date is the first arXiv submission, not the latest revision.
     paper_year_val, _ = _paper_year_and_date(
         paper_year, paper_published_date)
     parts, _ = _crossref_date_parts(cr_item, target_year=paper_year_val)
     cr_year = parts[0] if parts else None
 
-    # Year match (weight 0.10)
+    # Publication 0--4 calendar years later is ordinary publication lag.
+    # Deduct one percentage point per extra year, or two per year earlier.
     if cr_year is not None and paper_year_val is not None:
-        diff = abs(int(cr_year) - int(paper_year_val))
-        year_score = 1.0 if diff <= 1 else (0.5 if diff <= 2 else 0.0)
+        lag = int(cr_year) - int(paper_year_val)
+        date_penalty = 0.01 * max(lag - 4, 0) if lag >= 0 else 0.02 * -lag
     else:
-        year_score = 0.3  # unknown
+        date_penalty = 0.07  # Preserve the existing unknown-date deduction.
 
     # DOI sanity (weight 0.10)
     has_journal = bool(cr_item.get('container-title'))
@@ -145,10 +145,10 @@ def score_match(paper_title, paper_authors, paper_year, cr_item,
 
     text_author_score = score_title_author_match(
         paper_title, paper_authors, cr_title, cr_authors)
-    confidence = (0.80 * text_author_score +
-                  0.10 * year_score + 0.10 * doi_sanity)
+    confidence = (0.80 * text_author_score + 0.10 * doi_sanity +
+                  0.10 - date_penalty)
 
-    return round(confidence, 3), cr_title, cr_year
+    return round(max(0.0, min(1.0, confidence)), 3), cr_title, cr_year
 
 
 def query_crossref(title, first_author_last):

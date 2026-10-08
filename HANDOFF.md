@@ -2,6 +2,32 @@
 
 ## Current scope
 
+Completed and ownership released (2026-10-08, not yet deployed): the user's
+asymmetric publication-year policy is implemented in `src/doi_lookup.py`.
+Relative to the first arXiv submission year: publication 0–4 years later has
+no deduction, each additional year deducts one percentage point, and each year
+before arXiv deducts two. This interprets the user's last sentence as the
+publication-before-upload case, as indicated by their parenthetical example.
+Year-only granularity follows available Crossref metadata. The existing date
+selection and missing-date deduction (seven points) are retained. Deductions
+are not capped at ten points; the final confidence is clamped to [0,1].
+
+With the preceding Unicode fix, fresh evaluations of both 2208.03788v4 and
+2212.04556v2 now score 1.000. This supersedes the previous checkpoint's 0.90
+and 0.95 fresh-score results described below. Existing stored candidate scores,
+statuses and DOI assignments were not changed. No production deployment was
+requested or performed for these two follow-ups; production remains at the
+DOI API activation recorded below.
+
+Verification: 161 Python tests OK (one opt-in MariaDB skip), including year
+boundaries, both date directions, uncapped deductions, score floor, missing
+years and first-submission date precedence; diff check passes. Full suite also
+runs all seven JavaScript behavior tests. Log: `/tmp/arxiv-year-policy-tests.log`.
+README, API guide and admin help describe the new rule. The score-refresh
+suggestion records the still-outstanding distinction between old stored scores
+and fresh evaluations. All ownership released for doi_lookup.py, its tests,
+README, docs/DOI_REVIEW_API.md, admin/dois.html, the suggestion and this handoff.
+
 Completed and ownership released (2026-10-08, not yet deployed): fixed
 Crossref title normalization for MathJax `\unicode{x003BD}` (nu), including
 decimal escapes and the duplicated plain-text/MathML Greek symbol in

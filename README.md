@@ -551,9 +551,12 @@ python3 bib_doi_backfill.py /path/to/file.bib   # bulk backfill from .bib file
   `DOI_AUTO_APPROVE` cron override still takes precedence.
 - Admin UI has date range controls; defaults to 1 year ago → today
 - Admin can manually set DOIs on individual paper pages
-- Publication dates contribute proximity evidence; publication may precede arXiv upload.
-- The stored confidence combines title/author similarity (80%), publication-year
-  proximity (10%) and journal metadata (10%). Identical title/author records can
+- Confidence combines title/author similarity (80%), journal metadata (10%)
+  and a ten-point baseline, minus a publication-year deduction. Relative to
+  the first arXiv submission year, publication 0–4 years later has no deduction;
+  each additional year deducts one percentage point. Publication before arXiv
+  deducts two points per year. Unknown dates retain the seven-point deduction;
+  the final score is bounded to 0–100%. Identical title/author records can
   therefore score below 100%; the admin score tooltip shows their current text
   similarity separately. Normalization decodes MathJax Unicode escapes and
   removes duplicate plain-text/MathML Greek symbols. Existing stored scores
