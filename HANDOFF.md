@@ -2,6 +2,24 @@
 
 ## Current scope
 
+Assessment completed and ownership released (2026-10-08): title rarity and
+score-band calibration proposal recorded in `suggestions/doi-score-calibration.md`.
+Read-only local snapshot: 82,505 titles, 19,030 normalized tokens; document
+frequencies include graphs 16,054, Ehrhart 239, tensegrities 7, McNeil 1.
+Counts are per title using the existing normalizer, not full-text frequency.
+Potential label strata: 3,046 approved/current verified DOI pairs, 40 arXiv
+pairs, 32,468 automatic pairs and 3,309 rejected candidates. These are not
+independent clean labels; rejection/current-assignment inconsistencies need
+curation. Result artifact: `/tmp/arxiv-title-frequency-inspection.json`.
+
+Proposal: capped/smoothed title IDF, versioned frequency snapshots, proportional
+weighted edits and held-out validation of desired bands. No runtime code or
+score policy changed. The known wrong coauthor example remains 82.5 with an
+approval guard; simple numeric rescaling cannot make 60–100 reliably mean
+likely without handling such contradictions. No production/database writes,
+queue review or deployment occurred. This checkpoint owns only the suggestion
+and handoff; all ownership released.
+
 Completed and ownership released (2026-10-08, not deployed): proportional
 match scoring and runner-up handling are implemented. This supersedes the
 older weighted title/author policy described in earlier checkpoints below.
