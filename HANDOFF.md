@@ -2,27 +2,31 @@
 
 ## Current scope
 
-Active (2026-10-08): academic webpages worker owns deployment and pending DOI
-review integration; HANDOFF.md and deployment/review receipts only. User
-authorized deployment and cheap-agent review. Luna agents will own separate
-read-only evidence batches and private review-result files, no shared source
-edits or API decisions. Root verifies evidence and owns all decision writes.
+Completed and ownership released (2026-10-08): deployed clean checkpoint
+58ad92e, then reviewed all 448 pending DOI candidates with three inexpensive
+agent batches and root evidence review. Applied through the credentialed API:
+209 approved, 114 rejected; 125 uncertain identity/version cases left pending.
+All 323 decisions have matching audit rows and verified paper DOI/provenance.
+All 448 candidate states and existing conflicting DOI owners reconciled against
+production. No skipped writes, errors, reassignment, or reopening of old decisions.
 
-Deployed and smoke-verified 58ad92e on 2026-10-08. Ten live runtime/schema
-files match the checkout; public routes and authenticated/unauthorized API
-checks pass. Host backup: backups/pre-doi-scoring-20261008 (code/config and
-consistent database dump). Log: /tmp/arxiv-doi-scoring-deploy.log. Snapshot:
-448 pending candidates, partitioned into 343 unassigned and 105 DOI conflicts.
-Review evidence is outside Git under
+Production now: 125 pending, 35,802 approved, 3,416 rejected; 323 review events.
+Ten live runtime/schema files matched the tested checkout after deployment;
+public routes and authenticated/unauthorized API smoke checks passed. Host
+backup: backups/pre-doi-scoring-20261008 (code/config and consistent DB dump).
+Deployment log: /tmp/arxiv-doi-scoring-deploy.log.
+
+Review methodology, limitations and examples: docs/DOI_PENDING_REVIEW_2026-10-08.md.
+Durable local evidence, final per-case plan, intents, receipts, after snapshots
+and reconciliation result (outside Git; no credentials):
 /home/dev/.local/state/arxiv-symmetricfunctions/reviews/2026-10-08-pending/.
-All 448 reviewed: final plan is 209 approve, 114 reject, 125 defer.
-The 90 root-owned conflict-case rejections have been API-applied and re-read;
-the remaining 233 decisions are applying sequentially. No reassignment.
-Three agent batches were evidence-audited, with root overrides before writes.
-See docs/DOI_PENDING_REVIEW_2026-10-08.md; final reconciliation still pending.
+Initial agent proposals were corrected before writes. Deferred cases require
+additional primary evidence; they are not rejection labels or calibration truth.
+Released HANDOFF.md, review report and suggestions/doi-review-evidence-quality.md;
+no other site touched. Runtime unchanged since verified deployment.
 
 Completed and ownership released (2026-10-08): Unicode/version fixes committed
-and pushed as `8a62b32`, deployed below 58ad92e. Styled Latin/Greek normalization fixed;
+and pushed as `8a62b32`, deployed in checkpoint 58ad92e. Styled Latin/Greek normalization fixed;
 explicit precursor/FPSAC markers require automatic-approval review except for
 proceedings-article DOIs. Discovery/backfill pass version context. AI review
 evidence now includes comments/editor notes and richer conflicting-paper data.

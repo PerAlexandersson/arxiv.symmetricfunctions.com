@@ -33,17 +33,27 @@ not negative labels. Per-case evidence records distinguish these limitations.
 Private local artifacts (no credentials):
 `/home/dev/.local/state/arxiv-symmetricfunctions/reviews/2026-10-08-pending/`.
 They include the original queue, independent proposals, corrected reviews,
-root conflict notes, and will hold the final plan, API intents, receipts, and
-post-decision snapshots. Only the root applies decisions, with a fresh evidence
+root conflict notes, final plan, API intents, receipts, and post-decision snapshots. Only the root applies decisions, with a fresh evidence
 snapshot comparison and a re-read after each write. Changed snapshots are skipped.
 
 ## Outcome
 
-Final review plan: 209 approvals, 114 rejections, 125 deferrals. The root batch
-of 90 conflict-case rejections is applied and individually re-read. The remaining
-233 decisions are being applied. Final production/audit reconciliation is pending.
-No reassignment or reopening of existing approved/rejected rows is part of this
-queue pass.
+Completed: **209 approved, 114 rejected, 125 deferred**. All 323 decisions
+were applied through the credentialed API, with a fresh unchanged snapshot
+before each write and an individual re-read afterward. No writes were skipped
+and no errors occurred.
+
+A separate production reconciliation checked all 448 candidate states, paper
+DOIs/provenance, every audit reason/token/DOI/paper ID, and the existing DOI
+owners from the conflict snapshot. All checks passed. Exactly 323 audit rows
+exist; deferred candidates have none. Production totals are 125 pending, 35,802
+approved, and 3,416 rejected. No existing DOI assignment was replaced, and no
+previously approved/rejected candidate was reopened.
+
+`production-verification.json` records the reconciled totals; `final-plan.json`
+and the root/agents intent, receipt and after-snapshot JSONL files preserve
+the per-case record in the artifact directory above. The code checkpoint remains
+deployed; subsequent commits only record review progress and results.
 
 Examples of review corrections before writes:
 
