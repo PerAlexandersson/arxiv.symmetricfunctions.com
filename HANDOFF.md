@@ -2,6 +2,46 @@
 
 ## Current scope
 
+Completed and ownership released (2026-10-08): dedicated DOI review REST API
+and agent CLI, plus routine auto-match default lowered from 0.95 to 0.93.
+Admin lookup now uses the same 0.93 (previously 0.85). No actual candidate
+review, application DB migration, production configuration or deployment was
+performed. Source is ready for a deployment owner; see `docs/DOI_REVIEW_API.md`.
+
+API: `/api/v1/doi-review/candidates`, individual candidate evidence, and a
+single-candidate decision endpoint. Dedicated hashed bearer authentication is
+disabled by default. Decisions require current evidence and a reason, cannot
+reassign DOIs or override skipped papers, and atomically record an audit entry.
+Identical retries are idempotent. Public API/MCP remain read-only. CLI previews
+decisions unless `--apply` is passed; OpenAPI documents the interface.
+
+Automatic lookup rechecks and locks assignments, skipped status and intervening
+rejections before approval, then releases locks before another network request.
+No existing pending queue is bulk-approved. Read-only local snapshot: 340
+pending, two in [0.93,0.95), none >=0.95; this is not a live-production count.
+
+Verification: full Python suite 154 tests OK (one opt-in test skipped); the
+12-test DOI API suite separately passed against MariaDB with connection-local
+temporary tables, including actual transaction, stale evidence and retry checks.
+Six JavaScript behavior tests, JS/shell syntax, OpenAPI YAML/security checks and
+`git diff --check` pass. Test logs: `/tmp/arxiv-review-full-final.log` and
+`/tmp/arxiv-review-mariadb-final.log`.
+
+A dedicated credential was generated outside the synced workspace at
+`/home/dev/.config/arxiv-symmetricfunctions/doi-review-token`; its corresponding
+`.server.env` file contains the server digest and actor. Both files are mode
+600; no secret value was printed or added to Git. Activation requires the
+additive `database/migrate_doi_review_events.sql`, private server configuration
+(and `.env.production`, because deployment uploads it), then an authorized
+source deployment/restart. Do not run the destructive fresh-install schema.
+The ignored local `CRONJOBS.md` example was also aligned to 0.93.
+
+Task-owned paths: `src/{doi_review_api,doi_review_client,doi_lookup,app,config,
+admin,api_v1}.py`, `src/templates/admin/dois.html`, review API/client tests,
+`tests/{test_doi_lookup,test_cron_update}.py`, audit migration and fresh schema,
+cron/batch wrappers, `.env.example`, README, CLAUDE, OpenAPI, review guide and
+this handoff. No other site was touched.
+
 Ownership released (2026-10-03): source-derived keyword compatibility is
 implemented, verified, committed, and pushed. No application database write,
 tagging, deployment, or production mutation occurred. Generated corpus text

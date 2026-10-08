@@ -9,7 +9,9 @@ Live at **https://arxiv.symmetricfunctions.com**. Built with [Claude Code](https
 **Features:** Browse papers, search by author/title/keyword, one-click BibTeX export, KaTeX math rendering, keyword tagging with admin UI, DOI discovery via Crossref, ORCID login with personal paper lists and personalized feeds.
 
 The repository also provides a public read-only REST API and an optional MCP
-server for agent-assisted literature review.
+server for agent-assisted literature review. A separate bearer-protected
+[DOI review API](docs/DOI_REVIEW_API.md) supports audited candidate decisions;
+the existing MCP tools remain read-only.
 
 ---
 
@@ -537,18 +539,20 @@ python3 database/push_local_doi_state.py \
 
 # Or directly
 cd src && source ../venv/bin/activate
-python3 doi_lookup.py --batch 250 --auto-approve 0.95
+python3 doi_lookup.py --batch 250 --auto-approve 0.93
 python3 bib_doi_backfill.py /path/to/file.bib   # bulk backfill from .bib file
 ```
 
-- Routine matches at least 95% are auto-approved; lower-confidence matches at
+- Routine matches at least 93% are auto-approved; lower-confidence matches at
   least 60% are staged for review, while weaker results are not staged. The
   CLI threshold remains configurable.
-- 61-89% go to `/admin/dois` for manual review
+- DOI conflicts and candidates below 93% remain in `/admin/dois` for review.
+- The admin-run lookup and default batch wrapper also use 93%; an explicit
+  `DOI_AUTO_APPROVE` cron override still takes precedence.
 - Admin UI has date range controls; defaults to 1 year ago → today
 - Admin can manually set DOIs on individual paper pages
-- Papers that predate their Crossref match are automatically filtered out
-- DOI provenance: `arxiv` (from arXiv metadata), `auto` (Crossref match), `verified` (admin-approved), `skipped` (unlikely to ever get a DOI)
+- Publication dates contribute proximity evidence; publication may precede arXiv upload.
+- DOI provenance: `arxiv` (from arXiv metadata), `auto` (Crossref match), `verified` (admin- or API-reviewed), `skipped` (unlikely to ever get a DOI)
 - `doi_checked_at` tracks when each paper was last queried (skipped for 180 days)
 - Routine discovery waits until a preprint is at least 180 days old and takes
   the top 250 due papers. Priority order is: journal reference present,

@@ -4,7 +4,7 @@
 # Usage:
 #   ./batch_doi_lookup.sh                        # 500 papers from 2023-01-01 backwards
 #   ./batch_doi_lookup.sh 200                    # custom batch size
-#   ./batch_doi_lookup.sh 500 0.95               # custom batch + threshold
+#   ./batch_doi_lookup.sh 500 0.93               # custom batch + threshold
 #   ./batch_doi_lookup.sh 500 0.90 2020-01-01    # start from a specific date backwards
 
 set -e
@@ -13,7 +13,7 @@ cd "$SCRIPT_DIR"
 source activate_venv.sh
 
 BATCH=${1:-500}
-THRESHOLD=${2:-0.95}
+THRESHOLD=${2:-0.93}
 START_DATE=${3:-2023-01-01}
 
 echo "============================================="

@@ -51,7 +51,7 @@ class CronUpdateScriptTests(unittest.TestCase):
         self.assertIn('DOI_BATCH=0', self.script)
 
     def test_auto_approve_can_be_disabled(self):
-        self.assertIn('DOI_AUTO_APPROVE="${DOI_AUTO_APPROVE:-0.95}"', self.script)
+        self.assertIn('DOI_AUTO_APPROVE="${DOI_AUTO_APPROVE:-0.93}"', self.script)
         self.assertIn('[ "$DOI_AUTO_APPROVE" != "none" ]', self.script)
         self.assertIn('doi_args+=(--auto-approve "$DOI_AUTO_APPROVE")', self.script)
 

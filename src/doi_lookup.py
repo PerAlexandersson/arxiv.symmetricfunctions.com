@@ -10,7 +10,7 @@ Usage:
     python3 doi_lookup.py --batch 100         # process 100 papers
     python3 doi_lookup.py --min-age 180       # only papers published >6 months ago
     python3 doi_lookup.py --dry-run           # print matches without writing
-    python3 doi_lookup.py --auto-approve 0.95 # auto-promote high-confidence matches
+    python3 doi_lookup.py --auto-approve 0.93 # auto-promote high-confidence matches
 """
 
 import argparse
@@ -279,6 +279,8 @@ def main(argv=None):
     parser.add_argument('--auto-approve', type=float, default=None,
                         help='auto-promote DOIs with confidence >= threshold')
     args = parser.parse_args(argv)
+    if args.auto_approve is not None and not 0.60 <= args.auto_approve <= 1:
+        parser.error('--auto-approve must be between 0.60 and 1')
 
     conn = pymysql.connect(**DB_CONFIG, cursorclass=pymysql.cursors.DictCursor)
     cursor = conn.cursor()
@@ -340,7 +342,27 @@ def main(argv=None):
             stats['found'] += 1
             flag = ''
 
-            if args.auto_approve and conf >= args.auto_approve:
+            auto_approve = args.auto_approve is not None and conf >= args.auto_approve
+            if auto_approve:
+                # Recheck and lock current assignments before promoting a queued result.
+                lock = '' if args.dry_run else ' FOR UPDATE'
+                cursor.execute("SELECT doi, doi_status FROM papers WHERE id = %s" + lock,
+                               (paper['id'],))
+                current = cursor.fetchone()
+                cursor.execute("""SELECT id FROM papers
+                    WHERE id <> %s AND LOWER(TRIM(doi)) = %s LIMIT 1""" + lock,
+                               (paper['id'], doi.strip().lower()))
+                conflict = cursor.fetchone()
+                cursor.execute("""SELECT status FROM doi_candidates
+                    WHERE paper_id = %s AND LOWER(TRIM(doi)) = %s""" + lock,
+                               (paper['id'], doi.strip().lower()))
+                candidate_state = cursor.fetchone()
+                if (not current or current['doi'] or current['doi_status'] == 'skipped'
+                        or conflict or (candidate_state and candidate_state['status'] == 'rejected')):
+                    auto_approve = False
+                    flag = ' [DOI CONFLICT OR CHANGED PAPER: REVIEW REQUIRED]'
+
+            if auto_approve:
                 flag = ' [AUTO-APPROVED]'
                 stats['auto_approved'] += 1
                 if not args.dry_run:
@@ -384,6 +406,8 @@ def main(argv=None):
             cursor.execute(
                 "UPDATE papers SET doi_checked_at = NOW() WHERE id = %s",
                 (paper['id'],))
+            # Release assignment locks before the next network call or rate-limit wait.
+            conn.commit()
 
         time.sleep(REQUEST_DELAY)
 

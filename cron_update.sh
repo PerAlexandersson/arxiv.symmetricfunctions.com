@@ -12,7 +12,7 @@
 #   DOI_BATCH=250
 #   DOI_MIN_AGE=180
 #   DOI_RECHECK=180
-#   DOI_AUTO_APPROVE=0.95             # set to "none" to only stage candidates
+#   DOI_AUTO_APPROVE=0.93             # set to "none" to only stage candidates
 
 set -euo pipefail
 
@@ -26,7 +26,7 @@ FETCH_DAYS="${FETCH_DAYS:-}"
 DOI_BATCH="${DOI_BATCH:-250}"
 DOI_MIN_AGE="${DOI_MIN_AGE:-180}"
 DOI_RECHECK="${DOI_RECHECK:-180}"
-DOI_AUTO_APPROVE="${DOI_AUTO_APPROVE:-0.95}"
+DOI_AUTO_APPROVE="${DOI_AUTO_APPROVE:-0.93}"
 
 mkdir -p "$LOG_DIR" "$LOCK_DIR"
 

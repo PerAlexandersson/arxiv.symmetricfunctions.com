@@ -1492,7 +1492,7 @@ def run_doi_lookup():
     try:
         from doi_lookup import main as doi_main
         buf = io.StringIO()
-        argv = ['--batch', '20', '--auto-approve', '0.85']
+        argv = ['--batch', '20', '--auto-approve', '0.93']
         from_date = request.form.get('from_date', '').strip()
         to_date = request.form.get('to_date', '').strip()
         if from_date:

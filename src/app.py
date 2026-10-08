@@ -86,6 +86,11 @@ app.register_blueprint(watch_bp)
 from api_v1 import configure_api
 app.register_blueprint(configure_api(lambda: sf_labels))
 
+# Dedicated bearer-only API; browser sessions never authorize these writes.
+from doi_review_api import review_api
+csrf.exempt(review_api)
+app.register_blueprint(review_api)
+
 
 @app.after_request
 def add_security_headers(response):

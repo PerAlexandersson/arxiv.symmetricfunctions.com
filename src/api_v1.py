@@ -81,6 +81,7 @@ def api_index():
             'papers': '/api/v1/papers',
             'paper': '/api/v1/papers/{arxiv_id}',
             'keywords': '/api/v1/keywords',
+            'doi_review': '/api/v1/doi-review/candidates',
         },
     }, max_age=3600)
 

@@ -26,6 +26,39 @@ from title_matching import (
 )
 
 
+class AutoApprovalTests(unittest.TestCase):
+    def test_threshold_boundary_and_existing_assignments(self):
+        for confidence, current, conflict, candidate_state, expected in [
+            (.929, {'doi': None, 'doi_status': None}, None, None, False),
+            (.93, {'doi': None, 'doi_status': None}, None, None, True),
+            (.94, {'doi': None, 'doi_status': None}, None, None, True),
+            (.99, {'doi': None, 'doi_status': None}, {'id': 99}, None, False),
+            (.99, {'doi': '10.1234/other', 'doi_status': 'verified'}, None, None, False),
+            (.99, {'doi': None, 'doi_status': 'skipped'}, None, None, False),
+            (.99, {'doi': None, 'doi_status': None}, None, {'status': 'rejected'}, False),
+        ]:
+            with self.subTest(confidence=confidence, current=current, conflict=conflict):
+                cursor = mock.Mock()
+                cursor.fetchone.side_effect = [current, conflict, candidate_state]
+                connection = mock.Mock()
+                connection.cursor.return_value = cursor
+                paper = dict(id=7, arxiv_id='2401.00007', title='A title', published_date='2024-01-02')
+                with mock.patch.object(doi_lookup_module.pymysql, 'connect', return_value=connection), \
+                     mock.patch.object(doi_lookup_module, 'get_papers_needing_doi', return_value=[paper]), \
+                     mock.patch.object(doi_lookup_module, 'get_paper_authors', return_value=['Jane Doe']), \
+                     mock.patch.object(doi_lookup_module, 'get_rejected_dois', return_value=set()), \
+                     mock.patch.object(doi_lookup_module, 'query_crossref', return_value=[{'DOI':'10.1234/test'}]), \
+                     mock.patch.object(doi_lookup_module, 'score_match', return_value=(confidence, 'A title', 2024)), \
+                     mock.patch.object(doi_lookup_module, '_mark_index_cache_dirty_after_doi_changes'), \
+                     mock.patch.object(doi_lookup_module.time, 'sleep',
+                                       side_effect=lambda _: connection.commit.assert_called()), \
+                     contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(doi_lookup_module.main(['--batch', '1', '--auto-approve', '.93']), 0)
+                queries = [call.args[0] for call in cursor.execute.call_args_list]
+                self.assertEqual(any("doi_status='auto'" in sql for sql in queries), expected)
+                self.assertTrue(any('INSERT INTO doi_candidates' in sql for sql in queries))
+
+
 class NormalizeTests(unittest.TestCase):
     def test_doi_queue_uses_explicit_priority_bands(self):
         cursor = mock.Mock()

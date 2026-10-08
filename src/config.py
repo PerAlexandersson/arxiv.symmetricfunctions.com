@@ -31,6 +31,8 @@ FLASK_CONFIG = {
     'SESSION_COOKIE_HTTPONLY': True,
     'SESSION_COOKIE_SAMESITE': 'Lax',
     'SESSION_COOKIE_SECURE': not FLASK_DEBUG,
+    'DOI_REVIEW_TOKEN_SHA256': os.getenv('DOI_REVIEW_TOKEN_SHA256', ''),
+    'DOI_REVIEW_ACTOR': os.getenv('DOI_REVIEW_ACTOR', 'agent'),
 }
 
 # Secret key for triggering paper fetches via URL
