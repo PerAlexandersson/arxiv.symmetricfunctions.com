@@ -15,7 +15,11 @@ consistent database dump). Log: /tmp/arxiv-doi-scoring-deploy.log. Snapshot:
 448 pending candidates, partitioned into 343 unassigned and 105 DOI conflicts.
 Review evidence is outside Git under
 /home/dev/.local/state/arxiv-symmetricfunctions/reviews/2026-10-08-pending/.
-No pending decisions applied yet; initial agent proposals need evidence audit.
+All 448 reviewed: final plan is 209 approve, 114 reject, 125 defer.
+The 90 root-owned conflict-case rejections have been API-applied and re-read;
+the remaining 233 decisions are applying sequentially. No reassignment.
+Three agent batches were evidence-audited, with root overrides before writes.
+See docs/DOI_PENDING_REVIEW_2026-10-08.md; final reconciliation still pending.
 
 Completed and ownership released (2026-10-08): Unicode/version fixes committed
 and pushed as `8a62b32`, deployed below 58ad92e. Styled Latin/Greek normalization fixed;
