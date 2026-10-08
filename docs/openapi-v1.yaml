@@ -248,6 +248,8 @@ components:
         arxiv_id: {type: string}
         paper_title: {type: string}
         paper_abstract: {type: [string, 'null']}
+        paper_comment: {type: [string, 'null']}
+        editor_note: {type: [string, 'null']}
         paper_authors: {type: array, items: {type: string}}
         published_date: {type: [string, 'null'], format: date}
         journal_ref: {type: [string, 'null']}
@@ -261,7 +263,12 @@ components:
               paper_id: {type: integer}
               arxiv_id: {type: string}
               title: {type: string}
+              abstract: {type: [string, 'null']}
+              comment: {type: [string, 'null']}
+              journal_ref: {type: [string, 'null']}
+              editor_note: {type: [string, 'null']}
               doi: {type: string}
+              doi_status: {type: [string, 'null']}
         review_token: {type: string, pattern: '^[0-9a-f]{64}$'}
         arxiv_url: {type: string, format: uri}
         doi_url: {type: string, format: uri}

@@ -544,7 +544,7 @@ python3 bib_doi_backfill.py /path/to/file.bib   # bulk backfill from .bib file
 ```
 
 - Routine matches scoring at least 93/100 can be auto-approved when author,
-  ambiguity and DOI-assignment checks pass. Other matches scoring at least
+  version, ambiguity and DOI-assignment checks pass. Other matches scoring at least
   60/100 are staged for review; weaker results are not staged. The
   CLI threshold remains configurable.
 - DOI conflicts and candidates below 93/100 remain in `/admin/dois` for review.
@@ -580,6 +580,12 @@ python3 bib_doi_backfill.py /path/to/file.bib   # bulk backfill from .bib file
   eight points; a lead of five or more costs none. Duplicate results for the
   same DOI do not compete. The penalty never promotes the runner-up silently.
   Routine lookup, bibliography backfill and BibTeX lookup share this rule.
+- Routine discovery and DB-backed bibliography backfill require review when
+  comments/journal references explicitly mark an extended abstract, conference
+  precursor or FPSAC record and the candidate is a journal or untyped DOI.
+  Explicit proceedings-article DOIs remain eligible under the other guards.
+  Related short/full papers can share exact titles and authors; a score of 100
+  does not resolve that distinction. See the [eleven-case audit](docs/DOI_HIGH_SCORE_REJECTIONS.md).
 - The admin score tooltip shows current title agreement and author changes.
   Stored scores are not silently recalculated when the policy changes. The
   database/API field `confidence` retains its name for compatibility and stores

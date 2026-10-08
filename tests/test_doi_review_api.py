@@ -176,6 +176,10 @@ class ReviewApiTests(unittest.TestCase):
         self.assertNotEqual(first['review_token'], second['review_token'])
         self.assertNotEqual(first['review_token'], third['review_token'])
         self.assertEqual(third['conflicts'][0]['paper_id'], 8)
+        row['paper_comment'] = 'Extended abstract submitted to FPSAC'
+        fourth = enrich([{'paper_id': 7, 'name': 'Jane Doe'}], [])
+        self.assertNotEqual(first['review_token'], fourth['review_token'])
+        self.assertIn('FPSAC', fourth['paper_comment'])
 
 
 @unittest.skipUnless(os.getenv('DOI_REVIEW_TEST_DB_HOST'), 'opt-in temporary-table MariaDB test')
@@ -188,7 +192,8 @@ class MariaDbReviewTests(unittest.TestCase):
         # Connection-local temporary tables shadow application names. No real rows are changed.
         with conn.cursor() as cur:
             cur.execute('''CREATE TEMPORARY TABLE papers (id INT PRIMARY KEY, arxiv_id TEXT,
-                title TEXT, abstract TEXT, published_date DATE, journal_ref TEXT, doi VARCHAR(100),
+                title TEXT, abstract TEXT, comment TEXT, editor_note TEXT,
+                published_date DATE, journal_ref TEXT, doi VARCHAR(100),
                 doi_status VARCHAR(20), doi_confidence DECIMAL(4,3)) ENGINE=InnoDB''')
             cur.execute('''CREATE TEMPORARY TABLE doi_candidates (id INT PRIMARY KEY, paper_id INT,
                 doi VARCHAR(100), confidence DECIMAL(4,3), crossref_title TEXT, crossref_authors TEXT,

@@ -27,6 +27,29 @@ from title_matching import (
 
 
 class AutoApprovalTests(unittest.TestCase):
+    def test_extended_abstract_exact_match_is_staged_for_review(self):
+        cursor = mock.Mock()
+        connection = mock.Mock()
+        connection.cursor.return_value = cursor
+        paper = dict(id=7, arxiv_id='2401.00007', title='A title',
+                     published_date='2024-01-02', comment='Extended abstract, FPSAC 2024')
+        record = dict(DOI='10.1234/a', title=['A title'], type='journal-article',
+                      author=[{'given': 'Jane', 'family': 'Doe'}],
+                      **{'container-title': ['Journal'], 'issued': {'date-parts': [[2024]]}})
+        with mock.patch.object(doi_lookup_module.pymysql, 'connect', return_value=connection), \
+             mock.patch.object(doi_lookup_module, 'get_papers_needing_doi', return_value=[paper]), \
+             mock.patch.object(doi_lookup_module, 'get_paper_authors', return_value=['Jane Doe']), \
+             mock.patch.object(doi_lookup_module, 'get_rejected_dois', return_value=set()), \
+             mock.patch.object(doi_lookup_module, 'query_crossref', return_value=[record]), \
+             mock.patch.object(doi_lookup_module, '_mark_index_cache_dirty_after_doi_changes'), \
+             mock.patch.object(doi_lookup_module.time, 'sleep'), \
+             contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(doi_lookup_module.main(['--batch', '1', '--auto-approve', '.93']), 0)
+        statements = cursor.execute.call_args_list
+        self.assertFalse(any("doi_status='auto'" in call.args[0] for call in statements))
+        insert = next(call for call in statements if 'INSERT INTO doi_candidates' in call.args[0])
+        self.assertEqual(insert.args[1][2], 1)
+
     def test_tied_candidates_are_staged_even_with_a_lower_threshold(self):
         cursor = mock.Mock()
         connection = mock.Mock()
@@ -83,6 +106,16 @@ class AutoApprovalTests(unittest.TestCase):
 
 
 class NormalizeTests(unittest.TestCase):
+    def test_styled_latin_and_greek_survive_compatibility_normalization(self):
+        for styled, plain in [('𝑀', 'M'), ('𝐌', 'M'), ('ℳ', 'M'), ('Ｍ', 'M'),
+                              ('𝚴', 'nu'), ('𝛎', 'nu'), ('𝚷', 'pi')]:
+            with self.subTest(styled=styled):
+                self.assertEqual(normalize_title(styled), normalize_title(plain))
+        title = 'Enumeration of three quadrant walks with small steps and walks on other M-quadrant cones'
+        self.assertEqual(title_similarity(title, title.replace('M-quadrant', '𝑀-quadrant')), 1)
+        self.assertNotEqual(normalize_title('𝑀-quadrant'), normalize_title('N-quadrant'))
+        self.assertEqual(normalize_title('𝛎 <math><mi>ν</mi></math>'), 'nu')
+
     def test_crossref_unicode_mathml_matches_arxiv_nu_title(self):
         arxiv = 'Super Stable Tensegrities and the Colin de Verdière Number $ν$'
         crossref = ('Super stable tensegrities and the Colin de Verdière number ν '

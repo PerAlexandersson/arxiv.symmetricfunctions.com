@@ -105,7 +105,7 @@ def main():
 
     for arxiv_id in arxiv_ids:
         cursor.execute(
-            """SELECT id, title, doi, doi_status, published_date
+            """SELECT id, title, doi, doi_status, published_date, comment, journal_ref
                FROM papers WHERE arxiv_id LIKE %s""",
             (f"{arxiv_id}%",))
         paper = cursor.fetchone()
@@ -150,7 +150,9 @@ def main():
             continue
 
         ranked = rank_crossref_matches(paper['title'], authors, year, items,
-                                       paper_published_date=paper.get('published_date'))
+                                       paper_published_date=paper.get('published_date'),
+                                       paper_comment=paper.get('comment'),
+                                       paper_journal_ref=paper.get('journal_ref'))
         leader = ranked[0] if ranked else None
         best = (tuple(leader[key] for key in ('score', 'doi', 'title', 'authors', 'year'))
                 if leader else None)

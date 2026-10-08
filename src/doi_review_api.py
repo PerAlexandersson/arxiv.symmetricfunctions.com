@@ -18,7 +18,8 @@ review_api = Blueprint('doi_review_api', __name__, url_prefix='/api/v1/doi-revie
 _FIELDS = '''dc.id, dc.paper_id, dc.doi, dc.confidence, dc.crossref_title,
     dc.crossref_authors, dc.crossref_year, dc.status, dc.reviewed_at,
     p.arxiv_id, p.title AS paper_title, p.abstract AS paper_abstract,
-    p.published_date, p.journal_ref, p.doi AS current_doi, p.doi_status'''
+    p.published_date, p.journal_ref, p.comment AS paper_comment, p.editor_note,
+    p.doi AS current_doi, p.doi_status'''
 
 
 class ReviewError(Exception):
@@ -87,7 +88,8 @@ def _enrich(cursor, rows, lock=False):
     for row in cursor.fetchall():
         authors.setdefault(row['paper_id'], []).append(row['name'])
     dois = [row['doi'].strip().lower() for row in rows]
-    cursor.execute(f'''SELECT id AS paper_id, arxiv_id, title, doi FROM papers
+    cursor.execute(f'''SELECT id AS paper_id, arxiv_id, title, abstract,
+        comment, journal_ref, editor_note, doi, doi_status FROM papers
         WHERE LOWER(TRIM(doi)) IN ({placeholders}) ORDER BY id'''
                    + (' FOR UPDATE' if lock else ''), dois)
     assignments = cursor.fetchall()

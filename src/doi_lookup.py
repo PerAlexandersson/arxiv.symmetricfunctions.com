@@ -15,6 +15,7 @@ Usage:
 
 import argparse
 from datetime import date
+import re
 import sys
 import time
 
@@ -151,7 +152,21 @@ def score_match(paper_title, paper_authors, paper_year, cr_item,
     return round(max(0.0, min(1.0, confidence)), 3), cr_title, cr_year
 
 
-def rank_crossref_matches(title, authors, year, items, paper_published_date=None):
+def publication_version_needs_review(comment, journal_ref, item):
+    """A precursor's journal match needs review even with identical metadata.
+
+    Conference proceedings may have their own DOI. Only explicitly typed
+    proceedings articles bypass this guard; absent type information is uncertain.
+    """
+    context = ' '.join(str(value or '') for value in (comment, journal_ref))
+    precursor = re.search(
+        r'\b(?:extended[\s-]+abstract|conference[\s-]+(?:abstract|precursor)|FPSAC)\b',
+        context, re.I)
+    return bool(precursor and item.get('type') != 'proceedings-article')
+
+
+def rank_crossref_matches(title, authors, year, items, paper_published_date=None,
+                         paper_comment=None, paper_journal_ref=None):
     """Rank distinct DOIs and discount a close, plausible alternative.
 
     A rival scoring at least 80/100 within five points deducts up to eight
@@ -169,9 +184,13 @@ def rank_crossref_matches(title, authors, year, items, paper_published_date=None
         names = [((a.get('family', '') + ', ' + a.get('given', '')).strip(', ')
                   or a.get('name', '')) for a in item.get('author', [])]
         changes = author_changes(authors, names)
+        version_review = publication_version_needs_review(
+            paper_comment, paper_journal_ref, item)
         row = dict(doi=doi, score=score, raw_score=score, title=cr_title,
                    authors='; '.join(names), year=cr_year, author_changes=changes,
-                   auto_eligible=changes['complete'] and not changes['conflicting'],
+                   auto_eligible=(changes['complete'] and not changes['conflicting']
+                                  and not version_review),
+                   version_review_required=version_review,
                    ambiguity_penalty=0.0, runner_up_doi=None, runner_up_score=None)
         key = doi.lower()
         if key not in distinct or score > distinct[key]['raw_score']:
@@ -245,7 +264,7 @@ def get_papers_needing_doi(cursor, batch_size, min_age_days,
 
     params.append(batch_size)
     cursor.execute(f"""
-        SELECT p.id, p.arxiv_id, p.title, p.published_date,
+        SELECT p.id, p.arxiv_id, p.title, p.published_date, p.comment, p.journal_ref,
                CASE
                  WHEN p.journal_ref IS NOT NULL AND TRIM(p.journal_ref) <> '' THEN 0
                  WHEN p.doi_checked_at IS NULL
@@ -361,7 +380,9 @@ def main(argv=None):
         )
 
         ranked = rank_crossref_matches(paper['title'], authors, year, items,
-                                       paper_published_date=paper['published_date'])
+                                       paper_published_date=paper['published_date'],
+                                       paper_comment=paper.get('comment'),
+                                       paper_journal_ref=paper.get('journal_ref'))
         leader = ranked[0] if ranked else None
         best = (tuple(leader[key] for key in ('score', 'doi', 'title', 'authors', 'year'))
                 if leader else None)
@@ -369,7 +390,7 @@ def main(argv=None):
         if best and best[0] >= 0.60:
             conf, doi, cr_title, cr_authors_str, cr_year = best
             stats['found'] += 1
-            flag = '' if leader['auto_eligible'] else ' [AMBIGUOUS MATCH OR AUTHOR CHANGES: REVIEW REQUIRED]'
+            flag = '' if leader['auto_eligible'] else ' [AUTHOR, VERSION OR MATCH AMBIGUITY: REVIEW REQUIRED]'
 
             auto_approve = (args.auto_approve is not None and conf >= args.auto_approve
                             and leader['auto_eligible'])

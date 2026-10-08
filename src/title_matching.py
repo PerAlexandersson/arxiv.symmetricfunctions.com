@@ -155,7 +155,8 @@ def _unwrap_tex_commands(text):
 
 def _ascii_fold(text):
     """Casefold and strip accents/ligatures to a comparable ASCII-ish form."""
-    text = text.casefold()
+    # Compatibility decomposition can introduce capitals (e.g. 𝑀 -> M).
+    text = unicodedata.normalize('NFKD', text).casefold()
     for src, dst in _ASCII_FOLD_REPLACEMENTS.items():
         text = text.replace(src, dst)
     text = unicodedata.normalize('NFKD', text)
@@ -367,6 +368,8 @@ def normalize_title(text):
 
     text = html.unescape(str(text))
     text = _TEX_UNICODE_RE.sub(_decode_tex_unicode, text)
+    # Decode styled Greek before the Greek-to-name mapping as well.
+    text = unicodedata.normalize('NFKC', text)
     text = _remove_duplicate_mathml_symbols(text)
     text = _HTML_TAG_RE.sub(' ', text)
     text = _DASH_RE.sub(' - ', text)

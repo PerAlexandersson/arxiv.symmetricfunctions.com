@@ -130,6 +130,34 @@ class TitlePolicyTests(unittest.TestCase):
 
 
 class RunnerUpPolicyTests(unittest.TestCase):
+    def test_explicit_precursors_need_review_for_journal_or_unknown_doi_type(self):
+        for comment, journal in [('Extended abstract submitted to FPSAC 2022', None),
+                                 (None, "FPSAC'09, Hagenberg (2009)"),
+                                 ('A conference precursor', None),
+                                 ('Extended-abstract version', None)]:
+            for kind in ('journal-article', None):
+                publication = item()
+                if kind:
+                    publication['type'] = kind
+                ranked = rank_crossref_matches('A title', ['Jane Doe'], 2022,
+                                               [publication], paper_comment=comment,
+                                               paper_journal_ref=journal)
+                self.assertEqual(ranked[0]['score'], 1)
+                self.assertTrue(ranked[0]['version_review_required'])
+                self.assertFalse(ranked[0]['auto_eligible'])
+
+    def test_proceedings_doi_and_ordinary_journal_paper_remain_eligible(self):
+        publication = item()
+        publication['type'] = 'proceedings-article'
+        ranked = rank_crossref_matches('A title', ['Jane Doe'], 2022, [publication],
+                                       paper_comment='Extended abstract, FPSAC')
+        self.assertTrue(ranked[0]['auto_eligible'])
+        self.assertFalse(ranked[0]['version_review_required'])
+        publication['type'] = 'journal-article'
+        ranked = rank_crossref_matches('A title', ['Jane Doe'], 2022, [publication],
+                                       paper_comment='Presented at a conference; 35 pages')
+        self.assertTrue(ranked[0]['auto_eligible'])
+
     def test_tie_discount_and_duplicate_doi_deduplication(self):
         ranked = rank_crossref_matches('A title', ['Jane Doe'], 2022, [item(), item('10.1234/b')])
         self.assertEqual(ranked[0]['raw_score'], 1)
