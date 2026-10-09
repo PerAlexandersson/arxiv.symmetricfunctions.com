@@ -67,8 +67,24 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
 from werkzeug.middleware.proxy_fix import ProxyFix
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
-from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import CSRFError, CSRFProtect, generate_csrf
 csrf = CSRFProtect(app)
+
+
+@app.errorhandler(CSRFError)
+def handle_csrf_error(error):
+    if request.headers.get('X-Requested-With') != 'XMLHttpRequest':
+        return error.get_response()
+    # CSRFProtect rejected this request before the route could perform a write.
+    # Same-origin JavaScript can safely refresh the token and retry once.
+    response = jsonify(
+        error='The page security token is no longer valid. Please reload and try again.',
+        code='csrf_failed',
+        csrf_token=generate_csrf(),
+    )
+    response.status_code = 400
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 from admin import admin as admin_blueprint
 app.register_blueprint(admin_blueprint)

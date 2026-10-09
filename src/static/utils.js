@@ -1058,17 +1058,16 @@ function getCsrfToken() {
  * @param {FormData|object} data - FormData instance or plain object
  * @returns {Promise<Response>}
  */
-function csrfFetch(url, data) {
+function csrfFetch(url, data, token = getCsrfToken()) {
     let body;
     if (data instanceof FormData) {
-        if (!data.has('csrf_token')) data.append('csrf_token', getCsrfToken());
         body = data;
     } else {
         const fd = new FormData();
-        fd.append('csrf_token', getCsrfToken());
         for (const [k, v] of Object.entries(data || {})) fd.append(k, v);
         body = fd;
     }
+    body.set('csrf_token', token);
     return fetch(url, {
         method: 'POST',
         body,
@@ -1139,7 +1138,21 @@ async function fetchJson(url, options) {
  * @returns {Promise<object>}
  */
 async function csrfJsonFetch(url, data) {
-    const response = await csrfFetch(url, data);
+    let response = await csrfFetch(url, data);
+    if (response.status === 400 &&
+        (response.headers.get('content-type') || '').includes('application/json')) {
+        const error = await response.clone().json();
+        if (error.code === 'csrf_failed' && typeof error.csrf_token === 'string' && error.csrf_token) {
+            const token = error.csrf_token;
+            document.querySelector('meta[name="csrf-token"]')?.setAttribute('content', token);
+            document.querySelectorAll('input[name="csrf_token"]').forEach(input => {
+                input.value = token;
+            });
+            // Only retry an explicit rejection before the route ran. Never retry
+            // a network/server error: the original write may have succeeded.
+            response = await csrfFetch(url, data, token);
+        }
+    }
     return fetchResponseJson(response);
 }
 

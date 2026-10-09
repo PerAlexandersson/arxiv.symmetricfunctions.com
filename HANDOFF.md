@@ -2,6 +2,27 @@
 
 ## Current scope
 
+Completed and ownership released (2026-10-09): bookmark CSRF recovery. AJAX
+CSRF failures now return JSON with a fresh session-bound token and no-store;
+csrfJsonFetch updates the page/forms and retries exactly once only after that
+explicit pre-write rejection. Other errors never trigger a retry. Ordinary
+HTML forms retain their existing error response; CSRF protection remains on.
+utils.js cache version bumped to 12. Files: src/app.py, src/static/utils.js,
+src/templates/base.html, tests/test_routes.py, tests/csrf_fetch.test.cjs,
+HANDOFF.md. No other site touched.
+
+Evidence: live tokenless POST returned HTML 400 (no account/list write).
+A two-hour-old token reproduced the failure locally with CSRF enabled; regression
+verifies rejection before DB access and exactly one commit after renewal. Token
+expiry is a likely cause of the reported old-tab error, not confirmed from the
+user's individual request. Missing/invalid token, normal forms, retry limit,
+object/FormData payloads, login expiry and non-retryable failures are covered.
+Verification: 186 Python tests (one skip), 12 Node tests, git diff --check passed.
+No deployment in this task; fix ready for publication. Reloading the live page
+is the immediate workaround for an expired token.
+
+## Previous scope
+
 Completed and ownership released (2026-10-08): resolved all 125 deferred DOI
 candidates: 40 approved, 85 rejected, zero pending. Root applied 124 ordinary
 decisions through the snapshot-bound bearer API and one admin reassignment:

@@ -507,6 +507,57 @@ class RouteTests(unittest.TestCase):
 
         self.assertEqual(400, resp.status_code)
 
+    def test_expired_bookmark_token_refreshes_before_any_write(self):
+        from itsdangerous import URLSafeTimedSerializer
+        import time
+        import lists as lists_module
+
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = 7
+            sess['csrf_token'] = 'test-session-token'
+        serializer = URLSafeTimedSerializer(
+            app_module.app.secret_key, salt='wtf-csrf-token')
+        with mock.patch('itsdangerous.timed.time.time', return_value=time.time() - 7200):
+            expired = serializer.dumps('test-session-token')
+        cursor = FakeCursor(
+            fetchone_values=[{'id': 19}, {'saved': 1, 'starred': 0}],
+            lastrowid=12,
+        )
+        conn = FakeConnection(cursor)
+        with mock.patch.dict(app_module.app.config, WTF_CSRF_ENABLED=True), \
+                mock.patch.object(lists_module, 'get_db_connection', return_value=conn) as db:
+            payload = {'arxiv_id': '2401.00001', 'new_name': 'Read later',
+                       'csrf_token': expired}
+            headers = {'X-Requested-With': 'XMLHttpRequest'}
+            failed = self.client.post('/api/lists/save', data=payload, headers=headers)
+            self.assertEqual(400, failed.status_code)
+            self.assertEqual('csrf_failed', failed.json['code'])
+            self.assertEqual('no-store', failed.headers['Cache-Control'])
+            db.assert_not_called()
+            payload['csrf_token'] = failed.json['csrf_token']
+            saved = self.client.post('/api/lists/save', data=payload, headers=headers)
+        self.assertEqual(200, saved.status_code)
+        self.assertEqual(1, conn.commit_count)
+        self.assertTrue(saved.json['saved'])
+
+    def test_missing_or_invalid_ajax_token_never_runs_bookmark_route(self):
+        import lists as lists_module
+        with mock.patch.dict(app_module.app.config, WTF_CSRF_ENABLED=True), \
+                mock.patch.object(lists_module, 'get_db_connection') as db:
+            for token in ('', 'invalid-token'):
+                response = self.client.post('/api/lists/save',
+                    data={'csrf_token': token},
+                    headers={'X-Requested-With': 'XMLHttpRequest'})
+                self.assertEqual(400, response.status_code)
+                self.assertEqual('csrf_failed', response.json['code'])
+            db.assert_not_called()
+
+    def test_normal_form_csrf_failure_stays_html(self):
+        with mock.patch.dict(app_module.app.config, WTF_CSRF_ENABLED=True):
+            response = self.client.post('/api/lists/save')
+        self.assertEqual(400, response.status_code)
+        self.assertEqual('text/html', response.mimetype)
+
     def test_paper_detail_renders_existing_star_state(self):
         paper = {
             'id': 13,
