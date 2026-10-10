@@ -1,5 +1,27 @@
 # Handoff
 
+## Verified deployment — Retag keyword fetch, 2026-10-10
+
+At the user's request, deployed clean checkpoint d783962 with sync_to_prod.sh,
+after SymCat published its generated keyword feed. Production configuration
+matched the local deployment configuration before transfer. Recoverable code
+backup: ~/domains/arxiv.symmetricfunctions.com/backups/pre-keyword-ui-20261010T091000Z/code.tar.gz
+(archive verified; existing secrets were not included). No database migration.
+
+Preflight: 196 Python tests (two optional skips), six keyword tests including
+MariaDB temporary-table idempotence/rollback, 12 Node tests, and clean Git pass.
+Deployment restarted Passenger and refreshed the label cache from 2,227 to
+2,232. Homepage and public status API return HTTPS 200. Authenticated live
+/admin/retag shows the new fetch button and separate retag form; its JS matches
+the checkout. Nine selected production runtime/template/static/configuration
+files match local checksums. The production interpreter fetched and validated
+the live SymCat feed: 1,051 normalized phrases. No keyword import or paper
+retag action was submitted; all keyword data remains under admin control.
+
+Log: /tmp/arxiv-keywords-deploy.log; checks:
+/tmp/arxiv-keywords-deploy-{tests,db-tests,node}.log. Only this handoff changed
+after deployment; ownership released. Includes the earlier bookmark CSRF fix.
+
 ## Completed — Fetch SymCat keywords on Retag, 2026-10-10
 
 Added an authenticated, CSRF-protected POST /admin/retag/fetch-keywords and
