@@ -1057,6 +1057,28 @@ def retag():
                            earliest=earliest, today=today, result=result)
 
 
+@admin.route('/retag/fetch-keywords', methods=['POST'])
+@login_required
+def fetch_symcat_keywords():
+    """Explicitly import the latest published SymCat definition terms."""
+    from symcat_keywords import fetch_keywords, import_keywords
+    import requests
+    try:
+        keywords = fetch_keywords()
+    except (ValueError, requests.RequestException) as exc:
+        logger.warning('SymCat keyword fetch failed: %s', exc)
+        return jsonify({'ok': False, 'error': 'Could not fetch the keyword list. '
+                        'Check that SymCat has published site-keywords.json, then retry.'}), 502
+    try:
+        counts = import_keywords(get_db_connection(), keywords)
+    except pymysql.Error:
+        logger.exception('SymCat keyword import failed')
+        return jsonify({'ok': False, 'error': 'Keyword import failed; no changes were saved.'}), 500
+    if counts['added']:
+        _mark_index_cache_dirty()
+    return jsonify({'ok': True, **counts})
+
+
 @admin.route('/fetch', methods=['GET', 'POST'])
 @login_required
 def fetch():

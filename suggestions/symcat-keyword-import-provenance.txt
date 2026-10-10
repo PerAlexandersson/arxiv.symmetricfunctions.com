@@ -1,0 +1,12 @@
+SymCat import provenance — proposal, 2026-10-10
+
+The first generated feed has 62 normalized terms with multiple source targets.
+The importer leaves new ambiguous URLs unset and preserves all curated rows.
+It also has no persistent source ownership or deletion tombstone: deleting an
+imported keyword alone will allow a later fetch to add it again. Classifying
+it as ignored/math prevents that reimport with the current workflow.
+
+If source-driven updates or permanent per-term rejection are wanted, add
+import provenance plus explicit rejection records before implementing removal
+or URL replacement. Show ambiguous targets for editorial selection rather
+than choosing an arbitrary source page.

@@ -83,6 +83,58 @@ class FakeConnection:
 
 
 class RouteTests(unittest.TestCase):
+    def test_keyword_fetch_requires_admin_and_csrf(self):
+        with mock.patch('symcat_keywords.fetch_keywords') as fetch:
+            response = self.client.post('/admin/retag/fetch-keywords',
+                                        headers={'Accept': 'application/json'})
+            self.assertEqual(response.status_code, 401)
+            with self.client.session_transaction() as sess:
+                sess['admin_logged_in'] = True
+            app_module.app.config['WTF_CSRF_ENABLED'] = True
+            try:
+                response = self.client.post('/admin/retag/fetch-keywords')
+                self.assertEqual(response.status_code, 400)
+            finally:
+                app_module.app.config['WTF_CSRF_ENABLED'] = False
+            fetch.assert_not_called()
+
+    def test_keyword_fetch_failure_does_not_access_database(self):
+        with self.client.session_transaction() as sess:
+            sess['admin_logged_in'] = True
+        with mock.patch('symcat_keywords.fetch_keywords', side_effect=ValueError('bad feed')), \
+                mock.patch('admin.get_db_connection') as database:
+            response = self.client.post('/admin/retag/fetch-keywords')
+        self.assertEqual(response.status_code, 502)
+        self.assertFalse(response.json['ok'])
+        database.assert_not_called()
+
+    def test_keyword_fetch_adds_terms_without_retagging(self):
+        with self.client.session_transaction() as sess:
+            sess['admin_logged_in'] = True
+        cursor = FakeCursor(fetchall_values=[[], []])
+        conn = FakeConnection(cursor)
+        with mock.patch('symcat_keywords.fetch_keywords', return_value={
+                'laminar matroid': {'https://www.symmetricfunctions.com/matroids.htm#laminarMatroid'}}), \
+                mock.patch('admin.get_db_connection', return_value=conn), \
+                mock.patch('admin._mark_index_cache_dirty'), \
+                mock.patch('auto_tag.tag_papers') as tag:
+            response = self.client.post('/admin/retag/fetch-keywords')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json['added'], 1)
+        self.assertTrue(conn.committed)
+        tag.assert_not_called()
+
+    def test_retag_page_has_separate_keyword_fetch_button(self):
+        with self.client.session_transaction() as sess:
+            sess['admin_logged_in'] = True
+        cursor = FakeCursor(fetchone_values=[{'earliest': date(2000, 1, 1)}])
+        with mock.patch('admin.get_db_connection', return_value=FakeConnection(cursor)):
+            response = self.client.get('/admin/retag')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('Fetch latest SymCat keywords', response.text)
+        self.assertIn('/admin/retag/fetch-keywords', response.text)
+        self.assertIn('id="retag-form"', response.text)
+
     def test_bibtex_lookup_does_not_choose_between_tied_dois(self):
         records = [dict(DOI=doi, title=['A title'],
                         author=[{'given': 'Jane', 'family': 'Doe'}],

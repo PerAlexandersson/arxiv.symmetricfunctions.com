@@ -15,6 +15,28 @@ the existing MCP tools remain read-only.
 
 ---
 
+## Fetching SymCat keywords
+
+On **Admin → Retag**, click **Fetch latest SymCat keywords** to import the
+latest published `https://www.symmetricfunctions.com/site-keywords.json`.
+SymCat generates this version-1 JSON feed from its `\defin{...}` terms during
+the normal build. It must be deployed on SymCat before the button can work.
+The existing `site-labels.json` serves a different purpose: resolving anchors.
+
+The authenticated, CSRF-protected `POST /admin/retag/fetch-keywords` fetches
+and validates the complete feed before opening a database connection. It
+normalizes phrases with the existing paper tagger, deduplicates them, and adds
+new keywords at score 5 in one transaction. Existing keywords (including
+inactive entries), aliases, scores and URLs remain unchanged. Terms classified
+as `math_words` or `ignored_candidates` are skipped. A new term with exactly
+one source target gets its full SymCat URL; ambiguous targets leave the URL
+unset for curation. The button reports added, existing and excluded counts.
+
+Use **Run retag** afterward to apply keywords to the selected papers. Fetching
+does not retag papers, refresh the separate label cache, remove keywords, or
+change any schedule. Repeating an import is safe. Deployment still changes no
+keyword database rows; import happens only when the administrator clicks.
+
 ## Quick Setup
 
 ### 1. Install Python Dependencies

@@ -6,6 +6,17 @@
 
 <h2 class="page-title">Retag Papers</h2>
 <p class="admin-note">
+  Fetch the latest keywords defined on symmetricfunctions.com, then run retag below.
+  Existing keywords, aliases, excluded terms and reference links are preserved.
+</p>
+<button type="button" id="fetch-keywords" class="admin-primary-btn"
+        data-fetch-url="{{ url_for('admin.fetch_symcat_keywords') }}">
+  Fetch latest SymCat keywords
+</button>
+<div class="admin-result-box" id="keyword-fetch-result" role="status"
+     aria-live="polite" style="display:none"></div>
+
+<p class="admin-note">
   Re-applies all active keywords to papers in the selected date range.
   Use this after adding or editing keywords to keep tags up to date.
   Tagging all papers may take a minute or two.
@@ -51,5 +62,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='admin-retag.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='admin-retag.js') }}?v=2"></script>
 {% endblock %}

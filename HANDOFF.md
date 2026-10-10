@@ -1,6 +1,36 @@
 # Handoff
 
-## Current scope
+## Completed — Fetch SymCat keywords on Retag, 2026-10-10
+
+Added an authenticated, CSRF-protected POST /admin/retag/fetch-keywords and
+Fetch latest SymCat keywords button beside the existing retag workflow.
+The consumer validates the fixed published site-keywords.json feed before DB
+access, normalizes through the existing tagger and adds new terms in a single
+transaction. Existing/inactive keywords, aliases, scores, URLs and ignored/math
+classifications are preserved. New unique references use full URLs; ambiguous
+references remain unset. Fetch reports counts; paper retagging stays separate.
+No schedules, label-cache behavior or production data changed.
+
+Producer: ../symmetricfunctions.com/gather.lua and merge_meta.lua. Its generated
+feed contains 1,126 records / 1,051 normalized phrases, all accepted by this
+consumer. SymCat must publish the new feed before this button works on the
+live arXiv site; a missing/invalid feed produces an error without DB access.
+
+Verification: 196 Python tests pass (two opt-in DB skips), then all six keyword
+tests pass with SYMCAT_TEST_DB_HOST=db using connection-local temporary tables,
+including idempotence, alias/exclusion preservation and transaction rollback.
+Twelve Node tests, new JS syntax, rendered Retag page and git diff --check pass.
+Auth/CSRF rejection and no automatic retagging are covered. Logs:
+/tmp/arxiv-keywords-{tests,db-tests,routes,node}.log.
+
+Owned/released: src/symcat_keywords.py, src/admin.py, src/templates/admin/retag.html,
+src/static/admin-retag.js, tests/test_symcat_keywords.py, tests/test_routes.py,
+README.md, CLAUDE.md, suggestions/symcat-keyword-import-provenance.txt, HANDOFF.md.
+External venv recreated with existing setup_venv.sh after Docker rebuild.
+No production writes or deployment. See provenance suggestion before adding
+source-driven deletions or overwriting curated mappings.
+
+## Previous scope — bookmark CSRF recovery
 
 Completed and ownership released (2026-10-09): bookmark CSRF recovery. AJAX
 CSRF failures now return JSON with a fresh session-bound token and no-store;
