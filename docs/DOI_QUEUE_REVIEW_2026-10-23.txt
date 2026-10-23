@@ -30,7 +30,7 @@ journal authors; Part II has only Evtushevsky. Do not reject Part II merely
 for an author-list difference or arbitrarily choose an owner: the API guards
 against assigning a DOI already held by a different paper. Full journal text
 is subscription-only; the Russian original (10.4213/faa4139) is embargoed
-until October 2027. User asked for a downloaded journal PDF, not credentials.
+until October 2027. User was asked for a downloaded journal PDF, not credentials.
 
 55979: arXiv 2009.06135, DOI 10.1007/s00373-026-03070-4. Title and theorem
 agree, but arXiv metadata says Min Liu alone, cached TeX explicitly names
