@@ -1,5 +1,22 @@
 # Handoff
 
+## Reviewed — pending DOI queue, 2026-10-23
+
+Reviewed all 35 candidates under explicit user authority: 20 approved,
+12 rejected, 3 deferred. Fresh snapshot guards and post-decision read-backs
+pass for all 32 writes. Final live queue contains exactly 55958, 55960, 55979.
+No admin repairs, configuration/scoring changes, or deployment. Ownership
+released for this opening and `docs/DOI_QUEUE_REVIEW_2026-10-23.txt`.
+
+The two Young–Fibonacci preprints appear consolidated into one journal paper;
+the remaining Ramsey–Turan candidate has changed author lists. Requested two
+journal PDFs from the user (not university credentials). Keep these pending
+until publication identity/ownership is resolved; uncertainty is not rejection.
+Detailed decisions/sources: `docs/DOI_QUEUE_REVIEW_2026-10-23.txt`.
+Evidence/receipts: `/home/dev/.codex/review-evidence/arxiv-doi-20261023/`.
+Verified all 35 Crossref lookups, all 32 intent/receipt/after records, final
+queue, and whitespace. No runtime changes, so no application build required.
+
 ## Verified — scoped DOI-review credential rotation, 2026-10-23
 
 Rotated only the dedicated DOI-review credential under explicit user authority.

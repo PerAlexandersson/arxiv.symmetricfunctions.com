@@ -1,0 +1,230 @@
+DOI queue review — 2026-10-23
+
+User authorized decisions on the pending queue. Reviewed all 35 initial
+candidates: 20 approved, 12 rejected, 3 left pending. Final live queue read
+contains exactly the three deferrals below; no next page.
+
+All 35 candidate DOI records were independently fetched from Crossref.
+Title/author formatting differences were distinguished from different works,
+conference abstracts, sequel papers, and revised or split manuscripts.
+Cached arXiv source/text and publisher abstracts supplied additional evidence.
+This is a publication-identity review, not a mathematical correctness audit.
+
+Execution: fresh evidence snapshot checked before each of 32 writes through
+the scoped bearer API; intent, receipt and post-decision read-back retained
+for each. All approvals have matching current DOI and verified provenance;
+all rejections preserved the paper's existing DOI/provenance. No stale
+snapshots, skipped decisions, or request failures. No admin repairs,
+configuration/scoring changes, unrelated assignments, or deployment.
+
+Durable evidence (no bearer credential):
+/home/dev/.codex/review-evidence/arxiv-doi-20261023/
+queue.json, crossref.json, plan.json, results.json, final-queue.json,
+and per-candidate intent/receipt/after JSON files.
+
+Remaining questions
+55958 and 55960: arXiv 2012.08107 (Part II) and 2012.07447 (Part I) both
+proposed for DOI 10.1134/S1234567826030018. Publisher abstract covers both
+beta regimes, suggesting consolidation of the two preprints. Part I has both
+journal authors; Part II has only Evtushevsky. Do not reject Part II merely
+for an author-list difference or arbitrarily choose an owner: the API guards
+against assigning a DOI already held by a different paper. Full journal text
+is subscription-only; the Russian original (10.4213/faa4139) is embargoed
+until October 2027. User asked for a downloaded journal PDF, not credentials.
+
+55979: arXiv 2009.06135, DOI 10.1007/s00373-026-03070-4. Title and theorem
+agree, but arXiv metadata says Min Liu alone, cached TeX explicitly names
+Guantao Chen and Min Liu, and the journal lists Min Liu and Zhiquan Hu.
+Need the journal PDF to establish revision lineage. No negative conclusion
+about authorship is implied by this metadata discrepancy.
+
+Useful full-text checks
+- 2202.05024v3/IntNUA.tex: current title agrees with the published intertwining-
+  number title; the introduction explains the relationship to depth index.
+- 2009.09674v2 cached text: exact published Part I title and main theorem,
+  superseding the unsplit title in feed metadata.
+- 2604.23131v1 cached text: k>=t-3 theorem differs from the earlier published
+  k>=3r-4 result. This is not merely a shortened title.
+- 2009.06135v1/CL-Reference.tex lines 67–68: the author discrepancy above.
+These are already cached under /papers/math-co/; no new downloads were needed.
+
+Sources for remaining cases
+https://link.springer.com/article/10.1134/S1234567826030018
+https://www.mathnet.ru/eng/faa4139
+https://link.springer.com/article/10.1007/s00373-026-03070-4
+
+Decisions
+55879: APPROVE — 2202.12671v1
+Upper bound for the $(d-2)$-leaky forcing number of $Q_d$ and $\ell$-leaky forcing number of $GP(n,1)$
+DOI: 10.1016/j.disopt.2022.100744
+valid_publication: Same author and hypercube/generalized Petersen leaky-forcing results. Publisher abstract agrees with the preprint, with the bound sharpened to equality and title shortened. Source: https://www.sciencedirect.com/science/article/abs/pii/S1572528622000494
+
+55884: APPROVE — 2202.05024v2
+On distribution of the depth index on perfect matchings
+DOI: 10.1007/s11253-026-02594-5
+valid_publication: Cached arXiv 2202.05024v3 source has the exact published intertwining-number title and same two authors. Its introduction explicitly relates depth index to intertwining number; publisher abstract matches the revised paper. Source: https://link.springer.com/article/10.1007/s11253-026-02594-5
+
+55893: REJECT — 2201.03642v1
+Chromatic Number and Hamiltonicity of Graphs
+DOI: 10.1080/09728600.2020.1769416
+wrong_work: Candidate DOI is Rao Li's matching-number Hamiltonicity paper, already associated with arXiv:2001.00992. This preprint gives a chromatic-number condition and is a distinct later work. Source: https://doi.org/10.1080/09728600.2020.1769416
+
+55901: APPROVE — 2111.15663v2
+Equivariant Chevalley, Giambelli, and Monk Formulae for the Peterson Variety
+DOI: 10.1017/nmj.2026.10098
+valid_publication: Title and both authors match; deposited publisher abstract matches the Hessenberg/Peterson variety results, with only formulae/formulas spelling changed. Source: https://api.crossref.org/works/10.1017/nmj.2026.10098
+
+55910: APPROVE — 2110.12629v1
+Cylindric plane partitions, Lambda determinants, Commutants in semicircular systems
+DOI: 10.70675/150f9f8az5683z42e8z88b0z43dabb9b7518
+valid_publication: DOI identifies Robin Langer's dissertation, not a new journal article. Dissertation title and its three-part abstract (cylindric partitions, lambda determinants, semicircular commutators) match the arXiv thesis. Repository identifier is 2013PEST1087; DOI deposit year is not thesis defense year. Source: https://theses.fr/2013PEST1087
+
+55912: APPROVE — 2110.02013v1
+Two Disjoint Alternating Paths in Bipartite Graphs
+DOI: 10.1007/s00493-026-00211-4
+valid_publication: Same two authors and two-disjoint-alternating-paths paper; publisher added subtitle Conformal Crosses. Publisher abstract agrees on braces, conformal crosses, and the planar reduction. Source: https://api.crossref.org/works/10.1007/s00493-026-00211-4
+
+55916: APPROVE — 2109.01452v1
+Odd and even $q$-type Lidstone polynomial sequences
+DOI: 10.37256/cm.5320243511
+valid_publication: Exact distinctive Lidstone q-polynomial title and same authors after reconciling initials, surname order, and Al Towailb/Al-Towailb spelling. Crossref primary record checked. Source: https://api.crossref.org/works/10.37256/cm.5320243511
+
+55917: APPROVE — 2108.12796v1
+$q$-Analogues of $π$-Related Formulae from Jackson's $_8φ_7$-Series via Inversion Approach
+DOI: 10.1007/s11253-026-02593-6
+valid_publication: Exact distinctive Jackson 8phi7 inversion title and both authors match; differences are mathematical rendering and analogues/analogs spelling. Source: https://api.crossref.org/works/10.1007/s11253-026-02593-6
+
+55924: APPROVE — 2107.05572v4
+The Integer Sequence Transform $a \mapsto b$ where $b_n$ is the Number of Real Roots of the Polynomial $a_0 + a_1x + a_2x^2 + \cdots + a_nx^n$
+DOI: 10.2989/16073606.2022.2113473
+valid_publication: Exact distinctive integer-sequence/real-root transform title and both authors match; Crossref splits W. Edwin Clark's given name differently. Source: https://api.crossref.org/works/10.2989/16073606.2022.2113473
+
+55925: REJECT — 2107.01416v3
+The maximum size of a graph with prescribed order, circumference and minimum degree
+DOI: 10.1016/j.dam.2026.04.040
+wrong_work: Publisher article treats maximum size of nonhamiltonian-connected graphs with given order/minimum degree. The preprint treats prescribed circumference and longest paths; these are different extremal problems by the same author. Source: https://www.sciencedirect.com/science/article/pii/S0166218X26002684
+
+55927: APPROVE — 2106.13196v1
+A note on $\overline{2}$-separable codes and $B_2$ codes
+DOI: 10.1016/j.disc.2021.112751
+valid_publication: Same two authors and exact 2-bar-separable/B2-codes title; differences are MathML rendering only. Source: https://api.crossref.org/works/10.1016/j.disc.2021.112751
+
+55928: REJECT — 2106.05323v1
+Answer to an Isomorphism Problem in $\mathbb{Z}^2$
+DOI: 10.20429/tag.2015.020101
+wrong_work: DOI is the 2015 An Isomorphism Problem in Z^2 paper. This 2021 Answer paper explicitly describes resolving the question asked in that earlier article, not its publication. Source: https://api.crossref.org/works/10.20429/tag.2015.020101
+
+55931: REJECT — 2105.07594v2
+The automorphism group of the Andrásfai graph
+DOI: 10.1007/s12044-019-0477-9
+wrong_work: DOI concerns the bipartite Kneser graph automorphism group (2019), whereas this preprint concerns Andrasfai graphs and a dihedral automorphism group (2021). Shared author does not identify the same work. Source: https://api.crossref.org/works/10.1007/s12044-019-0477-9
+
+55932: REJECT — 2105.01389v1
+Global rigidity of complete bipartite graphs
+DOI: 10.1007/s00454-016-9836-9
+wrong_work: DOI is Universal Rigidity of Complete Bipartite Graphs by Connelly and Gortler (2017). Candidate preprint is Global rigidity with an additional author Theran and a different generic-global-rigidity result (2021). Source: https://api.crossref.org/works/10.1007/s00454-016-9836-9
+
+55934: APPROVE — 2104.11640v1
+The crossing number of the generalized Petersen graph $P(3k,k)$ in the projective plane
+DOI: 10.1080/09728600.2023.2247455
+valid_publication: Exact projective-plane generalized Petersen P(3k,k) crossing-number title and both authors match after family/given-name order reconciliation. Source: https://api.crossref.org/works/10.1080/09728600.2023.2247455
+
+55935: APPROVE — 2104.11646v1
+The generalized 3-connectivity of the folded hypercube $FQ_n$
+DOI: 10.1093/comjnl/bxac137
+valid_publication: Exact folded-hypercube generalized 3-connectivity title and both authors match after family/given-name order reconciliation. Source: https://api.crossref.org/works/10.1093/comjnl/bxac137
+
+55936: APPROVE — 2104.07025v4
+$q$-Supercongruences from Jackson's $_8φ_7$ summation and Watson's $_8φ_7$ transformation
+DOI: 10.1016/j.jcta.2023.105853
+valid_publication: Same sole author and exact Jackson/Watson 8phi7 q-supercongruence title; only mathematical typesetting differs. Source: https://api.crossref.org/works/10.1016/j.jcta.2023.105853
+
+55943: REJECT — 2103.12655v2
+Twisted cubic and orbits of lines in $\mathrm{PG}(3,q)$
+DOI: 10.1007/s00022-022-00644-4
+wrong_work: DOI is the plane-line incidence-matrix paper arXiv:2103.11248, already assigned and verified. Candidate arXiv:2103.12655 classifies line orbits; its overlap note distinguishes the two manuscripts. Source: https://api.crossref.org/works/10.1007/s00022-022-00644-4
+
+55944: APPROVE — 2103.11419v3
+Configurations of rectangles in a set in $\mathbb{F}_q^2$
+DOI: 10.1016/j.ffa.2022.102147
+valid_publication: Same four authors; publisher abstract agrees on rectangle counts over finite fields with subgroup-constrained side lengths. Title drops the words 'a set in' without changing work identity. Source: https://www.sciencedirect.com/science/article/abs/pii/S1071579722001563
+
+55946: APPROVE — 2103.07047v2
+Inducibility of 4-vertex tournaments
+DOI: 10.1002/jgt.70075
+valid_publication: Same four authors, identical tournament-inducibility title modulo 4/four, and matching publisher abstract including the unbalanced iterative construction. Source: https://api.crossref.org/works/10.1002/jgt.70075
+
+55948: REJECT — 2604.22357v1
+Asymptotically Tight Bound for the Conflict-Free Chromatic Index
+DOI: 10.1016/j.disc.2025.114945
+wrong_work: DOI publishes the earlier nearly-regular-graphs result, arXiv:2409.00759. Candidate arXiv:2604.22357 treats general graphs and additional random-graph regimes; it is a distinct broader result. Source: https://api.crossref.org/works/10.1016/j.disc.2025.114945
+
+55949: APPROVE — 2102.01278v1
+Kazhdan-Lusztig polynomials for $\tilde{B}_2$
+DOI: 10.1016/j.jpaa.2023.107385
+valid_publication: Exact affine B2 Kazhdan-Lusztig title and all three authors match; discrepancy is MathML rendering. Source: https://api.crossref.org/works/10.1016/j.jpaa.2023.107385
+
+55958: DEFER — 2012.08107v2
+Ergodicity of the Martin boundary of the Young--Fibonacci graph. II
+DOI: 10.1134/s1234567826030018
+possible_merged_publication: Published abstract covers both beta=1 and 0<beta<1, corresponding to separate preprints I and II. Journal lists Bochkov and Evtushevsky, while II lists Evtushevsky alone. Need full text and an explicit mapping decision; do not reject a potentially genuine contribution or arbitrarily choose one DOI owner. Source: https://link.springer.com/article/10.1134/S1234567826030018
+
+55960: DEFER — 2012.07447v3
+Ergodicity of the Martin boundary of the Young--Fibonacci graph. I
+DOI: 10.1134/s1234567826030018
+possible_merged_publication: Same journal DOI also proposed for Part II; publisher abstract covers both parts. Part I authors match, but a combined-publication mapping requires full-text review before selecting ownership under the API conflict guard. Source: https://link.springer.com/article/10.1134/S1234567826030018
+
+55962: APPROVE — 2012.06415v2
+Percolation of a strongly connected component in simple directed random graphs with a given degree distribution
+DOI: 10.1017/s0269964823000128
+valid_publication: Same two authors and matching publisher abstract on site/bond percolation thresholds and giant strongly connected component size; published title is shortened. Source: https://api.crossref.org/works/10.1017/s0269964823000128
+
+55963: APPROVE — 2012.02718v3
+Infinite families of optimal systems of biangular lines related to representations of $\textrm{SL}(2,\mathbb{F}_q)$
+DOI: 10.1016/j.jcta.2022.105656
+valid_publication: Exact distinctive SL(2,Fq) biangular-lines title and author Mikhail Ganzhinov match; arXiv metadata reverses personal/family-name order. Source: https://api.crossref.org/works/10.1016/j.jcta.2022.105656
+
+55964: REJECT — 2012.00913v2
+Chromatic symmetric functions of Dyck paths and q-rook theory (extended abstract)
+DOI: 10.1016/j.ejc.2022.103595
+wrong_version: Candidate explicitly identifies itself as the FPSAC extended abstract of arXiv:2104.07599. DOI is the full European Journal of Combinatorics article and is already correctly assigned to that full-paper record. Source: https://api.crossref.org/works/10.1016/j.ejc.2022.103595
+
+55966: REJECT — 2604.23131v1
+Towards a conjecture on degree conditions for Ramsey goodness of paths
+DOI: 10.1016/j.dam.2025.11.012
+wrong_work: Earlier published note proves the conjecture for k>=3r-4; this later cached preprint proves the different regime k>=t-3. Same author and topic but distinct statements and manuscripts. Source: https://www.sciencedirect.com/science/article/abs/pii/S0166218X25006535
+
+55967: APPROVE — 2011.04927v1
+Dinv, Area, and Bounce for $\vec{k}$-Dyck paths
+DOI: 10.1016/j.aam.2022.102455
+valid_publication: Exact vector-k Dyck-path dinv/area/bounce title and both authors match; mathematical rendering accounts for title discrepancy. Source: https://api.crossref.org/works/10.1016/j.aam.2022.102455
+
+55971: REJECT — 2010.08664v3
+On some subclasses of circular-arc catch digraphs
+DOI: 10.1007/s00373-025-02887-9
+wrong_work: Solo-author published paper explicitly cites the three-author candidate arXiv:2010.08664 as reference 20. It studies additional oriented interval/circular-arc subclasses and is not simply a renamed version of the cited manuscript. Source: https://link.springer.com/article/10.1007/s00373-025-02887-9
+
+55974: REJECT — 2009.12692v1
+Problems and results in Extremal Combinatorics -- IV
+DOI: 10.1007/978-3-032-18810-6_2
+wrong_work: DOI is installment V of Alon's problems-and-results series. Its reference 4 explicitly cites installment IV, arXiv:2009.12692, which is this candidate. Source: https://api.crossref.org/works/10.1007/978-3-032-18810-6_2
+
+55977: APPROVE — 2009.09674v1
+Connected Fair Detachments of Hypergraphs
+DOI: 10.1007/s00493-026-00224-z
+valid_publication: Cached latest arXiv:2009.09674v2 has the exact published Part I title, same author, matching abstract and main detachment theorem. Earlier v1 included material later split into Part II. Source: https://link.springer.com/article/10.1007/s00493-026-00224-z
+
+55979: DEFER — 2009.06135v1
+Ramsey-Turán numbers for intersecting odd cliques
+DOI: 10.1007/s00373-026-03070-4
+author_identity_review: Title and main Ramsey-Turan asymptotic result match, but arXiv metadata lists Min Liu alone, cached v1 TeX names Guantao Chen and Min Liu, and journal lists Min Liu and Zhiquan Hu. Need journal full text to confirm revision lineage; do not infer match from the title/result alone. Source: https://link.springer.com/article/10.1007/s00373-026-03070-4
+
+55982: APPROVE — 2008.08779v1
+A simple 7/3-approximation algorithm for feedback vertex set in tournaments
+DOI: 10.1016/j.dam.2023.04.016
+valid_publication: Same four authors and matching one-round Sherali-Adams 7/3-approximation result for tournament feedback vertex set; journal title explicitly names the method. Source: https://www.sciencedirect.com/science/article/pii/S0166218X23001439
+
+55986: REJECT — 2007.11645v2
+Counting multiple graphs in generalized Turán problems
+DOI: 10.1016/j.disc.2024.114021
+wrong_work: DOI is the distinct extremal-graphs paper arXiv:2210.00666, already assigned. Candidate arXiv:2007.11645 counts sums of multiple graphs and colored variants, a different problem. Source: https://api.crossref.org/works/10.1016/j.disc.2024.114021
