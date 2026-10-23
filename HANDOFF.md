@@ -1,15 +1,38 @@
 # Handoff
 
-## Active — scoped DOI-review credential rotation, 2026-10-23
+## Verified — scoped DOI-review credential rotation, 2026-10-23
 
-Root owns this opening and the two DOI-review settings in private local
-`.env.production` and production `.env`, under explicit user authorization.
-Initial checkout clean at a032b01; SSH and exact local/remote configuration
-comparison pass. No unrelated config/code deployment or DOI decisions allowed.
-Target token: `/home/dev/.codex/secrets/arxiv-symmetricfunctions/doi-review-token`
-(persistent Docker volume, mode 600). Make private recoverable config backups
-before changing either file; verify all other bytes unchanged and read-only API
-access after Passenger restart. Stop on failed checks; do not improvise.
+Rotated only the dedicated DOI-review credential under explicit user authority.
+Persistent client token (mode 600):
+`/home/dev/.codex/secrets/arxiv-symmetricfunctions/doi-review-token`.
+Its `.server.env` companion is also mode 600; parent secret directories are
+mode 700. `/home/dev/.codex` is the persistent Docker codex-state volume.
+This supersedes the older `/home/dev/.config/...` credential guidance below.
+Set `DOI_REVIEW_TOKEN_FILE` to the new token path when using
+`src/doi_review_client.py`; never print the file or paste its contents into chat.
+
+Initial checkout clean at a032b01; execution gate clean at 652cb12. SSH,
+private-file checks, and exact pre-change local/remote config comparison pass.
+Generated the pair with the existing client, retained the existing reviewer
+actor, and updated the permitted review settings in private `.env.production`
+and production `.env`. All bytes outside the two permitted value spans were
+verified unchanged; resulting local/remote files match exactly, mode 600.
+No other configuration or code was deployed. Requested Passenger restart via
+the existing WSGI/restart markers. Authenticated HTTPS GET of the DOI queue
+returned successfully with one requested row; no review decisions submitted.
+
+Private recoverable pre-change backups, verified before replacement:
+- Local: `/home/dev/.codex/secrets/arxiv-symmetricfunctions/backups/20261023T093552Z/.env.production`
+- Production: `/home/symmetricf/.local/state/arxiv-symmetricfunctions/credential-backups/20261023T093552Z/.env`
+Both backup files are mode 600 in private mode-700 directories. They contain
+private configuration; do not print or commit them. The old client token was
+missing, so restoring old server config alone would not restore client access.
+
+Verification: 14 DOI API/client tests pass, one optional DB test skipped;
+LF/CRLF byte-preservation checks pass; live authenticated queue read passes.
+No token or digest values were logged. Temporary orchestration script (no
+embedded secrets): `/tmp/doi-review-rotate-20261023.py`; do not rerun its apply
+mode. Ownership released; any DOI approval/rejection needs separate authority.
 
 ## Verified deployment — Retag keyword fetch, 2026-10-10
 
