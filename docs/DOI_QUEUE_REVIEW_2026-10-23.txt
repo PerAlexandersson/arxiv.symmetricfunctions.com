@@ -1,5 +1,36 @@
 DOI queue review — 2026-10-23
 
+Full-text follow-up (supersedes the initial deferrals below)
+User supplied both journal PDFs after Dropbox sync. Cached both and the
+requested Lascoux paper, compared all three cached PDFs byte-for-byte with
+their temp originals, then removed only those three temp originals. Cache
+IDs 396 (Lascoux), 397 (Young–Fibonacci), 398 (Liu–Hu); searchable plaintext
+was generated through paper-cache as well. These copies remain recoverable
+under /papers/pdfs/; no journal PDFs were committed or uploaded publicly.
+
+55979 APPROVED after comparison of the journal PDF with arXiv:2009.06135v1.
+Journal Theorem 1.1, Lemmas 2.1–2.4, and the final lexicographically maximal
+multi-fan construction correspond to the preprint's theorem, four preliminary
+lemmas, and final contradiction argument. There are revised estimates and
+proof details. This establishes publication lineage despite the author-list
+differences, without claiming why the author list changed. Fresh snapshot,
+approval receipt, and verified DOI/provenance read-back saved as 55979-*.json.
+
+55958 and 55960 BOTH MATCH a combined publication. Journal introduction
+(p. 210) explains the first-stage result and its use as input to the second
+stage; Theorems 2–4 treat beta=1 followed by beta in (0,1) and ergodicity.
+This parallels the two cached Russian preprints' introductions and proof
+structure. The former uncertainty is resolved, but recording both matches
+requires an explicit many-preprints-to-one-publication policy: the scoped
+API rejects approval when another paper holds the DOI. Neither candidate
+was rejected or arbitrarily made the sole owner. Both remain pending;
+no admin/API-guard bypass or application change was attempted.
+
+Current totals: 21 approved, 12 rejected, 2 pending (shared-DOI policy).
+Read-only final queue: fulltext-final-queue.json in the evidence directory.
+
+Initial review record
+
 User authorized decisions on the pending queue. Reviewed all 35 initial
 candidates: 20 approved, 12 rejected, 3 left pending. Final live queue read
 contains exactly the three deferrals below; no next page.

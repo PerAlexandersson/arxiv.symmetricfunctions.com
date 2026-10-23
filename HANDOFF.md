@@ -1,5 +1,23 @@
 # Handoff
 
+## Full-text follow-up — DOI matches resolved, shared-DOI policy pending
+
+2026-10-23: approved 55979 after comparing the supplied Liu–Hu journal PDF
+with the cached preprint's theorem, four lemmas, and final construction.
+Fresh snapshot, receipt and read-back verify the DOI/provenance. Totals now
+21 approved, 12 rejected, 2 pending. Full text confirms that 55958 and 55960
+both contribute to the combined Young–Fibonacci journal article, but the API
+prohibits one DOI on two paper records. Need explicit shared-publication
+handling before recording both matches; no arbitrary sole owner, rejection,
+admin bypass, or application change. Final queue IDs: 55958 and 55960 only.
+
+The two supplied PDFs plus the requested Lascoux paper are in paper-cache
+(397, 398, 396), with searchable text. Byte comparisons passed before removing
+the three exact temp originals; cached copies remain recoverable. No PDFs
+committed or publicly uploaded. Details in `docs/DOI_QUEUE_REVIEW_2026-10-23.txt`;
+follow-up receipt/read-back and `fulltext-final-queue.json` in the existing
+evidence directory. Ownership released for this opening and the report.
+
 ## Reviewed — pending DOI queue, 2026-10-23
 
 Reviewed all 35 candidates under explicit user authority: 20 approved,
