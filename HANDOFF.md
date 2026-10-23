@@ -1,5 +1,16 @@
 # Handoff
 
+## Active — scoped DOI-review credential rotation, 2026-10-23
+
+Root owns this opening and the two DOI-review settings in private local
+`.env.production` and production `.env`, under explicit user authorization.
+Initial checkout clean at a032b01; SSH and exact local/remote configuration
+comparison pass. No unrelated config/code deployment or DOI decisions allowed.
+Target token: `/home/dev/.codex/secrets/arxiv-symmetricfunctions/doi-review-token`
+(persistent Docker volume, mode 600). Make private recoverable config backups
+before changing either file; verify all other bytes unchanged and read-only API
+access after Passenger restart. Stop on failed checks; do not improvise.
+
 ## Verified deployment — Retag keyword fetch, 2026-10-10
 
 At the user's request, deployed clean checkpoint d783962 with sync_to_prod.sh,
